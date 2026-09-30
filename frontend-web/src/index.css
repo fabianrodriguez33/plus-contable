@@ -1,0 +1,29 @@
+:root { font-family: system-ui, Segoe UI, Roboto, sans-serif; color: #1f2937; background: #f3f4f6; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #1d4ed8; }
+.navbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #0f2a4a; color: #fff; }
+.navbar a { color: #fff; text-decoration: none; margin-right: 16px; }
+.navbar .brand { font-weight: 700; font-size: 18px; }
+.container { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 16px; }
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-wrap .card { width: 360px; }
+label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 4px; }
+input, select { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+input[type=checkbox] { width: auto; margin-right: 6px; }
+button { padding: 8px 16px; border: 0; border-radius: 6px; background: #1d4ed8; color: #fff; font-size: 14px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary { background: #6b7280; }
+button.danger { background: #dc2626; padding: 4px 10px; }
+.error { background: #fee2e2; color: #991b1b; padding: 8px 12px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+.ok { background: #dcfce7; color: #166534; padding: 8px 12px; border-radius: 6px; margin: 12px 0; font-size: 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e5e7eb; margin-bottom: 16px; }
+.tabs button { background: transparent; color: #374151; border-radius: 6px 6px 0 0; }
+.tabs button.active { background: #1d4ed8; color: #fff; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb; }
+h2, h3 { margin-top: 0; }
+.row { display: flex; justify-content: space-between; align-items: center; }
+.muted { color: #6b7280; font-size: 13px; }

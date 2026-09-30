@@ -1,0 +1,33 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: ms-tributario
+  datasource:
+    url: jdbc:postgresql://localhost:5432/plus_contable_db
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+app:
+  jwt:
+    # Debe ser identico al de ms-auth
+    secret: ${JWT_SECRET:plus-contable-jwt-secret-key-2026-v&f-asesores-minimo-32-bytes}
+  aes:
+    secret-key: ${AES_SECRET_KEY:PlusContableAES256SecretKey2026!}
+    iv: ${AES_IV:PlusContableIV01}
+  cors:
+    allowed-origins: http://localhost:5173
+  storage:
+    dir: ./uploads
