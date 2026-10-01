@@ -20,12 +20,14 @@ public record TrabajadorDto(
         LocalDate fechaIngreso,
         @DecimalMin(value = "0.00", message = "La remuneración no puede ser negativa") BigDecimal remuneracion,
         boolean registroSunafil,
-        boolean registroMtpe) {
+        boolean registroMtpe,
+        boolean essalud,
+        boolean quintaCategoria) {
 
     public static TrabajadorDto from(Trabajador t) {
         return new TrabajadorDto(t.getId(), t.getNombreCompleto(), t.getTipoDocumento(), t.getNumeroDocumento(),
                 t.isExtranjero(), t.getNacionalidad(), t.getRegimenLaboral(), t.getSistemaPensionario(),
                 t.getNombreAfp(), t.getFechaIngreso(), t.getRemuneracion(), t.isRegistroSunafil(),
-                t.isRegistroMtpe());
+                t.isRegistroMtpe(), t.isEssalud(), t.isQuintaCategoria());
     }
 }

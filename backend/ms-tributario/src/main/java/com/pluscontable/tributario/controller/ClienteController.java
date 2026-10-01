@@ -9,7 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/clientes")
+@RequestMapping("/api/tributario/clientes")
 public class ClienteController {
 
     private final ClienteService clienteService;

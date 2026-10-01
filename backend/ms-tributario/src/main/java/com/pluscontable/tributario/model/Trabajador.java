@@ -59,4 +59,10 @@ public class Trabajador {
 
     @Column(name = "registro_mtpe", nullable = false)
     private boolean registroMtpe;
+
+    @Column(nullable = false)
+    private boolean essalud;
+
+    @Column(name = "quinta_categoria", nullable = false)
+    private boolean quintaCategoria;
 }

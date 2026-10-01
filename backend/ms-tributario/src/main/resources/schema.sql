@@ -70,3 +70,9 @@ CREATE INDEX IF NOT EXISTS idx_documentos_cliente ON tributario_schema.documento
 CREATE INDEX IF NOT EXISTS idx_socios_cliente ON tributario_schema.socios(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_activos_cliente ON tributario_schema.activos_fijos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_trabajadores_cliente ON tributario_schema.trabajadores(cliente_id);
+
+ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
+ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
+ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS quinta_categoria BOOLEAN NOT NULL DEFAULT FALSE;

@@ -24,7 +24,6 @@ app:
   aes:
     # AES-256: clave de exactamente 32 caracteres, IV de exactamente 16
     secret-key: ${AES_SECRET_KEY:PlusContableAES256SecretKey2026!}
-    iv: ${AES_IV:PlusContableIV01}
   security:
     max-failed-attempts: 5
     lock-minutes: 15

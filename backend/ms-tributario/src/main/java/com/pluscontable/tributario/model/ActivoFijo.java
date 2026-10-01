@@ -18,6 +18,9 @@ public class ActivoFijo {
     @Column(name = "cliente_id", nullable = false)
     private Long clienteId;
 
+    @Column(length = 40)
+    private String codigo;
+
     @Column(nullable = false, length = 250)
     private String descripcion;
 
