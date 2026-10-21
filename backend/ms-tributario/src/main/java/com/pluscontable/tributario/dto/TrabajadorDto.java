@@ -1,23 +1,21 @@
 package com.pluscontable.tributario.dto;
 
 import com.pluscontable.tributario.model.Trabajador;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** Sin anotaciones de validación: TrabajadorService valida todo junto para listar todos los campos faltantes. */
 public record TrabajadorDto(
         Long id,
-        @NotBlank(message = "nombreCompleto: es obligatorio") String nombreCompleto,
-        @NotNull(message = "tipoDocumento: es obligatorio") Trabajador.TipoDocumento tipoDocumento,
-        @NotBlank(message = "numeroDocumento: es obligatorio") String numeroDocumento,
+        String nombreCompleto,
+        Trabajador.TipoDocumento tipoDocumento,
+        String numeroDocumento,
         boolean extranjero,
         String nacionalidad,
-        @NotNull(message = "sistemaPensionario: es obligatorio (ONP o AFP)") Trabajador.SistemaPensionario sistemaPensionario,
+        Trabajador.SistemaPensionario sistemaPensionario,
         String nombreAfp,
-        @NotNull(message = "fechaIngreso: es obligatoria") LocalDate fechaIngreso,
-        @DecimalMin(value = "0.00", message = "remuneracion: no puede ser negativa") BigDecimal remuneracion,
+        LocalDate fechaIngreso,
+        BigDecimal remuneracion,
         String tipoContrato,
         LocalDate fechaInicioContrato,
         LocalDate fechaFinContrato) {

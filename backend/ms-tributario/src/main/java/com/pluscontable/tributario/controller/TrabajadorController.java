@@ -2,7 +2,6 @@ package com.pluscontable.tributario.controller;
 
 import com.pluscontable.tributario.dto.TrabajadorDto;
 import com.pluscontable.tributario.service.TrabajadorService;
-import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +23,7 @@ public class TrabajadorController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TrabajadorDto registrar(@PathVariable Long clienteId, @Valid @RequestBody TrabajadorDto dto) {
+    public TrabajadorDto registrar(@PathVariable Long clienteId, @RequestBody TrabajadorDto dto) {
         return service.registrar(clienteId, dto);
     }
 }
