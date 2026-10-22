@@ -68,6 +68,8 @@ export interface Acuerdo {
   id?: number
   serviciosContratados: string
   honorarioMensual: number
+  /** Al cambiar el honorario: desde cuándo rige el nuevo (por defecto, hoy). */
+  honorarioDesde?: string
   fechaInicio: string
   historial?: { monto: number; vigenteDesde: string; vigenteHasta: string }[]
 }
