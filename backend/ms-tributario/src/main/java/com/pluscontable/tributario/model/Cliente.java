@@ -35,6 +35,12 @@ public class Cliente {
     @Column(length = 250)
     private String direccion;
 
+    @Column(length = 20)
+    private String telefono;
+
+    @Column(length = 150)
+    private String email;
+
     @Column(nullable = false)
     private boolean activo = true;
 

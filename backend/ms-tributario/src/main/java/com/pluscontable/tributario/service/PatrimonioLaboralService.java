@@ -59,6 +59,8 @@ public class PatrimonioLaboralService {
         t.setRemuneracion(dto.remuneracion());
         t.setRegistroSunafil(dto.registroSunafil());
         t.setRegistroMtpe(dto.registroMtpe());
+        t.setEssalud(dto.essalud());
+        t.setQuintaCategoria(dto.quintaCategoria());
         return TrabajadorDto.from(trabajadorRepository.save(t));
     }
 
@@ -83,6 +85,7 @@ public class PatrimonioLaboralService {
         clienteService.buscar(clienteId);
         ActivoFijo a = new ActivoFijo();
         a.setClienteId(clienteId);
+        a.setCodigo(dto.codigo() == null || dto.codigo().isBlank() ? null : dto.codigo().trim());
         a.setDescripcion(dto.descripcion().trim());
         a.setCategoria(dto.categoria());
         a.setValorAdquisicion(dto.valorAdquisicion());

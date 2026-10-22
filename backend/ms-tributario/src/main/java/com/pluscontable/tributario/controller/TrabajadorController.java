@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/clientes/{clienteId}/trabajadores")
+@RequestMapping("/api/tributario/clientes/{clienteId}/trabajadores")
 public class TrabajadorController {
 
     private final PatrimonioLaboralService service;
