@@ -4,6 +4,7 @@ import com.pluscontable.tributario.dto.CambioVencimientoDto;
 import com.pluscontable.tributario.dto.DeclaracionDto;
 import com.pluscontable.tributario.dto.ObligacionDto;
 import com.pluscontable.tributario.model.Obligacion;
+import com.pluscontable.tributario.model.VencimientoHistorial;
 import com.pluscontable.tributario.repository.ObligacionRepository;
 import com.pluscontable.tributario.repository.VencimientoHistorialRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -60,11 +61,55 @@ public class ObligacionService {
         return ObligacionDto.from(obligacionRepository.save(o));
     }
 
+    /**
+     * Cambia la fecha límite de una o varias obligaciones: todas o ninguna.
+     * Cada fecha anterior queda en vencimientos_historial.
+     */
     @Transactional
     public List<ObligacionDto> cambiarVencimiento(CambioVencimientoDto dto) {
-        // TODO Tarea 69: todas o ninguna; rechazar nuevaFecha anterior al periodo de cualquier obligacion;
-        //  por cada una guardar VencimientoHistorial(fechaAnterior, fechaNueva) y actualizar
-        throw new UnsupportedOperationException("HU-10 pendiente");
+        List<String> errores = new ArrayList<>();
+        if (dto.obligacionIds() == null || dto.obligacionIds().isEmpty() || dto.obligacionIds().contains(null)) {
+            errores.add("obligacionIds (al menos una obligación)");
+        }
+        if (dto.nuevaFecha() == null) errores.add("nuevaFecha");
+        if (!errores.isEmpty()) {
+            throw new ValidationException("Faltan o son inválidos: " + String.join(", ", errores));
+        }
+
+        List<Long> ids = dto.obligacionIds().stream().distinct().toList();
+        List<Obligacion> lista = obligacionRepository.findAllById(ids);
+        if (lista.size() != ids.size()) {
+            throw new EntityNotFoundException("Obligación no encontrada");
+        }
+
+        List<String> rechazos = new ArrayList<>();
+        for (Obligacion o : lista) {
+            if (o.getEstado() == Obligacion.Estado.DECLARADO) {
+                rechazos.add("obligación " + o.getId() + " ya declarada");
+            } else if (dto.nuevaFecha().isBefore(o.getPeriodo())) {
+                rechazos.add("obligación " + o.getId() + ": la fecha es anterior al periodo " + o.getPeriodo().toString().substring(0, 7));
+            }
+        }
+        if (!rechazos.isEmpty()) {
+            throw new ValidationException("No se cambió ninguna fecha: " + String.join("; ", rechazos));
+        }
+
+        for (Obligacion o : lista) {
+            if (o.getFechaVencimiento().equals(dto.nuevaFecha())) continue;
+            VencimientoHistorial h = new VencimientoHistorial();
+            h.setObligacionId(o.getId());
+            h.setFechaAnterior(o.getFechaVencimiento());
+            h.setFechaNueva(dto.nuevaFecha());
+            historialRepository.save(h);
+            o.setFechaVencimiento(dto.nuevaFecha());
+        }
+        return obligacionRepository.saveAll(lista).stream().map(ObligacionDto::from).toList();
+    }
+
+    /** PROVISIONAL hasta HU-07. */
+    @Transactional(readOnly = true)
+    public List<ObligacionDto> listar(Long clienteId) {
+        return obligacionRepository.findByClienteIdOrderByPeriodoDesc(clienteId).stream().map(ObligacionDto::from).toList();
     }
 
     private Obligacion obtener(Long obligacionId) {

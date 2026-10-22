@@ -4,7 +4,6 @@ import com.pluscontable.tributario.dto.CambioVencimientoDto;
 import com.pluscontable.tributario.dto.DeclaracionDto;
 import com.pluscontable.tributario.dto.ObligacionDto;
 import com.pluscontable.tributario.service.ObligacionService;
-import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +17,12 @@ public class ObligacionController {
         this.service = service;
     }
 
+    /** PROVISIONAL hasta HU-07: listado mínimo para elegir obligaciones en HU-10. */
+    @GetMapping
+    public List<ObligacionDto> listar(@RequestParam Long clienteId) {
+        return service.listar(clienteId);
+    }
+
     @GetMapping("/{id}")
     public ObligacionDto buscar(@PathVariable Long id) {
         return service.buscar(id);
@@ -29,7 +34,7 @@ public class ObligacionController {
     }
 
     @PatchMapping("/vencimiento")
-    public List<ObligacionDto> cambiarVencimiento(@Valid @RequestBody CambioVencimientoDto dto) {
+    public List<ObligacionDto> cambiarVencimiento(@RequestBody CambioVencimientoDto dto) {
         return service.cambiarVencimiento(dto);
     }
 }
