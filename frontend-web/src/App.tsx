@@ -14,6 +14,7 @@ function LayoutCliente() {
         <Link to={`/clientes/${clienteId}/trabajadores`}>Trabajadores</Link>
         <Link to={`/clientes/${clienteId}/documentos`}>Expediente</Link>
         <Link to={`/clientes/${clienteId}/acuerdo`}>Acuerdo</Link>
+        <Link to={`/clientes/${clienteId}/vencimientos`}>Vencimientos</Link>
       </nav>
       <main className="p-4">
         <Outlet />
@@ -29,9 +30,9 @@ export default function App() {
         <Route path="trabajadores" element={<TrabajadoresPage />} />
         <Route path="documentos" element={<DocumentosPage />} />
         <Route path="acuerdo" element={<AcuerdoPage />} />
+        <Route path="vencimientos" element={<VencimientosPage />} />
       </Route>
       <Route path="/obligaciones/:obligacionId/declarar" element={<DeclaracionPage />} />
-      <Route path="/obligaciones/vencimientos" element={<VencimientosPage />} />
       <Route path="*" element={<p className="p-4">Abra /clientes/1/trabajadores</p>} />
     </Routes>
   )

@@ -20,6 +20,10 @@ export interface Declaracion {
 
 const base = '/api/tributario/obligaciones'
 
+// PROVISIONAL hasta HU-07
+export const listarObligaciones = (clienteId: number) =>
+  tributarioApi.get<Obligacion[]>(base, { params: { clienteId } }).then((r) => r.data)
+
 export const buscarObligacion = (id: number) =>
   tributarioApi.get<Obligacion>(`${base}/${id}`).then((r) => r.data)
 
