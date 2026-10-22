@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.acuerdos_servicio (
     cliente_id            BIGINT NOT NULL UNIQUE REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
     servicios_contratados VARCHAR(1000),
     honorario_mensual     NUMERIC(12,2) NOT NULL CHECK (honorario_mensual > 0),
+    honorario_desde       DATE NOT NULL, -- desde cuándo rige el honorario actual
     fecha_inicio          DATE NOT NULL
 );
 

@@ -26,6 +26,10 @@ public class AcuerdoServicio {
     @Column(name = "honorario_mensual", nullable = false)
     private BigDecimal honorarioMensual;
 
+    /** Desde cuándo rige el honorario actual; al cambiarlo pasa a ser el inicio del tramo en el historial. */
+    @Column(name = "honorario_desde", nullable = false)
+    private LocalDate honorarioDesde;
+
     @Column(name = "fecha_inicio", nullable = false)
     private LocalDate fechaInicio;
 }

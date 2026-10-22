@@ -2,7 +2,6 @@ package com.pluscontable.tributario.controller;
 
 import com.pluscontable.tributario.dto.AcuerdoDto;
 import com.pluscontable.tributario.service.AcuerdoService;
-import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,7 +20,7 @@ public class AcuerdoController {
     }
 
     @PutMapping
-    public AcuerdoDto guardar(@PathVariable Long clienteId, @Valid @RequestBody AcuerdoDto dto) {
+    public AcuerdoDto guardar(@PathVariable Long clienteId, @RequestBody AcuerdoDto dto) {
         return service.guardar(clienteId, dto);
     }
 }
