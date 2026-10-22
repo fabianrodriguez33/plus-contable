@@ -22,15 +22,28 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // ADMIN existe en ms-auth (administrador del estudio) y tiene los mismos permisos que CONTADOR
+    static final String[] ESTUDIO = {"CONTADOR", "ADMIN"};
+    static final String[] ESTUDIO_Y_CLIENTE = {"CONTADOR", "ADMIN", "CLIENTE_MYPE"};
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                // HU-38: matriz de permisos (docs/sprint1-jeanpierre/HU-38.md). Lo no listado es solo del estudio.
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .anyRequest().authenticated())
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/tributario/clientes/*/trabajadores",
+                                "/api/tributario/clientes/*/documentos",
+                                "/api/tributario/clientes/*/documentos/*/archivo",
+                                "/api/tributario/clientes/*/acuerdo",
+                                "/api/tributario/obligaciones",
+                                "/api/tributario/obligaciones/*")
+                        .hasAnyRole(ESTUDIO_Y_CLIENTE)
+                        .anyRequest().hasAnyRole(ESTUDIO))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
