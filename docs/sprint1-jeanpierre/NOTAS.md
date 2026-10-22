@@ -27,6 +27,11 @@ Esta rama sale de `main` (vacío). En esas ramas ya existen versiones distintas 
   máximo 10 MB (`spring.servlet.multipart` y `ExpedienteService.TAMANO_MAXIMO`). Si se despliega en varias
   instancias o contenedores, pasar a un volumen compartido o almacenamiento de objetos.
 - **HU-38:** para que "un cliente nunca vea datos de otro" hace falta saber qué `cliente_id` tiene el usuario
-  `CLIENTE_MYPE`. Hoy el JWT no lo trae y `clientes` no tiene dueño. Hay que acordarlo con Ricardo (claim `clienteId` en el token).
+  `CLIENTE_MYPE`. Propuesta en [HU-38.md](HU-38.md): claim `clienteId` en el JWT, llenado desde
+  `auth_schema.usuarios.cliente_id`. Acordar con Ricardo (HU-36/HU-37). ms-auth aún no tiene el rol `CLIENTE_MYPE`.
+- **Ramas del remoto (vistas 2026-10-22):** aparecieron `feature/HU-03-nomina`, `HU-04-documentos`,
+  `HU-05-acuerdo-honorarios`, `HU-09-declaracion`, `HU-10-variar-fecha`, `HU-38-permisos` (y otras), todas vacías
+  sobre `develop`. Parece que el equipo usa una rama por HU desde `develop`, distinto a esta guía (una rama desde
+  `main`). Confirmar con el equipo antes de subir nada.
 - **HU-03 prioridad:** tarjeta Alta vs Excel Media; se usa Media hasta que Beto confirme.
 - HU-05, HU-09, HU-10 y HU-38: criterios tomados de la hoja de tareas; contrastar con las tarjetas DoR.
