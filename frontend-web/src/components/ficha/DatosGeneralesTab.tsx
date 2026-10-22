@@ -3,6 +3,7 @@ import { Eye, Save } from 'lucide-react'
 import { Input, Select } from '../Input'
 import Button from '../Button'
 import type { Cliente, Regimen } from '../../types'
+import { motivoRucInvalido } from '../../utils/ruc'
 
 interface Props {
   cliente: Cliente
@@ -14,11 +15,25 @@ interface Props {
 
 export default function DatosGeneralesTab({ cliente, esNuevo, onCambio, onGuardar, onRevelarSol }: Props) {
   const [verClave, setVerClave] = useState(false)
+  const [rucTocado, setRucTocado] = useState(false)
+  // se avisa al completar los 11 dígitos o al salir del campo, no mientras se escribe
+  const errorRuc = cliente.ruc.length === 11 || rucTocado ? motivoRucInvalido(cliente.ruc) : null
+
+  const enviar = (e: FormEvent) => {
+    if (motivoRucInvalido(cliente.ruc)) {
+      e.preventDefault()
+      setRucTocado(true)
+      return
+    }
+    onGuardar(e)
+  }
+
   return (
-    <form onSubmit={onGuardar} className="space-y-6">
+    <form onSubmit={enviar} className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
-        <Input label="RUC (11 dígitos)" value={cliente.ruc} maxLength={11} inputMode="numeric" pattern="[0-9]{11}"
-          title="11 dígitos numéricos" required onChange={(e) => onCambio('ruc', e.target.value.replace(/\D/g, ''))} />
+        <Input label="RUC (11 dígitos)" value={cliente.ruc} maxLength={11} inputMode="numeric" required
+          error={errorRuc} onBlur={() => setRucTocado(true)}
+          onChange={(e) => onCambio('ruc', e.target.value.replace(/\D/g, ''))} />
         <Input label="Razón social" value={cliente.razonSocial} required
           onChange={(e) => onCambio('razonSocial', e.target.value)} />
         <Select label="Régimen tributario" value={cliente.regimenTributario}
