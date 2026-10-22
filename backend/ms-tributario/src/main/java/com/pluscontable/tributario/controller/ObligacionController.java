@@ -24,7 +24,7 @@ public class ObligacionController {
     }
 
     @PatchMapping("/{id}/declaracion")
-    public ObligacionDto declarar(@PathVariable Long id, @Valid @RequestBody DeclaracionDto dto) {
+    public ObligacionDto declarar(@PathVariable Long id, @RequestBody DeclaracionDto dto) {
         return service.declarar(id, dto);
     }
 
