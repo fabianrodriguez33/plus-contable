@@ -41,3 +41,11 @@ INSERT INTO auth_schema.roles (nombre, descripcion) VALUES
     ('ADMIN', 'Administrador del estudio'),
     ('CONTADOR', 'Contador / analista tributario')
 ON CONFLICT (nombre) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS auth_schema.claves_sol (
+    id                  BIGSERIAL PRIMARY KEY,
+    ruc                 VARCHAR(11)  NOT NULL UNIQUE,
+    usuario_sol_cifrado VARCHAR(500) NOT NULL,
+    clave_sol_cifrada   VARCHAR(500) NOT NULL,
+    actualizado_en      TIMESTAMP    NOT NULL DEFAULT NOW()
+);
