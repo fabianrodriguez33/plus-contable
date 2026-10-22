@@ -52,8 +52,16 @@ export function archivarDocumento(clienteId: number, tipo: TipoDocumentoLegal, f
   return tributarioApi.post<DocumentoLegal>(`${base(clienteId)}/documentos`, form).then((r) => r.data)
 }
 
-export const urlDescarga = (clienteId: number, documentoId: number) =>
-  `${base(clienteId)}/documentos/${documentoId}/archivo`
+// se pide como blob (no un <a href>) para que viaje el JWT del interceptor
+export async function descargarDocumento(clienteId: number, d: DocumentoLegal) {
+  const r = await tributarioApi.get<Blob>(`${base(clienteId)}/documentos/${d.id}/archivo`, { responseType: 'blob' })
+  const url = URL.createObjectURL(r.data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = d.nombreArchivo
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ---- HU-05 ----
 export interface Acuerdo {
