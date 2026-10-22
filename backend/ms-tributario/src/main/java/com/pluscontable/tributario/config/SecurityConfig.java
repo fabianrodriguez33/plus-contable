@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.config;
 
+import jakarta.servlet.DispatcherType;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +35,10 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 // HU-38: matriz de permisos (docs/sprint1-jeanpierre/HU-38.md). Lo no listado es solo del estudio.
                 .authorizeHttpRequests(a -> a
+                        // El contenedor reenvia los errores a /error SIN volver a ejecutar JwtFilter: sin esta regla
+                        // todo error (404, 409, 500...) se evaluaba como anonimo y salia como 401.
+                        // Solo abre el reenvio interno de errores; GET /error directo sigue exigiendo token.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/tributario/clientes/*/trabajadores",
