@@ -23,8 +23,9 @@ Esta rama sale de `main` (vacío). En esas ramas ya existen versiones distintas 
 
 ## Decisiones pendientes
 
-- **HU-04 almacenamiento:** propuesta simple = disco local en `app.storage.dir` (`./uploads`, ya ignorado en git),
-  máximo 10 MB (ya configurado en `spring.servlet.multipart`). Confirmar con Jeanpierre.
+- **HU-04 almacenamiento (decidido 2026-10-22):** disco local en `app.storage.dir` (`./uploads`, ignorado en git),
+  máximo 10 MB (`spring.servlet.multipart` y `ExpedienteService.TAMANO_MAXIMO`). Si se despliega en varias
+  instancias o contenedores, pasar a un volumen compartido o almacenamiento de objetos.
 - **HU-38:** para que "un cliente nunca vea datos de otro" hace falta saber qué `cliente_id` tiene el usuario
   `CLIENTE_MYPE`. Hoy el JWT no lo trae y `clientes` no tiene dueño. Hay que acordarlo con Ricardo (claim `clienteId` en el token).
 - **HU-03 prioridad:** tarjeta Alta vs Excel Media; se usa Media hasta que Beto confirme.
