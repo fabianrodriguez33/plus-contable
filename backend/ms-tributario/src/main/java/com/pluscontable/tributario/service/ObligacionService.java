@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,7 +69,8 @@ public class ObligacionService {
     @Transactional
     public List<ObligacionDto> cambiarVencimiento(CambioVencimientoDto dto) {
         List<String> errores = new ArrayList<>();
-        if (dto.obligacionIds() == null || dto.obligacionIds().isEmpty() || dto.obligacionIds().contains(null)) {
+        if (dto.obligacionIds() == null || dto.obligacionIds().isEmpty()
+                || dto.obligacionIds().stream().anyMatch(Objects::isNull)) {
             errores.add("obligacionIds (al menos una obligación)");
         }
         if (dto.nuevaFecha() == null) errores.add("nuevaFecha");
