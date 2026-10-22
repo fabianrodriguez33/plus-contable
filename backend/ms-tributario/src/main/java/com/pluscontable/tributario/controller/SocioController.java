@@ -1,6 +1,8 @@
 package com.pluscontable.tributario.controller;
 
 import com.pluscontable.tributario.dto.ActivoFijoDto;
+import com.pluscontable.tributario.dto.AporteDto;
+import com.pluscontable.tributario.dto.ResumenSocietarioDto;
 import com.pluscontable.tributario.dto.SocioDto;
 import com.pluscontable.tributario.service.PatrimonioLaboralService;
 import com.pluscontable.tributario.service.SocioService;
@@ -29,15 +31,29 @@ public class SocioController {
         return socioService.listar(clienteId);
     }
 
+    /** Socios con capital social total, porcentaje total y diferencia respecto a 100 %. */
+    @GetMapping("/socios/resumen")
+    public ResumenSocietarioDto resumenSocietario(@PathVariable Long clienteId) {
+        return socioService.resumen(clienteId);
+    }
+
     @PutMapping("/socios")
-    public List<SocioDto> reemplazarSocios(@PathVariable Long clienteId, @RequestBody List<@Valid SocioDto> socios) {
+    public ResumenSocietarioDto reemplazarSocios(@PathVariable Long clienteId,
+                                                 @RequestBody List<@Valid SocioDto> socios) {
         return socioService.reemplazar(clienteId, socios);
     }
 
     @PostMapping("/socios")
     @ResponseStatus(HttpStatus.CREATED)
-    public List<SocioDto> registrarSocios(@PathVariable Long clienteId, @RequestBody List<@Valid SocioDto> socios) {
+    public ResumenSocietarioDto registrarSocios(@PathVariable Long clienteId,
+                                                @RequestBody List<@Valid SocioDto> socios) {
         return socioService.reemplazar(clienteId, socios);
+    }
+
+    @PatchMapping("/socios/{socioId}/aporte")
+    public ResumenSocietarioDto actualizarAporte(@PathVariable Long clienteId, @PathVariable Long socioId,
+                                                 @Valid @RequestBody AporteDto dto) {
+        return socioService.actualizarAporte(clienteId, socioId, dto.aporte());
     }
 
     @GetMapping("/activos")

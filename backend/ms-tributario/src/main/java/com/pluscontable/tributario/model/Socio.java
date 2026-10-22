@@ -26,6 +26,9 @@ public class Socio {
     @Column(name = "numero_documento", nullable = false, length = 20)
     private String numeroDocumento;
 
+    @Column(nullable = false, precision = 14, scale = 2)
+    private BigDecimal aporte = BigDecimal.ZERO;
+
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal porcentaje;
 
