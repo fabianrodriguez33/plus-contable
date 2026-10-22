@@ -1,4 +1,5 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
+import { isJwtActive } from './jwtSession'
 
 export interface Usuario {
   id: number
@@ -27,7 +28,10 @@ export function logout(): void {
 }
 
 export function isAuthenticated(): boolean {
-  return !!localStorage.getItem(TOKEN_KEY)
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token && isJwtActive(token)) return true
+  if (token) logout()
+  return false
 }
 
 export function usuarioActual(): Usuario | null {
