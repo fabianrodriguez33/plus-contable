@@ -3,7 +3,7 @@ package com.pluscontable.tributario.pago;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/** Precondiciones independientes para registrar una constancia en HU-13. */
+/** Precondiciones independientes para registrar un pago en HU-13. */
 public final class RegistroPagoValidator {
 
     private RegistroPagoValidator() {
@@ -20,15 +20,12 @@ public final class RegistroPagoValidator {
     }
 
     public static void validarDatos(LocalDate fechaPago, BigDecimal montoPagado,
-                                    String numeroOperacion, String usuarioRegistro) {
+                                    String usuarioRegistro) {
         if (fechaPago == null) {
             throw new IllegalArgumentException("fecha_pago es obligatoria");
         }
         if (montoPagado == null || montoPagado.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("monto_pagado debe ser mayor que cero");
-        }
-        if (numeroOperacion == null || numeroOperacion.isBlank()) {
-            throw new IllegalArgumentException("numero_operacion es obligatorio");
         }
         if (usuarioRegistro == null || usuarioRegistro.isBlank()) {
             throw new IllegalArgumentException("usuario_registro es obligatorio");

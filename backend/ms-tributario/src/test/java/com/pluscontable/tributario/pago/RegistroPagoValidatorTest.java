@@ -36,6 +36,10 @@ public final class RegistroPagoValidatorTest {
         comprobar(pago.referenciaConstancia() == null); // opcional hasta que el equipo lo confirme
         comprobar(pago.usuarioRegistro().equals("ricardo"));
         comprobar(pago.registradoEn().equals(LocalDateTime.of(2026, 10, 22, 10, 0)));
+        comprobar(RegistroPago.crear(2L, true, FECHA, MONTO, null, null,
+                "ricardo", RELOJ).numeroOperacion() == null);
+        comprobar(RegistroPago.crear(2L, true, FECHA, MONTO, " ", null,
+                "ricardo", RELOJ).numeroOperacion().isBlank());
         comprobar(RegistroPago.crear(2L, true, FECHA, MONTO, "OP-456", "constancias/456.pdf",
                 "ricardo", RELOJ).referenciaConstancia().equals("constancias/456.pdf"));
 
@@ -51,10 +55,6 @@ public final class RegistroPagoValidatorTest {
                 "OP-123", null, "ricardo", RELOJ));
         rechazar(IllegalArgumentException.class, () -> RegistroPago.crear(1L, true, FECHA, new BigDecimal("-0.01"),
                 "OP-123", null, "ricardo", RELOJ));
-        rechazar(IllegalArgumentException.class, () -> RegistroPago.crear(1L, true, FECHA, MONTO,
-                null, null, "ricardo", RELOJ));
-        rechazar(IllegalArgumentException.class, () -> RegistroPago.crear(1L, true, FECHA, MONTO,
-                " ", null, "ricardo", RELOJ));
         rechazar(IllegalArgumentException.class, () -> RegistroPago.crear(1L, true, FECHA, MONTO,
                 "OP-123", null, null, RELOJ));
         rechazar(IllegalArgumentException.class, () -> RegistroPago.crear(1L, true, FECHA, MONTO,

@@ -32,7 +32,7 @@ public final class RegistroPago {
                                      BigDecimal montoPagado, String numeroOperacion,
                                      String referenciaConstancia, String usuarioRegistro, Clock clock) {
         RegistroPagoValidator.validar(obligacionId, declarada);
-        RegistroPagoValidator.validarDatos(fechaPago, montoPagado, numeroOperacion, usuarioRegistro);
+        RegistroPagoValidator.validarDatos(fechaPago, montoPagado, usuarioRegistro);
         if (clock == null) {
             throw new IllegalArgumentException("clock es obligatorio");
         }
