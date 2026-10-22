@@ -24,8 +24,17 @@ export interface Socio {
   nombreCompleto: string
   tipoDocumento: string
   numeroDocumento: string
+  aporte: number
   porcentaje: number
   cargo?: string
+}
+
+export interface ResumenSocietario {
+  socios: Socio[]
+  capitalSocialTotal: number
+  porcentajeTotal: number
+  diferencia: number
+  completo: boolean
 }
 
 export interface ActivoFijo {

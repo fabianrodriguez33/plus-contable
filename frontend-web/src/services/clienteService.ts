@@ -1,5 +1,5 @@
 import { tributarioApi } from './apiClient'
-import type { ActivoFijo, Cliente, Socio } from '../types'
+import type { ActivoFijo, Cliente, ResumenSocietario, Socio } from '../types'
 
 const base = (id: number) => `/api/tributario/clientes/${id}`
 
@@ -8,9 +8,12 @@ export const obtenerCliente = async (id: number) => (await tributarioApi.get<Cli
 export const crearCliente = async (c: Cliente) => (await tributarioApi.post<Cliente>('/api/tributario/clientes', c)).data
 export const actualizarCliente = async (id: number, c: Cliente) => (await tributarioApi.put<Cliente>(base(id), c)).data
 
-export const listarSocios = async (id: number) => (await tributarioApi.get<Socio[]>(`${base(id)}/socios`)).data
+export const obtenerResumenSocietario = async (id: number) =>
+  (await tributarioApi.get<ResumenSocietario>(`${base(id)}/socios/resumen`)).data
 export const guardarSocios = async (id: number, socios: Socio[]) =>
-  (await tributarioApi.put<Socio[]>(`${base(id)}/socios`, socios)).data
+  (await tributarioApi.put<ResumenSocietario>(`${base(id)}/socios`, socios)).data
+export const actualizarAporte = async (id: number, socioId: number, aporte: number) =>
+  (await tributarioApi.patch<ResumenSocietario>(`${base(id)}/socios/${socioId}/aporte`, { aporte })).data
 
 export const listarActivos = async (id: number) => (await tributarioApi.get<ActivoFijo[]>(`${base(id)}/activos`)).data
 export const agregarActivo = async (id: number, a: ActivoFijo) =>
