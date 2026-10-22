@@ -7,6 +7,10 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.pluscontable.tributario.controller.AcuerdoController;
+import com.pluscontable.tributario.controller.DocumentoController;
+import com.pluscontable.tributario.controller.ObligacionController;
+import com.pluscontable.tributario.controller.TrabajadorController;
 import com.pluscontable.tributario.model.DocumentoLegal;
 import com.pluscontable.tributario.service.AcuerdoService;
 import com.pluscontable.tributario.service.ExpedienteService;
@@ -37,7 +41,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /** HU-38 · Tarea 84: cada rol contra cada opción de la matriz (con JWT reales firmados como ms-auth). */
-@WebMvcTest
+@WebMvcTest(controllers = {TrabajadorController.class, DocumentoController.class, AcuerdoController.class,
+        ObligacionController.class})
 @Import(SecurityConfig.class)
 class PermisosPorRolTest {
 
