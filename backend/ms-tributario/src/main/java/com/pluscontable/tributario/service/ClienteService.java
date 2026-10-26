@@ -11,14 +11,11 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClienteService {
-
-    private static final Pattern RUC = Pattern.compile("^[0-9]{11}$");
 
     private final ClienteRepository clienteRepository;
     private final CredencialSolRepository credencialRepository;
@@ -120,8 +117,9 @@ public class ClienteService {
     }
 
     private void validarRuc(String ruc) {
-        if (ruc == null || !RUC.matcher(ruc).matches()) {
-            throw new ValidationException("El RUC debe tener exactamente 11 dígitos numéricos");
+        String motivo = RucValidator.motivoInvalido(ruc);
+        if (motivo != null) {
+            throw new ValidationException(motivo);
         }
     }
 }

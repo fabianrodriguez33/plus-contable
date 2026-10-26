@@ -5,15 +5,19 @@ const base =
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string
+  /** Mensaje de validación que se muestra bajo el campo. */
+  error?: string | null
 }
 
-export function Input({ label, className = '', id, ...rest }: InputProps) {
+export function Input({ label, className = '', id, error, ...rest }: InputProps) {
   const auto = useId()
   const inputId = id ?? auto
   return (
     <div>
       <label htmlFor={inputId} className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
-      <input id={inputId} className={`${base} ${className}`} {...rest} />
+      <input id={inputId} className={`${base} ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''} ${className}`}
+        aria-invalid={error ? true : undefined} aria-describedby={error ? `${inputId}-error` : undefined} {...rest} />
+      {error && <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   )
 }

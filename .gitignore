@@ -5,3 +5,9 @@ uploads/
 *.log
 .idea/
 .vscode/
+
+# Padron reducido del RUC de SUNAT (~394 MB zip, ~1.6 GB txt): nunca se versiona
+padron_reducido_*
+*padron*.zip
+*padron*.txt
+data/padron/
