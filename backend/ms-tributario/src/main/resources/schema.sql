@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.socios (
     nombre_completo  VARCHAR(200) NOT NULL,
     tipo_documento   VARCHAR(10)  NOT NULL DEFAULT 'DNI',
     numero_documento VARCHAR(20)  NOT NULL,
+    aporte           NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (aporte >= 0),
     porcentaje       NUMERIC(5,2) NOT NULL CHECK (porcentaje > 0 AND porcentaje <= 100),
     cargo            VARCHAR(80)
 );
@@ -136,6 +137,9 @@ ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(15
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS quinta_categoria BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- HU-02: aporte de cada socio (S/). Los socios anteriores quedan con aporte 0 hasta que se edite.
+ALTER TABLE tributario_schema.socios ADD COLUMN IF NOT EXISTS aporte NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (aporte >= 0);
 
 -- HU-03: datos de contrato del extranjero; regimen_laboral deja de ser obligatorio.
 -- No se fuerza NOT NULL en fecha_ingreso para no rechazar filas anteriores sin fecha.
