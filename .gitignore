@@ -11,3 +11,6 @@ padron_reducido_*
 *padron*.zip
 *padron*.txt
 data/padron/
+
+# Secretos locales (la plantilla es .env.example)
+.env

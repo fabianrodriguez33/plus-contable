@@ -2,12 +2,15 @@ server:
   port: 8082
 
 spring:
+  config:
+    # .env en la raiz del repo (ver .env.example); las variables del sistema tienen prioridad
+    import: optional:file:./.env[.properties],optional:file:../../.env[.properties]
   application:
     name: ms-tributario
   datasource:
-    url: jdbc:postgresql://localhost:5432/plus_contable_db
-    username: postgres
-    password: postgres
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/plus_contable_db}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: none
@@ -23,10 +26,10 @@ spring:
 app:
   jwt:
     # Debe ser identico al de ms-auth
-    secret: ${JWT_SECRET:plus-contable-jwt-secret-key-2026-v&f-asesores-minimo-32-bytes}
+    secret: ${JWT_SECRET}
   aes:
-    secret-key: ${AES_SECRET_KEY:PlusContableAES256SecretKey2026!}
-    iv: ${AES_IV:PlusContableIV01}
+    secret-key: ${AES_SECRET_KEY}
+    iv: ${AES_IV}
   cors:
     allowed-origins: http://localhost:5173
   storage:
