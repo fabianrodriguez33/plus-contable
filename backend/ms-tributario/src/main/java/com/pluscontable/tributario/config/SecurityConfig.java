@@ -40,6 +40,7 @@ public class SecurityConfig {
                         // Solo abre el reenvio interno de errores; GET /error directo sigue exigiendo token.
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tributario/health").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/tributario/clientes/*/trabajadores",
                                 "/api/tributario/clientes/*/documentos",
