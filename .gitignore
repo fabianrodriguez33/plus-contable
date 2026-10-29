@@ -5,3 +5,6 @@ uploads/
 *.log
 .idea/
 .vscode/
+
+# Secretos locales (la plantilla es .env.example)
+.env
