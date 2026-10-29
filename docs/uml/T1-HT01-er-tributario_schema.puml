@@ -1,0 +1,150 @@
+@startuml
+!pragma layout smetana
+title T1 · HT-01 · Modelo de datos de tributario_schema (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>> (11 dígitos)
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO
+  direccion, telefono, email
+  * activo : BOOLEAN
+  * creado_en : TIMESTAMP
+}
+
+entity "credenciales_sol" as credenciales {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK, UNIQUE>>
+  * usuario_sol_cifrado : VARCHAR(300)
+  * clave_sol_cifrada : VARCHAR(300)
+  * actualizado_en : TIMESTAMP
+}
+
+entity "documentos_legales" as documentos {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : MINUTA | COPIA_LITERAL | VIGENCIA_PODERES | FICHA_RUC
+  * version : INT
+  * fecha_emision : DATE
+  * nombre_archivo, content_type
+  * tamano_bytes : BIGINT
+  * ruta_almacenamiento : VARCHAR(400)
+  * subido_en : TIMESTAMP
+  UNIQUE (cliente_id, tipo, version)
+}
+
+entity "socios" as socios {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * nombre_completo, tipo_documento, numero_documento
+  * aporte : NUMERIC(14,2) >= 0
+  * porcentaje : NUMERIC(5,2) (0, 100]
+  cargo : VARCHAR(80)
+}
+
+entity "activos_fijos" as activos {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  codigo, categoria
+  * descripcion : VARCHAR(250)
+  * valor_adquisicion : NUMERIC(14,2)
+  fecha_adquisicion : DATE
+}
+
+entity "trabajadores" as trabajadores {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * nombre_completo
+  * tipo_documento : DNI | CE | PASAPORTE | PTP
+  * numero_documento
+  * extranjero : BOOLEAN
+  nacionalidad
+  * sistema_pensionario : ONP | AFP
+  nombre_afp
+  * fecha_ingreso : DATE
+  remuneracion : NUMERIC(12,2)
+  tipo_contrato, fecha_inicio_contrato, fecha_fin_contrato
+  UNIQUE (cliente_id, tipo_documento, numero_documento)
+}
+
+entity "acuerdos_servicio" as acuerdos {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK, UNIQUE>>
+  servicios_contratados : VARCHAR(1000)
+  * honorario_mensual : NUMERIC(12,2) > 0
+  * honorario_desde : DATE
+  * fecha_inicio : DATE
+}
+
+entity "honorarios_historial" as honorarios {
+  * id : BIGSERIAL <<PK>>
+  --
+  * acuerdo_id : BIGINT <<FK>>
+  * monto : NUMERIC(12,2)
+  * vigente_desde, vigente_hasta : DATE
+}
+
+entity "obligaciones" as obligaciones {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  tipo_obligacion : IGV | RENTA | PLAME | ESSALUD |\n RETENCION_QUINTA | AFP (nulo en filas antiguas)
+  * periodo : DATE (primer día del mes)
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO
+  fecha_declaracion : DATE
+  numero_formulario : VARCHAR(30)
+  monto_determinado : NUMERIC(14,2)
+  UNIQUE (cliente_id, tipo_obligacion, periodo)
+}
+
+entity "vencimientos_historial" as venc_hist {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * fecha_anterior : DATE
+  * fecha_nueva : DATE
+  * cambiado_en : TIMESTAMP
+}
+
+entity "cronograma_tributario" as cronograma {
+  * periodo_tributario : DATE (día 1)
+  * ultimo_digito_ruc : VARCHAR(20)
+  --
+  * fecha_vencimiento : DATE
+  UNIQUE (periodo_tributario, ultimo_digito_ruc)
+}
+
+clientes ||--o| credenciales
+clientes ||--o{ documentos
+clientes ||--o{ socios
+clientes ||--o{ activos
+clientes ||--o{ trabajadores
+clientes ||--o| acuerdos
+acuerdos ||--o{ honorarios
+clientes ||--o{ obligaciones
+obligaciones ||--o{ venc_hist
+
+note bottom of cronograma
+  Sin clave foránea: es una tabla de consulta que se carga desde
+  cronograma_sunat_2026.csv (84 filas = 12 periodos x 7 grupos).
+  Ningún flujo del alta de obligaciones la consulta hoy.
+end note
+
+note top of clientes
+  Todas las claves foráneas a clientes son ON DELETE CASCADE.
+  Las Claves SOL se guardan cifradas (AES/GCM, prefijo v2:).
+end note
+
+footer Fuente: backend/ms-tributario/src/main/resources/schema.sql (develop 6db0036)
+@enduml

@@ -1,0 +1,79 @@
+@startuml
+!pragma layout smetana
+title T28 · HU-02 · Clases de socios y capital social (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+package "controller" {
+  class SocioController {
+    +listarSocios(clienteId): List<SocioDto>
+    +resumenSocietario(clienteId): ResumenSocietarioDto
+    +reemplazarSocios(clienteId, socios): ResumenSocietarioDto
+    +registrarSocios(clienteId, socios): ResumenSocietarioDto
+    +actualizarAporte(clienteId, socioId, dto): ResumenSocietarioDto
+  }
+}
+
+package "service" {
+  class SocioService {
+    -CIEN = 100.00
+    +listar(clienteId): List<SocioDto>
+    +resumen(clienteId): ResumenSocietarioDto
+    +reemplazar(clienteId, socios): ResumenSocietarioDto
+    +actualizarAporte(clienteId, socioId, aporte): ResumenSocietarioDto
+  }
+  class ClienteService {
+    +buscar(id): Cliente
+  }
+}
+
+package "dto" {
+  class SocioDto
+  class ResumenSocietarioDto {
+    socios: List<SocioDto>
+    capitalSocialTotal
+    porcentajeTotal
+    diferencia
+    completo: boolean
+  }
+  class AporteDto {
+    aporte
+  }
+}
+
+package "model" {
+  class Cliente
+  class Socio {
+    id: Long
+    clienteId: Long
+    nombreCompleto: String
+    tipoDocumento: String
+    numeroDocumento: String
+    aporte: BigDecimal
+    porcentaje: BigDecimal
+    cargo: String
+  }
+}
+
+interface SocioRepository {
+  findByClienteIdOrderById()
+  findByIdAndClienteId()
+  deleteByClienteId()
+}
+
+SocioController --> SocioService
+SocioController ..> SocioDto
+SocioController ..> AporteDto
+SocioService --> ClienteService : exige que el cliente exista
+SocioService --> SocioRepository
+SocioService ..> ResumenSocietarioDto : calcula capital, % y diferencia
+ResumenSocietarioDto o-- "0..*" SocioDto
+SocioRepository ..> Socio
+Cliente "1" <-- "0..*" Socio : cliente_id
+
+note bottom of SocioService
+  reemplazar(): la suma de porcentajes debe ser exactamente 100.00;
+  si no, ValidationException con "faltan" o "sobran" X%.
+  Capital social total = suma de aportes.
+end note
+@enduml

@@ -1,0 +1,63 @@
+@startuml
+!pragma layout smetana
+title T1 · HT-01 · Diagrama de componentes (código de develop)
+skinparam shadowing false
+skinparam componentStyle rectangle
+
+actor "Usuario del estudio\n(ADMIN / CONTADOR)" as U
+
+node "Navegador" {
+  component "frontend-web\nReact 18 + TypeScript + Vite\n:5173" as FE
+}
+
+node "ms-auth  (Spring Boot 3.3.5, Java 21)  :8081" {
+  component "AuthController\n/api/auth/login, /me, /health" as AC
+  component "AuthService\n(bloqueo por intentos, bitácora)" as AS
+  component "JwtProvider\n(firma HS256, expira 8 h)" as JP
+  component "JwtFilter + SecurityConfig" as AF
+  component "DataSeeder\n(crea el administrador inicial)" as DS
+}
+
+node "ms-tributario  (Spring Boot 3.3.5, Java 21)  :8082" {
+  component "Controllers\nCliente, Socio, Trabajador,\nDocumento, Acuerdo, Obligacion, Health" as TC
+  component "Services\nCliente, Socio, Trabajador, Expediente,\nAcuerdo, Obligacion, ObligacionProgramacion,\nPatrimonioLaboral" as TS
+  component "JwtFilter + SecurityConfig\n(matriz de permisos por rol)" as TF
+  component "AesUtil\n(Claves SOL: AES/GCM, prefijo v2:)" as AES
+  component "CronogramaSunatLoader\n(carga el CSV 2026 al arrancar)" as CL
+  component "GlobalExceptionHandler" as GE
+}
+
+database "PostgreSQL 16\nplus_contable_db" as DB {
+  folder "auth_schema" as AUTH
+  folder "tributario_schema" as TRIB
+}
+
+folder "./uploads\n(app.storage.dir)\nPDF del expediente" as FS
+
+U --> FE
+FE --> AC : POST /api/auth/login\n(HTTP + JSON)
+FE --> TC : /api/tributario/**\nAuthorization: Bearer <JWT>
+AC --> AS
+AS --> JP
+AF ..> JP
+TF ..> TC : autoriza por rol
+TC --> TS
+TS --> AES
+TS --> FS : guarda y lee PDF
+CL --> TRIB
+AS --> AUTH : JDBC
+DS --> AUTH
+TS --> TRIB : JDBC
+
+note bottom of TF
+  ms-tributario NO llama a ms-auth: valida el JWT por su cuenta con el mismo
+  secreto compartido (variable JWT_SECRET). No hay llamada HTTP entre servicios.
+end note
+
+note bottom of DB
+  Una sola base y un solo usuario de conexión (postgres) para ambos servicios.
+  No existe usuario por esquema (tarea 4 pendiente).
+end note
+
+footer Fuente: backend/ms-auth, backend/ms-tributario, frontend-web y docker-compose.yml en develop (6db0036)
+@enduml

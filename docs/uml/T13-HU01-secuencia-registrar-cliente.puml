@@ -1,0 +1,42 @@
+@startuml
+title T13 · HU-01 · Secuencia: registrar un cliente MYPE (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\nFichaMaestraPage" as FE
+participant "ClienteController" as CC
+participant "ClienteService" as CS
+participant "RucValidator" as RV
+participant "ClienteRepository" as CR
+participant "AesUtil" as AES
+participant "CredencialSolRepository" as SR
+database "tributario_schema" as DB
+
+U -> FE : completa RUC, razón social, régimen\n(y opcionalmente usuario y clave SOL)
+FE -> CC : POST /api/tributario/clientes\nAuthorization: Bearer <JWT>
+CC -> CS : crear(dto)
+CS -> RV : motivoInvalido(ruc)
+alt RUC inválido
+  CS --> FE : 400 (ValidationException con el motivo)
+end
+CS -> CR : existsByRuc(ruc)
+alt RUC ya registrado
+  CS --> FE : 400 "Ya existe un cliente registrado con el RUC ..."
+end
+CS -> CR : save(cliente)
+CR -> DB : INSERT clientes
+alt vienen usuario y clave SOL
+  CS -> AES : encrypt(usuarioSol), encrypt(claveSol)\n(AES/GCM, prefijo v2:)
+  CS -> SR : save(credencial)
+  SR -> DB : INSERT credenciales_sol (cifradas)
+else viene solo uno de los dos
+  CS --> FE : 400 "Para registrar la Clave SOL debe indicar\nusuario SOL y clave SOL"\n(la transacción se revierte)
+end
+CS -> CS : obtener(id)
+CS --> CC : ClienteDto (tieneClaveSol, sin la clave)
+CC --> FE : 200
+FE --> U : muestra el cliente en la ficha
+
+footer Fuente: ClienteController.crear, ClienteService.crear, RucValidator, AesUtil (develop 6db0036)
+@enduml

@@ -1,0 +1,62 @@
+@startuml
+!pragma layout smetana
+title T1 · HT-01 · Modelo de datos de auth_schema (schema.sql de ms-auth en develop)
+skinparam shadowing false
+hide circle
+skinparam linetype ortho
+
+entity "auth_schema.usuarios" as usuarios {
+  * id : BIGSERIAL <<PK>>
+  --
+  * username : VARCHAR(60) <<UNIQUE>>
+  * password_hash : VARCHAR(100)
+  * nombre_completo : VARCHAR(150)
+  email : VARCHAR(150)
+  * activo : BOOLEAN = true
+  * intentos_fallidos : INTEGER = 0
+  bloqueado_hasta : TIMESTAMP
+  * creado_en : TIMESTAMP
+}
+
+entity "auth_schema.roles" as roles {
+  * id : BIGSERIAL <<PK>>
+  --
+  * nombre : VARCHAR(50) <<UNIQUE>>
+  descripcion : VARCHAR(200)
+}
+
+entity "auth_schema.usuario_roles" as usuario_roles {
+  * usuario_id : BIGINT <<PK, FK>>
+  * rol_id : BIGINT <<PK, FK>>
+}
+
+entity "auth_schema.bitacora_seguridad" as bitacora {
+  * id : BIGSERIAL <<PK>>
+  --
+  usuario_id : BIGINT  (sin FK)
+  username : VARCHAR(60)
+  * evento : VARCHAR(40)
+  detalle : VARCHAR(300)
+  ip : VARCHAR(60)
+  * fecha : TIMESTAMP
+}
+
+usuarios ||--o{ usuario_roles : ON DELETE CASCADE
+roles ||--o{ usuario_roles : ON DELETE CASCADE
+usuarios .. bitacora : usuario_id e username\n(referencia lógica, sin clave foránea)
+
+note right of roles
+  Filas sembradas por schema.sql:
+  ADMIN y CONTADOR.
+  CLIENTE_MYPE no se siembra
+  (no existe en esta tabla).
+end note
+
+note bottom of bitacora
+  Eventos que escribe AuthService: LOGIN_EXITOSO,
+  LOGIN_FALLIDO, LOGIN_RECHAZADO, LOGIN_BLOQUEADO
+  y CUENTA_BLOQUEADA. Índices por username y por fecha.
+end note
+
+footer Fuente: backend/ms-auth/src/main/resources/schema.sql y AuthService (develop 6db0036)
+@enduml
