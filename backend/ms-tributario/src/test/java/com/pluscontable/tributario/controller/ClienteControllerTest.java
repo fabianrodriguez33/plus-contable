@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -88,5 +89,54 @@ class ClienteControllerTest {
         registrar(null, 401);
         mvc.perform(get("/api/tributario/clientes")).andExpect(status().isUnauthorized());
         verify(clienteService, never()).crear(any());
+    }
+
+    /** Envía un cuerpo y devuelve el mensaje de la respuesta 400 (el servicio nunca debe llamarse). */
+    private String rechazado(String cuerpo) throws Exception {
+        String respuesta = mvc.perform(post("/api/tributario/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo).header(HttpHeaders.AUTHORIZATION, bearer("CONTADOR")))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        verify(clienteService, never()).crear(any());
+        return respuesta;
+    }
+
+    @Test
+    void sinRazonSocialSeRechazaIndicandoElCampo() throws Exception {
+        assertThat(rechazado("""
+                {"ruc":"20100070970","regimenTributario":"MYPE"}""")).contains("La razón social es obligatoria");
+    }
+
+    @Test
+    void razonSocialVaciaOSoloEspaciosSeRechaza() throws Exception {
+        assertThat(rechazado("""
+                {"ruc":"20100070970","razonSocial":"","regimenTributario":"MYPE"}""")).contains("La razón social es obligatoria");
+        assertThat(rechazado("""
+                {"ruc":"20100070970","razonSocial":"   ","regimenTributario":"MYPE"}""")).contains("La razón social es obligatoria");
+    }
+
+    @Test
+    void sinRegimenSeRechazaIndicandoElCampo() throws Exception {
+        assertThat(rechazado("""
+                {"ruc":"20100070970","razonSocial":"Empresa SAC"}""")).contains("El régimen tributario es obligatorio");
+    }
+
+    @Test
+    void regimenNuloExplicitoSeRechaza() throws Exception {
+        assertThat(rechazado("""
+                {"ruc":"20100070970","razonSocial":"Empresa SAC","regimenTributario":null}""")).contains("El régimen tributario es obligatorio");
+    }
+
+    @Test
+    void sinRucSeRechaza() throws Exception {
+        assertThat(rechazado("""
+                {"razonSocial":"Empresa SAC","regimenTributario":"MYPE"}""")).contains("El RUC es obligatorio");
+    }
+
+    @Test
+    void variosCamposFaltantesSeInformanJuntos() throws Exception {
+        String r = rechazado("{}");
+        assertThat(r).contains("La razón social es obligatoria").contains("El régimen tributario es obligatorio")
+                .contains("El RUC es obligatorio");
     }
 }
