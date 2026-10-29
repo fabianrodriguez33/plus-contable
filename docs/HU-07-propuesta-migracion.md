@@ -26,3 +26,15 @@ las 84 filas de forma idempotente al arrancar el servicio. Se comprobó en una
 instancia temporal de PostgreSQL, nunca en una base compartida. Tampoco hay asignación automática de fechas a
 tipos: Beto debe confirmar qué obligaciones usan el cronograma y cómo se
 determina el grupo RUC aplicable.
+
+La consulta nueva obtiene el RUC ya almacenado en `Cliente`, toma su último
+dígito y busca la fecha del grupo numérico correspondiente en la tabla cargada.
+No asigna esa fecha a una obligación ni infiere la condición especial
+`BUEN_CONTRIB_UESP`, que no se deduce del último dígito.
+
+El `CHECK` nombrado `ck_obligaciones_tipo` se recrea en `schema.sql` después
+del `ALTER ADD COLUMN`, para que proteja tanto una base nueva como una
+existente. Los `NULL` antiguos se conservan; un valor no nulo fuera de los
+seis tipos hace fallar la migración sin borrar filas. Como `schema.sql` se
+ejecuta en cada arranque, el `DROP`/`ADD` de esta restricción requiere revisión
+operativa antes de desplegarse sobre una base compartida.
