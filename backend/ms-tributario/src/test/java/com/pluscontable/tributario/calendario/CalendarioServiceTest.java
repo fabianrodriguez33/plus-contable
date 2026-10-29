@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.pluscontable.tributario.dto.ObligacionDto;
 import com.pluscontable.tributario.model.Obligacion;
+import com.pluscontable.tributario.obligacion.TipoObligacion;
 import com.pluscontable.tributario.service.ObligacionService;
 import jakarta.validation.ValidationException;
 import java.time.*;
@@ -18,7 +19,7 @@ class CalendarioServiceTest {
     private static final LocalDate PERIODO = LocalDate.of(2026, 10, 1);
 
     private ObligacionDto dato(long id, int dia, Obligacion.Estado estado) {
-        return new ObligacionDto(id, 4L, PERIODO, LocalDate.of(2026, 10, dia), estado,
+        return new ObligacionDto(id, 4L, TipoObligacion.IGV, PERIODO, LocalDate.of(2026, 10, dia), estado,
                 null, null, null);
     }
 
@@ -31,6 +32,7 @@ class CalendarioServiceTest {
         assertEquals(List.of(1L, 2L, 3L), lista.stream().map(o -> o.obligacion().id()).toList());
         assertEquals(List.of(-2L, 0L, 2L), lista.stream().map(CalendarioObligacionDto::diasRestantes).toList());
         assertEquals(List.of(true, false, false), lista.stream().map(CalendarioObligacionDto::vencimientoPasado).toList());
+        assertEquals(TipoObligacion.IGV, lista.getFirst().obligacion().tipoObligacion());
     }
 
     @Test void filtraProximosConHorizonteExplicito() {
