@@ -12,14 +12,19 @@ import com.pluscontable.tributario.controller.DocumentoController;
 import com.pluscontable.tributario.controller.ObligacionController;
 import com.pluscontable.tributario.controller.TrabajadorController;
 import com.pluscontable.tributario.model.DocumentoLegal;
+import com.pluscontable.tributario.dto.ObligacionDto;
+import com.pluscontable.tributario.model.Obligacion;
+import com.pluscontable.tributario.obligacion.TipoObligacion;
 import com.pluscontable.tributario.service.AcuerdoService;
 import com.pluscontable.tributario.service.ExpedienteService;
+import com.pluscontable.tributario.service.ObligacionProgramacionService;
 import com.pluscontable.tributario.service.ObligacionService;
 import com.pluscontable.tributario.service.TrabajadorService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +58,7 @@ class PermisosPorRolTest {
     @MockBean ExpedienteService expedienteService;
     @MockBean AcuerdoService acuerdoService;
     @MockBean ObligacionService obligacionService;
+    @MockBean ObligacionProgramacionService programacionService;
 
     @BeforeEach
     void setUp() {
@@ -60,6 +66,9 @@ class PermisosPorRolTest {
         d.setNombreArchivo("ficha.pdf");
         when(expedienteService.buscar(anyLong(), anyLong())).thenReturn(d);
         when(expedienteService.cargar(any())).thenReturn(new ByteArrayResource("%PDF-".getBytes()));
+        when(programacionService.crear(any())).thenReturn(new ObligacionDto(1L, 1L, TipoObligacion.IGV,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 16), Obligacion.Estado.PENDIENTE,
+                null, null, null));
     }
 
     /** Opción de la matriz: método, ruta y si el cliente MYPE puede usarla (el estudio puede todas). */
@@ -74,6 +83,7 @@ class PermisosPorRolTest {
                 Arguments.of("PUT", "/api/tributario/clientes/1/acuerdo", false),
                 Arguments.of("GET", "/api/tributario/obligaciones?clienteId=1", true),
                 Arguments.of("GET", "/api/tributario/obligaciones/3", true),
+                Arguments.of("POST", "/api/tributario/obligaciones", false),
                 Arguments.of("PATCH", "/api/tributario/obligaciones/3/declaracion", false),
                 Arguments.of("PATCH", "/api/tributario/obligaciones/vencimiento", false));
     }
@@ -132,6 +142,16 @@ class PermisosPorRolTest {
         String falso = Jwts.builder().subject("x").claim("roles", List.of("CONTADOR"))
                 .signWith(Keys.hmacShaKeyFor("otra-clave-que-no-es-la-del-estudio-32b".getBytes())).compact();
         assertThat(estado("GET", ruta, falso)).isEqualTo(401);
+    }
+
+    @Test
+    void altaDeObligacionRespetaRolesExistentes() throws Exception {
+        String ruta = "/api/tributario/obligaciones";
+        assertThat(estado("POST", ruta, token(List.of("CONTADOR"), 60_000))).isEqualTo(200);
+        assertThat(estado("POST", ruta, token(List.of("ADMIN"), 60_000))).isEqualTo(200);
+        assertThat(estado("POST", ruta, token(List.of("CLIENTE_MYPE"), 60_000))).isEqualTo(403);
+        assertThat(estado("POST", ruta, token(List.of(), 60_000))).isEqualTo(403);
+        assertThat(estado("POST", ruta, null)).isEqualTo(401);
     }
 
     @Test @Disabled("Tarea 85: requiere el claim clienteId en el JWT (ver HU-38.md)")
