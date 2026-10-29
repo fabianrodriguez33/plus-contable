@@ -26,7 +26,8 @@ app:
     secret: ${JWT_SECRET:plus-contable-jwt-secret-key-2026-v&f-asesores-minimo-32-bytes}
   aes:
     secret-key: ${AES_SECRET_KEY:PlusContableAES256SecretKey2026!}
-    iv: ${AES_IV:PlusContableIV01}
+    # IV fijo del cifrado antiguo (CBC): solo para leer valores sin prefijo v2:
+    legacy-iv: ${AES_IV:PlusContableIV01}
   cors:
     allowed-origins: http://localhost:5173
   storage:
