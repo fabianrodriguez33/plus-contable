@@ -18,8 +18,10 @@ if (¿Token válido y rol CONTADOR o ADMIN?) then (no)
   o 403 (rol no permitido);
   stop
 endif
-if (¿RUC de 11 dígitos, razón social y régimen presentes?) then (no)
-  :400 con el campo faltante;
+if (¿Pasa la validación del DTO (@Valid)?
+RUC de 11 dígitos, razón social, régimen,
+email con formato) then (no)
+  :400 con el mensaje del campo;
   stop
 endif
 if (¿RucValidator.motivoInvalido(ruc) es nulo?\nprefijo 10/15/17/20 y dígito verificador) then (no)
@@ -36,11 +38,13 @@ if (¿Vienen usuario SOL y clave SOL?) then (los dos)
   y guarda en credenciales_sol;
 elseif (¿Viene solo uno?) then (sí)
   :400 "Para registrar la Clave SOL debe indicar
-  usuario SOL y clave SOL";
+  usuario SOL y clave SOL"
+  (la transacción se revierte: el cliente
+  recién guardado no queda en la base);
   stop
 else (ninguno)
 endif
-:Responde 200 con el ClienteDto
+:Responde 201 Created con el ClienteDto
 (tieneClaveSol; nunca devuelve la clave);
 
 |frontend-web|

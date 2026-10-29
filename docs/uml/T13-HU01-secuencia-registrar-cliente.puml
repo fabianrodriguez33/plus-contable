@@ -35,7 +35,7 @@ else viene solo uno de los dos
 end
 CS -> CS : obtener(id)
 CS --> CC : ClienteDto (tieneClaveSol, sin la clave)
-CC --> FE : 200
+CC --> FE : 201 Created
 FE --> U : muestra el cliente en la ficha
 
 footer Fuente: ClienteController.crear, ClienteService.crear, RucValidator, AesUtil (develop 6db0036)

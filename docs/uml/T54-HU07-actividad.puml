@@ -1,0 +1,57 @@
+@startuml
+title T54 · HU-07 · Actividad: de la obligación a la fecha límite (código de develop)
+skinparam shadowing false
+
+|Cliente de la API|
+start
+:POST /api/tributario/obligaciones
+{clienteId, tipoObligacion, periodo, fechaVencimiento};
+
+|ms-tributario · alta (conectado)|
+if (¿JWT válido y rol CONTADOR o ADMIN?) then (no)
+  :401 sin token válido
+  403 rol no permitido;
+  stop
+endif
+if (¿clienteId > 0, tipo informado\ny periodo con día 1?) then (no)
+  :400 con el motivo (ObligacionInputValidator);
+  stop
+endif
+if (¿fechaVencimiento informada y no\nanterior al periodo?) then (no)
+  :400 "fecha_vencimiento es obligatoria\ny no puede ser anterior al periodo";
+  stop
+endif
+if (¿Existe el cliente?) then (no)
+  :404 "Cliente no encontrado";
+  stop
+endif
+if (¿Ya existe cliente + tipo + periodo?) then (sí)
+  :409 "Ya existe esta obligación para el\ncliente, tipo y período";
+  stop
+endif
+:Guarda la obligación en estado PENDIENTE
+con la fecha recibida;
+:Responde 200 con el ObligacionDto;
+stop
+
+|Piezas existentes, sin conectar al alta|
+start
+:CronogramaConsultaService.buscar(clienteId, periodo);
+:Lee el RUC del cliente;
+:GrupoRucCronograma.paraRuc(ruc)
+último dígito → grupo "0", "1", "2-3", "4-5", "6-7" u "8-9";
+:SELECT fecha_vencimiento FROM cronograma_tributario
+WHERE periodo_tributario = periodo y ultimo_digito_ruc = grupo;
+:Devuelve la fecha (Optional);
+:Si hay más de una fila, lanza un error;
+note right
+  El régimen tributario del cliente no participa en este camino ni en
+  ningún otro: no hay selección de fecha por régimen en el código.
+  Ningún controlador ni servicio de producción llama a buscar();
+  solo lo usan las pruebas. Por eso esta rama no es el flujo
+  de la historia sino el material disponible para construirlo.
+end note
+stop
+
+footer Fuente: ObligacionProgramacionService.crear, CronogramaConsultaService, GrupoRucCronograma (develop 6db0036)
+@enduml

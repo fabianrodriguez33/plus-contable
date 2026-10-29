@@ -1,0 +1,42 @@
+@startuml
+title T41 · HU-04 · Secuencia: archivar un documento legal (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\nDocumentosPage" as FE
+participant "DocumentoController" as DC
+participant "ExpedienteService" as ES
+participant "ClienteRepository" as CR
+participant "DocumentoRepository" as DR
+database "tributario_schema" as DB
+participant "Disco\n(app.storage.dir)" as FS
+
+U -> FE : elige tipo, fecha de emisión y PDF
+FE -> DC : POST /api/tributario/clientes/{id}/documentos\n(multipart: tipo, fechaEmision, archivo)
+DC -> ES : archivar(clienteId, tipo, fechaEmision, archivo)
+ES -> CR : existsById(clienteId)
+alt el cliente no existe
+  ES --> FE : 404 "Cliente no encontrado"
+end
+ES -> ES : validar: tipo y fecha obligatorios, fecha no futura,\narchivo presente, <= 10 MB,\ncontent-type y firma "%PDF-"
+alt validación fallida
+  ES --> FE : 400 "Documento rechazado: ..."
+end
+ES -> DR : findTopByClienteIdAndTipoOrderByVersionDesc
+DR --> ES : última versión (o ninguna)
+ES -> ES : versión = última + 1 (o 1)
+ES -> FS : copia el PDF a {clienteId}/{uuid}.pdf
+ES -> DR : save(DocumentoLegal)
+DR -> DB : INSERT documentos_legales
+alt falla el guardado en base
+  ES -> FS : borra el archivo (evita huérfanos)
+  ES --> FE : error
+else guardado
+  ES --> DC : DocumentoDto
+  DC --> FE : 201 Created {id, tipo, version, fechaEmision, nombreArchivo, ...}
+end
+FE --> U : el documento aparece en el expediente
+
+footer Fuente: ExpedienteService.archivar, DocumentoController, GlobalExceptionHandler (develop 6db0036)
+@enduml
