@@ -1,18 +1,20 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Boxes, Building, FolderOpen, PieChart, Users } from 'lucide-react'
+import { Boxes, Building, CalendarClock, FileSignature, FolderOpen, PieChart, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { mensajeError, tributarioApi } from '../services/apiClient'
 import { actualizarCliente, crearCliente, obtenerCliente } from '../services/clienteService'
 import type { Cliente } from '../types'
 import Card from '../components/Card'
 import DatosGeneralesTab from '../components/ficha/DatosGeneralesTab'
-import ExpedienteTab from '../components/ficha/ExpedienteTab'
 import SociosTab from '../components/ficha/SociosTab'
-import TrabajadoresTab from '../components/ficha/TrabajadoresTab'
 import ActivosTab from '../components/ficha/ActivosTab'
+import DocumentosPage from './DocumentosPage'
+import TrabajadoresPage from './TrabajadoresPage'
+import AcuerdoPage from './AcuerdoPage'
+import VencimientosPage from './VencimientosPage'
 
-type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos'
+type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'vencimientos'
 
 const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'general', etiqueta: 'Datos generales', icono: Building },
@@ -20,6 +22,8 @@ const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'socios', etiqueta: 'Socios y capital', icono: PieChart },
   { id: 'trabajadores', etiqueta: 'Planilla', icono: Users },
   { id: 'activos', etiqueta: 'Activos fijos', icono: Boxes },
+  { id: 'acuerdo', etiqueta: 'Acuerdo de servicio', icono: FileSignature },
+  { id: 'vencimientos', etiqueta: 'Vencimientos', icono: CalendarClock },
 ]
 
 const clienteVacio: Cliente = {
@@ -28,9 +32,9 @@ const clienteVacio: Cliente = {
 }
 
 export default function FichaMaestraPage() {
-  const { id } = useParams()
+  const { clienteId: idRuta } = useParams()
   const navigate = useNavigate()
-  const clienteId = id ? Number(id) : null
+  const clienteId = idRuta ? Number(idRuta) : null
 
   const [tab, setTab] = useState<Tab>('general')
   const [cliente, setCliente] = useState<Cliente>(clienteVacio)
@@ -79,14 +83,14 @@ export default function FichaMaestraPage() {
 
   return (
     <Card title={clienteId === null ? 'Nuevo cliente' : `Ficha maestra — ${cliente.razonSocial || cliente.ruc}`}>
-      <div role="tablist" className="mb-5 flex flex-wrap gap-1 border-b border-slate-200">
+      <div role="tablist" className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map(({ id: tid, etiqueta, icono: Icono }) => {
           const activa = tab === tid
           const bloqueada = clienteId === null && tid !== 'general'
           return (
             <button key={tid} type="button" role="tab" aria-selected={activa} disabled={bloqueada}
               onClick={() => { limpiar(); setTab(tid) }}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:text-slate-300 ${
+              className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:text-slate-300 ${
                 activa ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
               <Icono size={16} /> {etiqueta}
             </button>
@@ -104,10 +108,12 @@ export default function FichaMaestraPage() {
         <DatosGeneralesTab cliente={cliente} esNuevo={clienteId === null} onCambio={cambiar}
           onGuardar={guardarGeneral} onRevelarSol={revelarSol} />
       )}
-      {clienteId !== null && tab === 'expediente' && <ExpedienteTab clienteId={clienteId} setError={setError} />}
+      {clienteId !== null && tab === 'expediente' && <DocumentosPage />}
       {clienteId !== null && tab === 'socios' && <SociosTab clienteId={clienteId} setError={setError} setOk={setOk} />}
-      {clienteId !== null && tab === 'trabajadores' && <TrabajadoresTab clienteId={clienteId} setError={setError} />}
+      {clienteId !== null && tab === 'trabajadores' && <TrabajadoresPage />}
       {clienteId !== null && tab === 'activos' && <ActivosTab clienteId={clienteId} setError={setError} />}
+      {clienteId !== null && tab === 'acuerdo' && <AcuerdoPage />}
+      {clienteId !== null && tab === 'vencimientos' && <VencimientosPage />}
     </Card>
   )
 }

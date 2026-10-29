@@ -1,8 +1,7 @@
 package com.pluscontable.tributario.controller;
 
 import com.pluscontable.tributario.dto.TrabajadorDto;
-import com.pluscontable.tributario.service.PatrimonioLaboralService;
-import jakarta.validation.Valid;
+import com.pluscontable.tributario.service.TrabajadorService;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -11,26 +10,20 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/tributario/clientes/{clienteId}/trabajadores")
 public class TrabajadorController {
 
-    private final PatrimonioLaboralService service;
+    private final TrabajadorService service;
 
-    public TrabajadorController(PatrimonioLaboralService service) {
+    public TrabajadorController(TrabajadorService service) {
         this.service = service;
     }
 
     @GetMapping
     public List<TrabajadorDto> listar(@PathVariable Long clienteId) {
-        return service.listarTrabajadores(clienteId);
+        return service.listar(clienteId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TrabajadorDto agregar(@PathVariable Long clienteId, @Valid @RequestBody TrabajadorDto dto) {
-        return service.agregarTrabajador(clienteId, dto);
-    }
-
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void eliminar(@PathVariable Long clienteId, @PathVariable Long id) {
-        service.eliminarTrabajador(clienteId, id);
+    public TrabajadorDto registrar(@PathVariable Long clienteId, @RequestBody TrabajadorDto dto) {
+        return service.registrar(clienteId, dto);
     }
 }

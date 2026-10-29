@@ -4,6 +4,7 @@ import PrivateRoute from './components/PrivateRoute'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import FichaMaestraPage from './pages/FichaMaestraPage'
+import DeclaracionPage from './pages/DeclaracionPage'
 
 export default function App() {
   return (
@@ -13,7 +14,8 @@ export default function App() {
         <Route element={<Navbar />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />
-          <Route path="/clientes/:id" element={<FichaMaestraPage />} />
+          <Route path="/clientes/:clienteId" element={<FichaMaestraPage />} />
+          <Route path="/obligaciones/:obligacionId/declarar" element={<DeclaracionPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

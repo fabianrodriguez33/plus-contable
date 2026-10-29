@@ -16,3 +16,11 @@ Sistema Web y Móvil para la Centralización y Control de Obligaciones Tributari
 
 ## Cliente
 V&F Asesores Empresarial - Sr. Villegas Calizaya Juvencio Ausberto
+
+## Rama `feature/jeanpierre-sprint1` (Sprint 1 · Jeanpierre Miranda)
+HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas unitarias.
+
+> ⚠️ Esta rama sale de `main` y **no se integra directamente** con `develop` (16 archivos en conflicto) ni con
+> `feature/seguridad-jwt` (11). Antes de unirla hay que resolver esos conflictos a mano.
+
+Detalle, tecnologías, compatibilidad y cómo levantarla: [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).

@@ -6,14 +6,15 @@ import java.time.LocalDate;
 import lombok.Getter;
 import lombok.Setter;
 
+/** HU-03: trabajador del expediente laboral. Nacional y extranjero comparten tabla; {@code extranjero} los diferencia. */
 @Entity
 @Table(name = "trabajadores", schema = "tributario_schema")
 @Getter
 @Setter
 public class Trabajador {
-    public enum RegimenLaboral { MYPE, REMIPE, GENERAL }
+    public enum TipoDocumento { DNI, CE, PASAPORTE, PTP }
 
-    public enum SistemaPensionario { AFP, ONP }
+    public enum SistemaPensionario { ONP, AFP }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,8 +26,9 @@ public class Trabajador {
     @Column(name = "nombre_completo", nullable = false, length = 200)
     private String nombreCompleto;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "tipo_documento", nullable = false, length = 10)
-    private String tipoDocumento = "DNI";
+    private TipoDocumento tipoDocumento;
 
     @Column(name = "numero_documento", nullable = false, length = 20)
     private String numeroDocumento;
@@ -38,31 +40,24 @@ public class Trabajador {
     private String nacionalidad;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "regimen_laboral", nullable = false, length = 20)
-    private RegimenLaboral regimenLaboral;
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "sistema_pensionario", nullable = false, length = 10)
     private SistemaPensionario sistemaPensionario;
 
     @Column(name = "nombre_afp", length = 60)
     private String nombreAfp;
 
-    @Column(name = "fecha_ingreso")
+    @Column(name = "fecha_ingreso", nullable = false)
     private LocalDate fechaIngreso;
 
-    @Column(precision = 12, scale = 2)
     private BigDecimal remuneracion;
 
-    @Column(name = "registro_sunafil", nullable = false)
-    private boolean registroSunafil;
+    // datos de contrato del extranjero
+    @Column(name = "tipo_contrato", length = 40)
+    private String tipoContrato;
 
-    @Column(name = "registro_mtpe", nullable = false)
-    private boolean registroMtpe;
+    @Column(name = "fecha_inicio_contrato")
+    private LocalDate fechaInicioContrato;
 
-    @Column(nullable = false)
-    private boolean essalud;
-
-    @Column(name = "quinta_categoria", nullable = false)
-    private boolean quintaCategoria;
+    @Column(name = "fecha_fin_contrato")
+    private LocalDate fechaFinContrato;
 }
