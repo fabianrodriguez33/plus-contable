@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { AxiosResponse } from 'axios'
@@ -36,6 +36,7 @@ beforeEach(() => localStorage.clear())
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.useRealTimers()
   localStorage.clear()
 })
 
@@ -98,6 +99,21 @@ describe('HU-36: sesión y login', () => {
     localStorage.setItem(TOKEN_KEY, jwt(Math.floor(Date.now() / 1000) - 1))
     localStorage.setItem(USER_KEY, JSON.stringify(usuario))
     rutas('/')
+
+    expect(screen.getByRole('button', { name: 'Ingresar' })).toBeTruthy()
+    expect(screen.queryByText('Área privada')).toBeNull()
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(USER_KEY)).toBeNull()
+  })
+
+  it('cierra la sesión al expirar el JWT con la ruta privada abierta', () => {
+    vi.useFakeTimers()
+    localStorage.setItem(TOKEN_KEY, jwt(Math.floor(Date.now() / 1000) + 2))
+    localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+    rutas('/')
+    expect(screen.getByText('Área privada')).toBeTruthy()
+
+    act(() => vi.advanceTimersByTime(2500))
 
     expect(screen.getByRole('button', { name: 'Ingresar' })).toBeTruthy()
     expect(screen.queryByText('Área privada')).toBeNull()
