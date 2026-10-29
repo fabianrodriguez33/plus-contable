@@ -1,27 +1,28 @@
-# HU-07: propuesta de integración de obligaciones
+# HU-07: integración propuesta sobre develop
 
-Esta propuesta no se aplica a ninguna base de datos. La rama `integration/sprint1`
-ya define `tributario_schema.obligaciones` con `id`, `cliente_id`, `periodo`,
-`fecha_vencimiento`, `estado` y las columnas de declaración de HU-09.
-HU-10 usa `fecha_vencimiento` y `vencimientos_historial`.
+La rama de integración parte de `origin/develop` y conserva la tabla existente
+`tributario_schema.obligaciones`. El `schema.sql` de esta rama propone añadir
+`tipo_obligacion` sin valor por defecto, crear `cronograma_tributario` y añadir
+unicidad por `(cliente_id, tipo_obligacion, periodo)`. **No se aplicó este script
+a ninguna base de datos compartida.** En este proyecto `schema.sql` se ejecuta
+en cada arranque, por lo que el equipo debe revisar el cambio antes de arrancar
+esta rama contra una base compartida.
 
-## Cambios propuestos para revisión conjunta
+Las obligaciones nuevas exigen tipo, periodo mensual y fecha de vencimiento
+explícita. Las filas antiguas conservan `tipo_obligacion = NULL`: PostgreSQL
+permite varias filas con esa combinación bajo el índice único. No se les asigna
+un tipo inventado. Antes de exigir `NOT NULL`, Jeanpierre y Ricardo deben
+revisar duplicados, clasificar los datos anteriores y acordar su migración.
 
-1. Revisar duplicados existentes por `(cliente_id, tipo_obligacion, periodo)` antes
-   de añadir una restricción única. Definir con el equipo cómo resolverlos si existen.
-2. Añadir `tipo_obligacion` a la tabla existente, migrar los registros anteriores
-   solo cuando el equipo conozca su tipo y después exigir `NOT NULL` y unicidad
-   por `(cliente_id, tipo_obligacion, periodo)`.
-3. Crear una tabla separada de cronograma con `periodo_tributario`,
-   `ultimo_digito_ruc` y `fecha_vencimiento`, y clave única por período y grupo.
-   Cargarla desde `docs/cronograma_sunat_2026.csv` de Julio una vez revisada e
-   incorporada explícitamente junto con `docs/cronograma_sunat_2026.md`.
-4. Mantener `estado` con `PENDIENTE` y `DECLARADO`, las columnas de HU-09 y el
-   historial de HU-10. La fecha de vencimiento de cada obligación solo se
-   asignará cuando Beto confirme a qué tipos corresponde el cronograma y cómo
-   seleccionar el grupo RUC; HU-10 podrá modificarla después.
+Se conservan `estado` (`PENDIENTE`/`DECLARADO`) y las columnas de HU-09
+(`fecha_declaracion`, `numero_formulario`, `monto_determinado`). Se conservan
+`fecha_vencimiento` y `vencimientos_historial` de HU-10. No se agrega
+`estado_pago` ni se almacena `VENCIDO`.
 
-No se propone guardar `VENCIDO` ni añadir `estado_pago`. Antes de implementar la
-migración se necesita acordar con Jeanpierre el cambio de la tabla compartida y
-verificar los datos existentes. El código actual solo prepara registros en memoria:
-la unicidad definitiva debe imponerse en la base de datos para evitar carreras.
+El CSV de Julio se incorporó sin alterar sus filas como
+`backend/ms-tributario/src/main/resources/cronograma_sunat_2026.csv` junto
+con su nota de fuente en `docs/cronograma_sunat_2026.md`. El cargador inserta
+las 84 filas de forma idempotente al arrancar el servicio. Se comprobó en una
+instancia temporal de PostgreSQL, nunca en una base compartida. Tampoco hay asignación automática de fechas a
+tipos: Beto debe confirmar qué obligaciones usan el cronograma y cómo se
+determina el grupo RUC aplicable.

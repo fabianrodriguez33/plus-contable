@@ -108,17 +108,26 @@ CREATE TABLE IF NOT EXISTS tributario_schema.honorarios_historial (
     vigente_hasta  DATE NOT NULL
 );
 
--- PROVISIONAL HU-07 (Ricardo): la tabla obligaciones es suya. Solo las columnas de declaracion
--- (fecha_declaracion, numero_formulario, monto_determinado) son de HU-09. Reemplazar al integrar HU-07.
+-- HU-07 amplía la tabla provisional sin alterar las columnas de declaración de HU-09
+-- (fecha_declaracion, numero_formulario, monto_determinado) ni el historial de HU-10.
 CREATE TABLE IF NOT EXISTS tributario_schema.obligaciones (
     id                 BIGSERIAL PRIMARY KEY,
     cliente_id         BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo_obligacion    VARCHAR(30) CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP')),
     periodo            DATE NOT NULL, -- primer dia del mes tributario
     fecha_vencimiento  DATE NOT NULL,
     estado             VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'DECLARADO')),
     fecha_declaracion  DATE,
     numero_formulario  VARCHAR(30),
     monto_determinado  NUMERIC(14,2)
+);
+
+-- HU-07: cronograma mensual de SUNAT; se carga desde el CSV versionado, sin asignar tipos.
+CREATE TABLE IF NOT EXISTS tributario_schema.cronograma_tributario (
+    periodo_tributario DATE NOT NULL CHECK (EXTRACT(DAY FROM periodo_tributario) = 1),
+    ultimo_digito_ruc  VARCHAR(20) NOT NULL,
+    fecha_vencimiento  DATE NOT NULL,
+    CONSTRAINT uq_cronograma_periodo_grupo UNIQUE (periodo_tributario, ultimo_digito_ruc)
 );
 
 -- HU-10 (Jeanpierre): historial de fechas de vencimiento anteriores
@@ -133,6 +142,8 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
+-- Sin valor por defecto: los registros anteriores requieren clasificación confirmada.
+ALTER TABLE tributario_schema.obligaciones ADD COLUMN IF NOT EXISTS tipo_obligacion VARCHAR(30);
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
@@ -164,6 +175,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_trabajadores_cliente_documento
     ON tributario_schema.trabajadores(cliente_id, tipo_documento, numero_documento);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_documentos_cliente_tipo_version
     ON tributario_schema.documentos_legales(cliente_id, tipo, version);
+-- PostgreSQL permite múltiples NULL: protege las obligaciones nuevas sin inventar tipos antiguos.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_obligaciones_cliente_tipo_periodo
+    ON tributario_schema.obligaciones(cliente_id, tipo_obligacion, periodo);
 
 CREATE INDEX IF NOT EXISTS idx_documentos_cliente ON tributario_schema.documentos_legales(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_socios_cliente ON tributario_schema.socios(cliente_id);
