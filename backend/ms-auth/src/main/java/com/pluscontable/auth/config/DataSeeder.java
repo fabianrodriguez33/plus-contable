@@ -36,6 +36,9 @@ public class DataSeeder implements CommandLineRunner {
         if (usuarios.existsByUsername(adminUser)) {
             return;
         }
+        if (adminPass == null || adminPass.isBlank()) {
+            throw new IllegalStateException("ADMIN_PASSWORD es obligatorio para crear el administrador inicial");
+        }
         Rol admin = roles.findByNombre("ADMIN").orElseThrow();
         Usuario u = new Usuario();
         u.setUsername(adminUser);
