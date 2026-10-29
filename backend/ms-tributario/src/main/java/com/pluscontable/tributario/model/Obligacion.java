@@ -1,14 +1,15 @@
 package com.pluscontable.tributario.model;
 
 import jakarta.persistence.*;
+import com.pluscontable.tributario.obligacion.TipoObligacion;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * PROVISIONAL: la obligación programada es de HU-07 (Ricardo) y aún no está en el repositorio.
- * Solo fechaDeclaracion, numeroFormulario y montoDeterminado son de HU-09. Reemplazar al integrar HU-07.
+ * HU-07 amplía la obligación provisional de develop. Las columnas de declaración
+ * de HU-09 y la fecha utilizada por HU-10 permanecen intactas.
  */
 @Entity
 @Table(name = "obligaciones", schema = "tributario_schema")
@@ -24,6 +25,11 @@ public class Obligacion {
 
     @Column(name = "cliente_id", nullable = false)
     private Long clienteId;
+
+    /** Nulo solo para filas anteriores a HU-07 hasta que se clasifiquen. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_obligacion", length = 30)
+    private TipoObligacion tipoObligacion;
 
     /** Primer día del mes tributario. */
     @Column(nullable = false)
