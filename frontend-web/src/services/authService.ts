@@ -1,11 +1,5 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
-
-export interface Usuario {
-  id: number
-  username: string
-  nombreCompleto: string
-  roles: string[]
-}
+import type { Usuario } from '../types'
 
 interface LoginResponse {
   token: string

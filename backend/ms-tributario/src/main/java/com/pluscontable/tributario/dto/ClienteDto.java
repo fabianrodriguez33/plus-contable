@@ -1,6 +1,7 @@
 package com.pluscontable.tributario.dto;
 
 import com.pluscontable.tributario.model.Cliente;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -15,12 +16,14 @@ public record ClienteDto(
         @NotNull(message = "El régimen tributario es obligatorio") Cliente.Regimen regimenTributario,
         Cliente.CondicionHabido condicionHabido,
         @Size(max = 250) String direccion,
+        @Size(max = 20) String telefono,
+        @Email(message = "El email no tiene un formato válido") @Size(max = 150) String email,
         String usuarioSol,
         String claveSol,
         Boolean tieneClaveSol) {
 
     public static ClienteDto from(Cliente c, boolean tieneClaveSol) {
         return new ClienteDto(c.getId(), c.getRuc(), c.getRazonSocial(), c.getRegimenTributario(),
-                c.getCondicionHabido(), c.getDireccion(), null, null, tieneClaveSol);
+                c.getCondicionHabido(), c.getDireccion(), c.getTelefono(), c.getEmail(), null, null, tieneClaveSol);
     }
 }

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 /** Estructura societaria (socios) y patrimonio (activos fijos) del cliente. */
 @RestController
 @Validated
-@RequestMapping("/api/clientes/{clienteId}")
+@RequestMapping("/api/tributario/clientes/{clienteId}")
 public class SocioController {
 
     private final SocioService socioService;
@@ -31,6 +31,12 @@ public class SocioController {
 
     @PutMapping("/socios")
     public List<SocioDto> reemplazarSocios(@PathVariable Long clienteId, @RequestBody List<@Valid SocioDto> socios) {
+        return socioService.reemplazar(clienteId, socios);
+    }
+
+    @PostMapping("/socios")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<SocioDto> registrarSocios(@PathVariable Long clienteId, @RequestBody List<@Valid SocioDto> socios) {
         return socioService.reemplazar(clienteId, socios);
     }
 

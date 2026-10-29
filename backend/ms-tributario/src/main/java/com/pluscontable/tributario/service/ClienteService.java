@@ -115,6 +115,8 @@ public class ClienteService {
         c.setRegimenTributario(dto.regimenTributario());
         c.setCondicionHabido(dto.condicionHabido() == null ? Cliente.CondicionHabido.HABIDO : dto.condicionHabido());
         c.setDireccion(dto.direccion());
+        c.setTelefono(dto.telefono());
+        c.setEmail(dto.email() == null || dto.email().isBlank() ? null : dto.email().trim());
     }
 
     private void validarRuc(String ruc) {

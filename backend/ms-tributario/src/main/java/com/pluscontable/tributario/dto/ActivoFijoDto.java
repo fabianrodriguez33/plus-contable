@@ -9,6 +9,7 @@ import java.time.LocalDate;
 
 public record ActivoFijoDto(
         Long id,
+        String codigo,
         @NotBlank(message = "La descripción del activo es obligatoria") String descripcion,
         String categoria,
         @NotNull(message = "El valor de adquisición es obligatorio")
@@ -16,7 +17,7 @@ public record ActivoFijoDto(
         LocalDate fechaAdquisicion) {
 
     public static ActivoFijoDto from(ActivoFijo a) {
-        return new ActivoFijoDto(a.getId(), a.getDescripcion(), a.getCategoria(), a.getValorAdquisicion(),
+        return new ActivoFijoDto(a.getId(), a.getCodigo(), a.getDescripcion(), a.getCategoria(), a.getValorAdquisicion(),
                 a.getFechaAdquisicion());
     }
 }

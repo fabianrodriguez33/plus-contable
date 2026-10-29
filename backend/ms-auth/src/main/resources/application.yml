@@ -21,10 +21,6 @@ app:
     # Debe ser identico en ms-tributario (minimo 32 bytes)
     secret: ${JWT_SECRET:plus-contable-jwt-secret-key-2026-v&f-asesores-minimo-32-bytes}
     expiration-hours: 8
-  aes:
-    # AES-256: clave de exactamente 32 caracteres, IV de exactamente 16
-    secret-key: ${AES_SECRET_KEY:PlusContableAES256SecretKey2026!}
-    iv: ${AES_IV:PlusContableIV01}
   security:
     max-failed-attempts: 5
     lock-minutes: 15
