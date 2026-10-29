@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.pluscontable.tributario.dto.CrearObligacionDto;
 import com.pluscontable.tributario.service.ObligacionProgramacionService;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 class Hu07PostgresIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ObligacionProgramacionService programacion;
+    @Autowired CronogramaConsultaService consultaCronograma;
 
     @Test
     @Transactional
@@ -57,5 +59,33 @@ class Hu07PostgresIntegrationTest {
         jdbc.update(sql, clienteId);
         assertThatThrownBy(() -> jdbc.update(sql, clienteId))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @Transactional
+    void consultaVencimientoPorPeriodoYUltimoDigitoDelRuc() {
+        Long clienteId = jdbc.queryForObject("""
+                INSERT INTO tributario_schema.clientes (ruc, razon_social, regimen_tributario)
+                VALUES ('20999999999', 'Cliente de cronograma HU-07', 'GENERAL') RETURNING id
+                """, Long.class);
+        assertThat(consultaCronograma.buscar(clienteId, YearMonth.of(2026, 1)))
+                .contains(LocalDate.of(2026, 2, 23));
+        assertThat(consultaCronograma.buscar(clienteId, YearMonth.of(2027, 1))).isEmpty();
+
+        jdbc.update("""
+                DELETE FROM tributario_schema.cronograma_tributario
+                WHERE periodo_tributario = DATE '2026-01-01' AND ultimo_digito_ruc = '8-9'
+                """);
+        assertThat(consultaCronograma.buscar(clienteId, YearMonth.of(2026, 1))).isEmpty();
+    }
+
+    @Test
+    @Transactional
+    void cronogramaRechazaDuplicadosPorPeriodoYGrupo() {
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO tributario_schema.cronograma_tributario
+                    (periodo_tributario, ultimo_digito_ruc, fecha_vencimiento)
+                VALUES (DATE '2026-01-01', '8-9', DATE '2026-02-24')
+                """)).isInstanceOf(DataIntegrityViolationException.class);
     }
 }

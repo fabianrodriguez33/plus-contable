@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.honorarios_historial (
 CREATE TABLE IF NOT EXISTS tributario_schema.obligaciones (
     id                 BIGSERIAL PRIMARY KEY,
     cliente_id         BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
-    tipo_obligacion    VARCHAR(30) CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP')),
+    tipo_obligacion    VARCHAR(30),
     periodo            DATE NOT NULL, -- primer dia del mes tributario
     fecha_vencimiento  DATE NOT NULL,
     estado             VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'DECLARADO')),
@@ -144,6 +144,11 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
 -- Sin valor por defecto: los registros anteriores requieren clasificación confirmada.
 ALTER TABLE tributario_schema.obligaciones ADD COLUMN IF NOT EXISTS tipo_obligacion VARCHAR(30);
+-- Se recrea con nombre estable para cubrir tanto tablas nuevas como anteriores.
+-- NULL conserva las obligaciones antiguas sin asignarles un tipo ficticio.
+ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_tipo;
+ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_tipo
+    CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP'));
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
