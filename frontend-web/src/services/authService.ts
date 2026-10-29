@@ -1,5 +1,6 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
 import type { Usuario } from '../types'
+import { isJwtActive } from './jwtSession'
 
 interface LoginResponse {
   token: string
@@ -21,7 +22,10 @@ export function logout(): void {
 }
 
 export function isAuthenticated(): boolean {
-  return !!localStorage.getItem(TOKEN_KEY)
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token && isJwtActive(token)) return true
+  if (token) logout()
+  return false
 }
 
 export function usuarioActual(): Usuario | null {
