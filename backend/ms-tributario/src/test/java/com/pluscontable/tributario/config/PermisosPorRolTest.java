@@ -16,6 +16,8 @@ import com.pluscontable.tributario.dto.ObligacionDto;
 import com.pluscontable.tributario.model.Obligacion;
 import com.pluscontable.tributario.obligacion.TipoObligacion;
 import com.pluscontable.tributario.service.AcuerdoService;
+import com.pluscontable.tributario.ruc.ConsultaRucController;
+import com.pluscontable.tributario.ruc.ConsultaRucService;
 import com.pluscontable.tributario.service.ExpedienteService;
 import com.pluscontable.tributario.service.ObligacionProgramacionService;
 import com.pluscontable.tributario.service.ObligacionService;
@@ -47,7 +49,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** HU-38 · Tarea 84: cada rol contra cada opción de la matriz (con JWT reales firmados como ms-auth). */
 @WebMvcTest(controllers = {TrabajadorController.class, DocumentoController.class, AcuerdoController.class,
-        ObligacionController.class})
+        ObligacionController.class, ConsultaRucController.class})
 @Import(SecurityConfig.class)
 class PermisosPorRolTest {
 
@@ -59,6 +61,7 @@ class PermisosPorRolTest {
     @MockBean AcuerdoService acuerdoService;
     @MockBean ObligacionService obligacionService;
     @MockBean ObligacionProgramacionService programacionService;
+    @MockBean ConsultaRucService consultaRucService;
 
     @BeforeEach
     void setUp() {
@@ -85,7 +88,8 @@ class PermisosPorRolTest {
                 Arguments.of("GET", "/api/tributario/obligaciones/3", true),
                 Arguments.of("POST", "/api/tributario/obligaciones", false),
                 Arguments.of("PATCH", "/api/tributario/obligaciones/3/declaracion", false),
-                Arguments.of("PATCH", "/api/tributario/obligaciones/vencimiento", false));
+                Arguments.of("PATCH", "/api/tributario/obligaciones/vencimiento", false),
+                Arguments.of("GET", "/api/tributario/ruc/20123456786/consulta", false));
     }
 
     private String token(List<String> roles, long msHastaExpirar) {
