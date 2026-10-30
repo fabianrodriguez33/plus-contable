@@ -39,4 +39,13 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 - **`GET /api/auth/me`:** existe y exige token, pero el frontend no lo invoca.
 - **Pruebas del contrato del token entre servicios:** `ContratoTokenTest` (ms-auth) y `TokenEntreServiciosTest` (ms-tributario) existen en el PR #7 (`feature/pruebas-julio-s1`), todavía sin fusionar. No se citan arriba porque no están en `develop`.
 - **Tarea 54 (HU-07), el diagrama pedido régimen + último dígito del RUC → fecha límite no existe como flujo.** El alta recibe la fecha en la solicitud. `CronogramaConsultaService.buscar` y `GeneradorObligaciones.preparar` existen, pero solo los usan las pruebas, y el régimen tributario no interviene en ningún cálculo. El diagrama muestra el alta real y, en un carril aparte, la consulta existente sin conectar.
-- **Tareas 62 (HU-08), 79 (HU-13) y 85 (HU-37):** no hay código en `develop`, así que no se diagraman.
+- **Tareas 62 (HU-08) y 79 (HU-13):** no hay código en `develop`, así que no se diagraman.
+- **Tarea 85 (HU-37):** tampoco hay código; se hizo como diseño previo (ver abajo).
+
+## Diseños previos (no derivados del código)
+
+Diagramas de funcionalidad que **no existe en `develop`**. Muestran lo que piden las tareas, no lo que hace el código, y no se pueden contrastar con él hasta que se implemente.
+
+| Tarea | Historia | Diagrama | Fuente | Pendiente de decisión |
+|---|---|---|---|---|
+| 85 | HU-37 | [`T85-HU37-actividad-crear-acceso-cliente`](T85-HU37-actividad-crear-acceso-cliente.puml) · [png](img/T85-HU37-actividad-crear-acceso-cliente.png) | Tareas 85 a 90 de `tareas_sprint1.csv`; `docs/sprint1-jeanpierre/HU-38.md` | Cómo se enlaza usuario y cliente; entrega de la contraseña inicial (tarea 88, con Beto); códigos de rechazo y servicio responsable |
