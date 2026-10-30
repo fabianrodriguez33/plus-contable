@@ -1,0 +1,57 @@
+@startuml
+title T13 · HU-01 · Actividad: registrar un cliente (código de develop)
+skinparam shadowing false
+
+|Contador|
+start
+:Abre "Nuevo cliente" (FichaMaestraPage)
+y completa RUC, razón social y régimen;
+:Pulsa Guardar;
+
+|frontend-web|
+:Valida el RUC en el formulario (utils/ruc.ts)
+y envía POST /api/tributario/clientes con el JWT;
+
+|ms-tributario|
+if (¿Token válido y rol CONTADOR o ADMIN?) then (no)
+  :Responde 401 (sin token válido)
+  o 403 (rol no permitido);
+  stop
+endif
+if (¿Pasa la validación del DTO (@Valid)?
+RUC de 11 dígitos, razón social, régimen,
+email con formato) then (no)
+  :400 con el mensaje del campo;
+  stop
+endif
+if (¿RucValidator.motivoInvalido(ruc) es nulo?\nprefijo 10/15/17/20 y dígito verificador) then (no)
+  :400 con el motivo;
+  stop
+endif
+if (¿Existe un cliente con ese RUC?) then (sí)
+  :400 "Ya existe un cliente registrado con el RUC ...";
+  stop
+endif
+:Guarda el cliente\n(condición HABIDO si no se indica);
+if (¿Vienen usuario SOL y clave SOL?) then (los dos)
+  :Cifra ambos con AesUtil (AES/GCM, prefijo v2:)
+  y guarda en credenciales_sol;
+elseif (¿Viene solo uno?) then (sí)
+  :400 "Para registrar la Clave SOL debe indicar
+  usuario SOL y clave SOL"
+  (la transacción se revierte: el cliente
+  recién guardado no queda en la base);
+  stop
+else (ninguno)
+endif
+:Responde 201 Created con el ClienteDto
+(tieneClaveSol; nunca devuelve la clave);
+
+|frontend-web|
+:Muestra el cliente en la ficha y en la cartera;
+
+|Contador|
+stop
+
+footer Fuente: ClienteService.crear, RucValidator, GlobalExceptionHandler, FichaMaestraPage (develop 6db0036)
+@enduml
