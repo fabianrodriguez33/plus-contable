@@ -17,6 +17,23 @@ class GrupoRucCronogramaTest {
         assertEquals(grupo, GrupoRucCronograma.paraRuc(ruc));
     }
 
+    @ParameterizedTest
+    @CsvSource({"0,0", "3,2-3", "5,4-5", "7,6-7", "9,8-9"})
+    void sinMarcaDeBuenContribuyenteManda_elUltimoDigito(int digito, String grupo) {
+        assertEquals(grupo, GrupoRucCronograma.paraCliente("2099999999" + digito, false));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "1", "4", "9"})
+    void conMarcaDeBuenContribuyenteManda_laMarcaYNoElDigito(int digito) {
+        assertEquals("BUEN_CONTRIB_UESP", GrupoRucCronograma.paraCliente("2099999999" + digito, true));
+    }
+
+    @Test
+    void paraClienteTambienRechazaUnRucInvalido() {
+        assertThrows(IllegalArgumentException.class, () -> GrupoRucCronograma.paraCliente("123", true));
+    }
+
     @Test
     void rechazaRucInvalido() {
         assertThrows(IllegalArgumentException.class, () -> GrupoRucCronograma.ultimoDigito(null));

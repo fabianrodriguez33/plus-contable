@@ -87,6 +87,77 @@ class ClienteServiceTest {
         assertThat(creado.ruc()).isEqualTo("20100070970");
     }
 
+    private static ClienteDto dtoConMarca(Boolean buenContribuyente) {
+        return new ClienteDto(null, "20100070970", "Empresa SAC", Cliente.Regimen.MYPE, Cliente.CondicionHabido.HABIDO,
+                null, null, null, null, null, null, buenContribuyente);
+    }
+
+    @Test
+    void elAltaSinLaMarcaDeBuenContribuyenteLaDejaEnNo() {
+        when(clientes.existsByRuc("20100070970")).thenReturn(false);
+        when(clientes.save(any(Cliente.class))).thenAnswer(inv -> {
+            Cliente c = inv.getArgument(0);
+            c.setId(5L);
+            return c;
+        });
+        when(clientes.findById(5L)).thenAnswer(inv -> Optional.of(new Cliente()));
+
+        service.crear(dtoConMarca(null));
+
+        var guardado = org.mockito.ArgumentCaptor.forClass(Cliente.class);
+        verify(clientes).save(guardado.capture());
+        assertThat(guardado.getValue().isBuenContribuyente()).isFalse();
+    }
+
+    @Test
+    void laMarcaDeBuenContribuyenteSeGuardaYSeDevuelve() {
+        when(clientes.existsByRuc("20100070970")).thenReturn(false);
+        when(clientes.save(any(Cliente.class))).thenAnswer(inv -> {
+            Cliente c = inv.getArgument(0);
+            c.setId(5L);
+            return c;
+        });
+        when(clientes.findById(5L)).thenAnswer(inv -> {
+            Cliente c = new Cliente();
+            c.setId(5L);
+            c.setBuenContribuyente(true);
+            return Optional.of(c);
+        });
+
+        ClienteDto creado = service.crear(dtoConMarca(true));
+
+        var guardado = org.mockito.ArgumentCaptor.forClass(Cliente.class);
+        verify(clientes).save(guardado.capture());
+        assertThat(guardado.getValue().isBuenContribuyente()).isTrue();
+        assertThat(creado.buenContribuyente()).isTrue();
+    }
+
+    @Test
+    void alActualizarSinLaMarcaSeConservaLaGuardada() {
+        Cliente existente = new Cliente();
+        existente.setId(5L);
+        existente.setRuc("20100070970");
+        existente.setBuenContribuyente(true);
+        when(clientes.findById(5L)).thenReturn(Optional.of(existente));
+
+        service.actualizar(5L, dtoConMarca(null));
+
+        assertThat(existente.isBuenContribuyente()).isTrue();
+    }
+
+    @Test
+    void alActualizarConLaMarcaEnNoSeQuita() {
+        Cliente existente = new Cliente();
+        existente.setId(5L);
+        existente.setRuc("20100070970");
+        existente.setBuenContribuyente(true);
+        when(clientes.findById(5L)).thenReturn(Optional.of(existente));
+
+        service.actualizar(5L, dtoConMarca(false));
+
+        assertThat(existente.isBuenContribuyente()).isFalse();
+    }
+
     @Test
     void alActualizarTambienSeValidaElDigitoVerificador() {
         assertThatThrownBy(() -> service.actualizar(5L, dto("20100070979")))

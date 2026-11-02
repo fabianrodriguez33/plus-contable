@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.pluscontable.tributario.controller.AcuerdoController;
 import com.pluscontable.tributario.controller.DocumentoController;
 import com.pluscontable.tributario.controller.ObligacionController;
+import com.pluscontable.tributario.controller.ProgramacionMensualController;
 import com.pluscontable.tributario.controller.TrabajadorController;
 import com.pluscontable.tributario.model.DocumentoLegal;
 import com.pluscontable.tributario.dto.ObligacionDto;
@@ -19,6 +20,7 @@ import com.pluscontable.tributario.service.AcuerdoService;
 import com.pluscontable.tributario.service.ExpedienteService;
 import com.pluscontable.tributario.service.ObligacionProgramacionService;
 import com.pluscontable.tributario.service.ObligacionService;
+import com.pluscontable.tributario.service.ProgramacionMensualService;
 import com.pluscontable.tributario.service.TrabajadorService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -47,7 +49,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /** HU-38 · Tarea 84: cada rol contra cada opción de la matriz (con JWT reales firmados como ms-auth). */
 @WebMvcTest(controllers = {TrabajadorController.class, DocumentoController.class, AcuerdoController.class,
-        ObligacionController.class})
+        ObligacionController.class, ProgramacionMensualController.class})
 @Import(SecurityConfig.class)
 class PermisosPorRolTest {
 
@@ -59,6 +61,7 @@ class PermisosPorRolTest {
     @MockBean AcuerdoService acuerdoService;
     @MockBean ObligacionService obligacionService;
     @MockBean ObligacionProgramacionService programacionService;
+    @MockBean ProgramacionMensualService programacionMensualService;
 
     @BeforeEach
     void setUp() {
@@ -84,6 +87,7 @@ class PermisosPorRolTest {
                 Arguments.of("GET", "/api/tributario/obligaciones?clienteId=1", true),
                 Arguments.of("GET", "/api/tributario/obligaciones/3", true),
                 Arguments.of("POST", "/api/tributario/obligaciones", false),
+                Arguments.of("POST", "/api/tributario/obligaciones/programacion", false),
                 Arguments.of("PATCH", "/api/tributario/obligaciones/3/declaracion", false),
                 Arguments.of("PATCH", "/api/tributario/obligaciones/vencimiento", false));
     }

@@ -150,6 +150,8 @@ ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaci
 ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_tipo
     CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP'));
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+-- HU-07: marca manual de buen contribuyente (BUEN_CONTRIB_UESP); los clientes existentes quedan en FALSE.
+ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS buen_contribuyente BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS quinta_categoria BOOLEAN NOT NULL DEFAULT FALSE;

@@ -17,6 +17,15 @@ public final class GrupoRucCronograma {
         return ruc.charAt(10) - '0';
     }
 
+    /** Grupo del CSV para los clientes marcados como buenos contribuyentes; no se deduce del RUC. */
+    public static final String BUEN_CONTRIBUYENTE = "BUEN_CONTRIB_UESP";
+
+    /** La marca manual del cliente manda sobre el último dígito; el RUC se valida igual. */
+    public static String paraCliente(String ruc, boolean buenContribuyente) {
+        String porDigito = paraRuc(ruc);
+        return buenContribuyente ? BUEN_CONTRIBUYENTE : porDigito;
+    }
+
     public static String paraRuc(String ruc) {
         return switch (ultimoDigito(ruc)) {
             case 0 -> "0";

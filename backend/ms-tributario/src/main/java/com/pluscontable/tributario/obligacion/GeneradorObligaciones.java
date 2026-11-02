@@ -6,9 +6,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Prepara obligaciones sin persistirlas ni seleccionar reglas tributarias. */
+/** Prepara obligaciones sin persistirlas. Las reglas del mes son las confirmadas por Beto el 02/11/2026. */
 public final class GeneradorObligaciones {
+    /**
+     * Tipos que se generan al programar un mes: usan la fecha del cronograma SUNAT por último dígito del RUC.
+     * SUPUESTO sin confirmar con Beto: los cinco se generan igual en MYPE, REMIPE y GENERAL.
+     */
+    public static final List<TipoObligacion> TIPOS_DEL_MES = List.of(TipoObligacion.IGV, TipoObligacion.RENTA,
+            TipoObligacion.PLAME, TipoObligacion.ESSALUD, TipoObligacion.RETENCION_QUINTA);
+
+    /** AFP tiene su propio cronograma, que aún no tenemos: no se genera en este sprint. */
+    public static final List<TipoObligacion> TIPOS_NO_GENERADOS = List.of(TipoObligacion.AFP);
+
     private GeneradorObligaciones() {
+    }
+
+    public static List<Solicitud> solicitudesDelMes(Long clienteId, LocalDate periodo, LocalDate fechaVencimiento) {
+        return TIPOS_DEL_MES.stream()
+                .map(tipo -> new Solicitud(new Clave(clienteId, tipo, periodo), fechaVencimiento))
+                .toList();
     }
 
     public record Clave(Long clienteId, TipoObligacion tipoObligacion, LocalDate periodo) {

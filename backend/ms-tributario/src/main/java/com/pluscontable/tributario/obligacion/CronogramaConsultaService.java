@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.obligacion;
 
+import com.pluscontable.tributario.model.Cliente;
 import com.pluscontable.tributario.repository.ClienteRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.sql.Date;
@@ -27,10 +28,9 @@ public class CronogramaConsultaService {
         if (clienteId == null || clienteId <= 0 || periodo == null) {
             throw new IllegalArgumentException("cliente_id y periodo son obligatorios");
         }
-        String ruc = clientes.findById(clienteId)
-                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado"))
-                .getRuc();
-        String grupo = GrupoRucCronograma.paraRuc(ruc);
+        Cliente cliente = clientes.findById(clienteId)
+                .orElseThrow(() -> new EntityNotFoundException("Cliente no encontrado"));
+        String grupo = GrupoRucCronograma.paraCliente(cliente.getRuc(), cliente.isBuenContribuyente());
         List<LocalDate> fechas = jdbc.query("""
                 SELECT fecha_vencimiento FROM tributario_schema.cronograma_tributario
                 WHERE periodo_tributario = ? AND ultimo_digito_ruc = ?

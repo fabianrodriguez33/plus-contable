@@ -20,10 +20,20 @@ public record ClienteDto(
         @Email(message = "El email no tiene un formato válido") @Size(max = 150) String email,
         String usuarioSol,
         String claveSol,
-        Boolean tieneClaveSol) {
+        Boolean tieneClaveSol,
+        /** Opcional: si no viene, al crear queda en false y al actualizar se conserva el valor guardado. */
+        Boolean buenContribuyente) {
+
+    public ClienteDto(Long id, String ruc, String razonSocial, Cliente.Regimen regimenTributario,
+                      Cliente.CondicionHabido condicionHabido, String direccion, String telefono, String email,
+                      String usuarioSol, String claveSol, Boolean tieneClaveSol) {
+        this(id, ruc, razonSocial, regimenTributario, condicionHabido, direccion, telefono, email, usuarioSol,
+                claveSol, tieneClaveSol, null);
+    }
 
     public static ClienteDto from(Cliente c, boolean tieneClaveSol) {
         return new ClienteDto(c.getId(), c.getRuc(), c.getRazonSocial(), c.getRegimenTributario(),
-                c.getCondicionHabido(), c.getDireccion(), c.getTelefono(), c.getEmail(), null, null, tieneClaveSol);
+                c.getCondicionHabido(), c.getDireccion(), c.getTelefono(), c.getEmail(), null, null, tieneClaveSol,
+                c.isBuenContribuyente());
     }
 }
