@@ -9,8 +9,9 @@ spring:
     name: ms-tributario
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/plus_contable_db}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    # Usuario propio del servicio (HT-01); si no se define, usa DB_USER y DB_PASSWORD
+    username: ${TRIBUTARIO_DB_USER:${DB_USER}}
+    password: ${TRIBUTARIO_DB_PASSWORD:${DB_PASSWORD}}
   jpa:
     hibernate:
       ddl-auto: none
