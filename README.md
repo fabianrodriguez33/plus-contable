@@ -173,11 +173,13 @@ Define las cuatro variables en el `.env` **antes** del primer `docker compose up
 
 ### Base de datos que ya existe
 
-Hazlo cuando ninguno de los servicios esté en uso y con un respaldo a mano:
+Hazlo cuando ninguno de los servicios esté en uso y con un respaldo a mano.
+
+> Las rutas del contenedor llevan **doble barra inicial** (`//tmp/…`, `//docker-entrypoint-initdb.d/…`): en Git Bash, una sola barra se convierte en una ruta de Windows y el comando falla; con doble barra funciona igual en Git Bash y en PowerShell.
 
 1. Respaldo, **fuera** de la carpeta del proyecto:
    ```bash
-   docker exec plus-contable-db pg_dump -U postgres -d plus_contable_db -Fc -f /tmp/respaldo.dump
+   docker exec plus-contable-db pg_dump -U postgres -d plus_contable_db -Fc -f //tmp/respaldo.dump
    docker cp plus-contable-db:/tmp/respaldo.dump ../respaldo-plus-contable.dump
    ```
 2. Detén `ms-auth` y `ms-tributario` y agrega las cuatro variables al `.env`.
@@ -187,7 +189,7 @@ Hazlo cuando ninguno de los servicios esté en uso y con un respaldo a mano:
    ```
 4. Crea los usuarios y pasa a ellos la propiedad de los esquemas y las tablas:
    ```bash
-   docker exec plus-contable-db psql -U postgres -d plus_contable_db -f /docker-entrypoint-initdb.d/01-roles-por-servicio.sql
+   docker exec plus-contable-db psql -U postgres -d plus_contable_db -f //docker-entrypoint-initdb.d/01-roles-por-servicio.sql
    ```
    Debe terminar con `Usuarios por servicio creados`. Es repetible sin riesgo.
 5. Arranca otra vez `ms-auth` y `ms-tributario` y comprueba las direcciones de salud y el inicio de sesión.
