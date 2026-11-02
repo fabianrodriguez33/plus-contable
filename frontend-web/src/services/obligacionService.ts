@@ -4,6 +4,7 @@ import { tributarioApi } from './apiClient'
 export interface Obligacion {
   id: number
   clienteId: number
+  tipoObligacion?: string
   periodo: string
   fechaVencimiento: string
   estado: 'PENDIENTE' | 'DECLARADO'
