@@ -1,6 +1,6 @@
 # Trazabilidad de diagramas UML — Sprint 1
 
-Todos los diagramas salen del código de `develop` (commit `6db0036`). Fuente `.puml` (PlantUML) en esta carpeta e imagen `.png` con el mismo nombre en `img/`. Para regenerarlas: `java -jar plantuml.jar -tpng -charset UTF-8 -o img *.puml` desde `docs/uml/`.
+Todos los diagramas salen del código de `develop` (commit `6db0036`; el de la tarea 62, del commit `5adfb88`). Fuente `.puml` (PlantUML) en esta carpeta e imagen `.png` con el mismo nombre en `img/`. Para regenerarlas: `java -jar plantuml.jar -tpng -charset UTF-8 -o img *.puml` desde `docs/uml/`.
 
 ## Alcance
 
@@ -30,6 +30,7 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 | 54 | HU-07 | [`T54-HU07-actividad`](T54-HU07-actividad.puml) · [png](img/T54-HU07-actividad.png) | `ObligacionController.crear`, `ObligacionProgramacionService`, `ObligacionInputValidator`, `CronogramaConsultaService`, `GrupoRucCronograma`. **Respaldo parcial**: ver nota abajo | `ObligacionProgramacionServiceTest`, `ObligacionInputValidatorTest`, `Hu07ComponentesTest`, `Hu07PostgresIntegrationTest`, `CronogramaYGeneradorTest`, `GrupoRucCronogramaTest`, `CronogramaSunatLoaderTest` |
 | 67 | HU-09 | [`T67-HU09-estados`](T67-HU09-estados.puml) · [png](img/T67-HU09-estados.png) | `Obligacion.Estado`, `ObligacionService.declarar` y `cambiarVencimiento`, `DeclaracionDto` | `ObligacionServiceTest` |
 | 73 | HU-10 | [`T73-HU10-secuencia`](T73-HU10-secuencia.puml) · [png](img/T73-HU10-secuencia.png) | `ObligacionController.cambiarVencimiento`, `ObligacionService.cambiarVencimiento`, `VencimientoHistorial`, `VencimientoHistorialRepository` | `ObligacionServiceTest` |
+| 62 | HU-08 | [`T62-HU08-secuencia-calendario`](T62-HU08-secuencia-calendario.puml) · [png](img/T62-HU08-secuencia-calendario.png) | `CalendarioController`, `CalendarioService`, `CalendarioObligacionDto`, `VencimientoTributario`, `ObligacionService.listar`, `SecurityConfig`. Código de `develop` en el commit `5adfb88` (PR #5 fusionado) | `CalendarioServiceTest`, `CalendarioPermisosTest`, `VencimientoTributarioTest` |
 
 ## Lo que el diseño no puede respaldar con código
 
@@ -39,7 +40,7 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 - **`GET /api/auth/me`:** existe y exige token, pero el frontend no lo invoca.
 - **Pruebas del contrato del token entre servicios:** `ContratoTokenTest` (ms-auth) y `TokenEntreServiciosTest` (ms-tributario) existen en el PR #7 (`feature/pruebas-julio-s1`), todavía sin fusionar. No se citan arriba porque no están en `develop`.
 - **Tarea 54 (HU-07), el diagrama pedido régimen + último dígito del RUC → fecha límite no existe como flujo.** El alta recibe la fecha en la solicitud. `CronogramaConsultaService.buscar` y `GeneradorObligaciones.preparar` existen, pero solo los usan las pruebas, y el régimen tributario no interviene en ningún cálculo. El diagrama muestra el alta real y, en un carril aparte, la consulta existente sin conectar.
-- **Tareas 62 (HU-08) y 79 (HU-13):** no hay código en `develop`, así que no se diagraman.
+- **Tarea 79 (HU-13):** no hay código en `develop`, así que no se diagrama. La tarea 62 (HU-08) se diagramó después de fusionar el PR #5 (ver su fila en el bloque 2).
 - **Tarea 85 (HU-37):** tampoco hay código; se hizo como diseño previo (ver abajo).
 
 ## Diseños previos (no derivados del código)
