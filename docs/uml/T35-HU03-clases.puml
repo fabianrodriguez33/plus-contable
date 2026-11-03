@@ -1,0 +1,82 @@
+@startuml
+!pragma layout smetana
+title T35 · HU-03 · Clases de Trabajador (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class TrabajadorController {
+  +listar(clienteId): List<TrabajadorDto>
+  +registrar(clienteId, dto): TrabajadorDto
+}
+
+class TrabajadorService {
+  +listar(clienteId): List<TrabajadorDto>
+  +registrar(clienteId, dto): TrabajadorDto
+  -validar(dto)
+  -exigirCliente(clienteId)
+}
+
+class Trabajador {
+  id: Long
+  clienteId: Long
+  nombreCompleto: String
+  tipoDocumento: TipoDocumento
+  numeroDocumento: String
+  extranjero: boolean
+  nacionalidad: String
+  sistemaPensionario: SistemaPensionario
+  nombreAfp: String
+  fechaIngreso: LocalDate
+  remuneracion: BigDecimal
+  tipoContrato: String
+  fechaInicioContrato: LocalDate
+  fechaFinContrato: LocalDate
+}
+
+enum "Trabajador.TipoDocumento" as TipoDocumento {
+  DNI
+  CE
+  PASAPORTE
+  PTP
+}
+
+enum "Trabajador.SistemaPensionario" as SistemaPensionario {
+  ONP
+  AFP
+}
+
+class TrabajadorDto <<record>>
+
+interface TrabajadorRepository {
+  findByClienteIdOrderById(clienteId)
+}
+interface ClienteRepository {
+  existsById(id)
+}
+
+TrabajadorController --> TrabajadorService
+TrabajadorController ..> TrabajadorDto
+TrabajadorService --> TrabajadorRepository
+TrabajadorService --> ClienteRepository : el cliente debe existir
+TrabajadorRepository ..> Trabajador
+Trabajador --> TipoDocumento
+Trabajador --> SistemaPensionario
+Trabajador "0..*" --> "1" Cliente : cliente_id
+
+note bottom of TrabajadorService
+  validar(): nombre, tipo y número de documento, sistema pensionario y fecha
+  de ingreso son obligatorios; con AFP se exige nombreAfp; remuneración >= 0.
+  registrar(): los datos de extranjería solo se guardan si extranjero = true.
+  Si extranjero: el tipo no puede ser DNI y se exigen nacionalidad, tipoContrato
+  y fechaInicioContrato (fin no anterior al inicio). Los faltantes se listan juntos en un 400.
+end note
+
+note bottom of Trabajador
+  Nacional y extranjero son la misma clase: se distinguen por el atributo
+  extranjero. No hay subclases en el código.
+  UNIQUE (cliente_id, tipo_documento, numero_documento): un duplicado
+  responde 409 "Ya existe un trabajador con ese tipo y número de documento".
+end note
+
+footer Fuente: TrabajadorController, TrabajadorService, model.Trabajador (develop 6db0036)
+@enduml

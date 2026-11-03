@@ -1,0 +1,108 @@
+@startuml
+!pragma layout smetana
+title T13 · HU-01 · Clases de Cliente y sus credenciales SOL (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class ClienteController {
+  +listar(): List<ClienteDto>
+  +obtener(id): ClienteDto
+  +crear(dto): ClienteDto
+  +actualizar(id, dto): ClienteDto
+  +guardarSol(id, dto)
+  +obtenerSol(id): CredencialSolDto
+}
+
+class ClienteService {
+  +listar(): List<ClienteDto>
+  +obtener(id): ClienteDto
+  +crear(dto): ClienteDto
+  +actualizar(id, dto): ClienteDto
+  +guardarCredencialSol(clienteId, dto)
+  +obtenerCredencialSol(clienteId): CredencialSolDto
+  +buscar(id): Cliente
+}
+
+class RucValidator <<utilidad>> {
+  {static} +PREFIJOS = {10, 15, 17, 20}
+  {static} +motivoInvalido(ruc): String
+  {static} +esValido(ruc): boolean
+}
+
+class AesUtil {
+  +encrypt(texto): String
+  +decrypt(texto): String
+  +esLegado(texto): boolean
+}
+
+class Cliente {
+  id: Long
+  ruc: String
+  razonSocial: String
+  regimenTributario: Regimen
+  condicionHabido: CondicionHabido
+  direccion: String
+  telefono: String
+  email: String
+  activo: boolean
+  creadoEn: LocalDateTime
+}
+
+enum "Cliente.Regimen" as Regimen {
+  MYPE
+  REMIPE
+  GENERAL
+}
+
+enum "Cliente.CondicionHabido" as Condicion {
+  HABIDO
+  NO_HABIDO
+}
+
+class CredencialSol {
+  id: Long
+  clienteId: Long
+  usuarioSolCifrado: String
+  claveSolCifrada: String
+  actualizadoEn: LocalDateTime
+}
+
+class ClienteDto <<record>> {
+  id, ruc, razonSocial, regimenTributario,
+  condicionHabido, direccion, telefono, email,
+  usuarioSol, claveSol, tieneClaveSol
+}
+
+class CredencialSolDto <<record>> {
+  usuarioSol
+  claveSol
+}
+
+interface ClienteRepository {
+  existsByRuc(ruc)
+  findByRuc(ruc)
+}
+interface CredencialSolRepository {
+  findByClienteId(clienteId)
+}
+
+ClienteController --> ClienteService
+ClienteController ..> ClienteDto
+ClienteService --> ClienteRepository
+ClienteService --> CredencialSolRepository
+ClienteService ..> RucValidator : valida el RUC
+ClienteService --> AesUtil : cifra y descifra SOL
+ClienteService ..> CredencialSolDto
+ClienteRepository ..> Cliente
+CredencialSolRepository ..> CredencialSol
+Cliente --> Regimen
+Cliente --> Condicion
+Cliente "1" <-- "0..1" CredencialSol : cliente_id (único)
+
+note right of ClienteDto
+  usuarioSol y claveSol solo viajan de entrada:
+  la respuesta devuelve tieneClaveSol, no la clave.
+end note
+
+footer Fuente: backend/ms-tributario (controller, service, model, dto, repository) en develop 6db0036
+@enduml

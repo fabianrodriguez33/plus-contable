@@ -1,0 +1,28 @@
+@startuml
+!pragma layout smetana
+title T67 · HU-09 · Estados de una obligación (código de develop)
+skinparam shadowing false
+
+[*] --> PENDIENTE : alta de la obligación\n(POST /obligaciones, HU-07)
+PENDIENTE --> PENDIENTE : cambiarVencimiento()\n(guarda la fecha anterior, HU-10)
+PENDIENTE --> DECLARADO : declarar(fechaDeclaracion,\nnumeroFormulario, montoDeterminado)
+DECLARADO --> [*]
+
+note right of PENDIENTE
+  Se puede cambiar el vencimiento.
+  Se puede declarar.
+end note
+note right of DECLARADO
+  Guarda fechaDeclaracion, numeroFormulario y montoDeterminado.
+  declarar() otra vez falla con 400 "La obligación ya fue declarada".
+  cambiarVencimiento() rechaza las obligaciones declaradas.
+  El comentario del código indica que HU-13 parte de este estado.
+end note
+
+note bottom
+  El enum Obligacion.Estado solo tiene PENDIENTE y DECLARADO.
+  No existe un estado VENCIDO guardado ni estados de pago.
+end note
+
+footer Fuente: model.Obligacion.Estado, ObligacionService.declarar y cambiarVencimiento (develop 6db0036)
+@enduml
