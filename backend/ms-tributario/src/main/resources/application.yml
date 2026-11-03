@@ -41,5 +41,7 @@ app:
     # se carga por entorno (por ejemplo APP_TRIBUTARIO_UIT_2026). Sin UIT de un anio no se evalua la quinta.
     # La quinta categoria sigue apagada hasta que Beto confirme unidad y formula de proyeccion
     # (quinta-activa y quinta-sueldos-al-anio).
+    # ESSALUD tambien apagado hasta confirmar la regla del estudio.
+    essalud-activo: false
     quinta-activa: false
     quinta-umbral-uit: 7

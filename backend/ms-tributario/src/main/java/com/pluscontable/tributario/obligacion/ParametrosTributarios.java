@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 public class ParametrosTributarios {
+    /** ESSALUD: apagado hasta que se confirme la regla del estudio (falta el campo asegurado). */
+    private boolean essaludActivo = false;
+
     /** UIT por año, en soles. */
     private Map<Integer, BigDecimal> uit = new HashMap<>();
 

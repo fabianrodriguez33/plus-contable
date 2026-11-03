@@ -74,7 +74,7 @@ public class ProgramacionMensualService {
         boolean conRemuneracion = activos.stream().map(Trabajador::getRemuneracion)
                 .anyMatch(r -> r != null && r.compareTo(BigDecimal.ZERO) > 0);
         String sinQuinta = ReglaQuinta.motivoDeOmision(parametros, periodo.getYear(), activos).orElse(null);
-        return new ReglasMes(!activos.isEmpty(), conRemuneracion, sinQuinta);
+        return new ReglasMes(!activos.isEmpty(), conRemuneracion, parametros.isEssaludActivo(), sinQuinta);
     }
 
     private ObligacionDto guardar(Solicitud solicitud) {

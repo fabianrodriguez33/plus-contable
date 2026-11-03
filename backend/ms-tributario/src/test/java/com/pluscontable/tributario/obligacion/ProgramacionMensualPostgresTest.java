@@ -50,20 +50,20 @@ class ProgramacionMensualPostgresTest {
 
     @Test
     @Transactional
-    void programaElMesConLaFechaDelGrupoDelRucYSinAfpNiQuinta() {
+    void programaElMesConLaFechaDelGrupoDelRucYSinEssaludAfpNiQuinta() {
         Long id = cliente();
         trabajador(id, "1500.00");
 
         var r = programacion.programar(id, YearMonth.of(2026, 1));
 
-        assertThat(r.creadas()).hasSize(4);
-        assertThat(filas(id, "2026-01-01")).containsExactly("ESSALUD 2026-02-23", "IGV 2026-02-23",
-                "PLAME 2026-02-23", "RENTA 2026-02-23");
+        assertThat(r.creadas()).hasSize(3);
+        assertThat(filas(id, "2026-01-01")).containsExactly("IGV 2026-02-23", "PLAME 2026-02-23",
+                "RENTA 2026-02-23");
         assertThat(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM tributario_schema.obligaciones WHERE cliente_id = ? AND tipo_obligacion = 'AFP'
                 """, Integer.class, id)).isZero();
         assertThat(r.noGeneradas()).extracting(Omision::tipo)
-                .containsExactlyInAnyOrder(TipoObligacion.AFP, TipoObligacion.RETENCION_QUINTA);
+                .containsExactlyInAnyOrder(TipoObligacion.AFP, TipoObligacion.RETENCION_QUINTA, TipoObligacion.ESSALUD);
     }
 
     @Test
@@ -80,7 +80,7 @@ class ProgramacionMensualPostgresTest {
 
     @Test
     @Transactional
-    void sinRemuneracionSeProgramaPlamePeroNoEssalud() {
+    void sinRemuneracionSeProgramaPlameYNuncaEssalud() {
         Long id = cliente();
         jdbc.update("""
                 INSERT INTO tributario_schema.trabajadores
@@ -97,6 +97,7 @@ class ProgramacionMensualPostgresTest {
     @Test
     void laQuintaViajaApagadaYSinNingunMontoDeUitEnLaConfiguracion() {
         assertThat(parametros.isQuintaActiva()).isFalse();
+        assertThat(parametros.isEssaludActivo()).isFalse();
         assertThat(parametros.getUit()).isEmpty();
         assertThat(parametros.sueldosAlAnio()).isEmpty();
     }
@@ -111,8 +112,8 @@ class ProgramacionMensualPostgresTest {
         var segunda = programacion.programar(id, YearMonth.of(2026, 1));
 
         assertThat(segunda.creadas()).isEmpty();
-        assertThat(segunda.yaExistian()).hasSize(4);
-        assertThat(filas(id, "2026-01-01")).hasSize(4);
+        assertThat(segunda.yaExistian()).hasSize(3);
+        assertThat(filas(id, "2026-01-01")).hasSize(3);
     }
 
     @Test
@@ -149,7 +150,7 @@ class ProgramacionMensualPostgresTest {
 
         programacion.programar(id, YearMonth.of(2026, 2));
 
-        assertThat(filas(id, "2026-02-01")).hasSize(4).allMatch(f -> f.endsWith("2026-03-24"));
+        assertThat(filas(id, "2026-02-01")).hasSize(3).allMatch(f -> f.endsWith("2026-03-24"));
     }
 
     @Test
@@ -158,13 +159,13 @@ class ProgramacionMensualPostgresTest {
         Long id = cliente();
         trabajador(id, "1500.00");
         programacion.programar(id, YearMonth.of(2026, 2));
-        assertThat(filas(id, "2026-02-01")).hasSize(4).allMatch(f -> f.endsWith("2026-03-23"));
+        assertThat(filas(id, "2026-02-01")).hasSize(3).allMatch(f -> f.endsWith("2026-03-23"));
 
         jdbc.update("UPDATE tributario_schema.clientes SET buen_contribuyente = TRUE WHERE id = ?", id);
         var otraVez = programacion.programar(id, YearMonth.of(2026, 2));
 
         assertThat(otraVez.creadas()).isEmpty();
-        assertThat(filas(id, "2026-02-01")).hasSize(4).allMatch(f -> f.endsWith("2026-03-23"));
+        assertThat(filas(id, "2026-02-01")).hasSize(3).allMatch(f -> f.endsWith("2026-03-23"));
     }
 
     @Test
@@ -179,8 +180,8 @@ class ProgramacionMensualPostgresTest {
 
         assertThat(otraVez.yaExistian()).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
         assertThat(otraVez.creadas()).extracting(o -> o.tipoObligacion())
-                .containsExactlyInAnyOrder(TipoObligacion.PLAME, TipoObligacion.ESSALUD);
-        assertThat(filas(id, "2026-01-01")).hasSize(4);
+                .containsExactly(TipoObligacion.PLAME);
+        assertThat(filas(id, "2026-01-01")).hasSize(3);
     }
 
     @Test
@@ -206,7 +207,7 @@ class ProgramacionMensualPostgresTest {
 
         programacion.programar(a, YearMonth.of(2026, 1));
 
-        assertThat(filas(a, "2026-01-01")).hasSize(4);
+        assertThat(filas(a, "2026-01-01")).hasSize(3);
         assertThat(filas(b, "2026-01-01")).isEmpty();
     }
 }

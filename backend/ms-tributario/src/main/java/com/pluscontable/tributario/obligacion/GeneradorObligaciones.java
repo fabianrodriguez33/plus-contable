@@ -14,15 +14,18 @@ public final class GeneradorObligaciones {
 
     /**
      * Datos del cliente que deciden qué se genera. {@code motivoSinQuinta} es null cuando la retención de quinta
-     * categoría corresponde y, si no, el motivo por el que se omite.
+     * categoría corresponde y, si no, el motivo por el que se omite. {@code essaludActivo} es false mientras la
+     * regla de ESSALUD no esté confirmada.
      */
-    public record ReglasMes(boolean hayPlanilla, boolean hayAsegurados, String motivoSinQuinta) {
+    public record ReglasMes(boolean hayPlanilla, boolean hayAsegurados, boolean essaludActivo,
+                            String motivoSinQuinta) {
     }
 
     public record TiposDelMes(List<TipoObligacion> generar, List<Omision> omitidas) {
     }
 
     public static final String MOTIVO_AFP = "AFP tiene su propio cronograma, que aún no está disponible";
+    public static final String MOTIVO_ESSALUD_PENDIENTE = "Pendiente de confirmar la regla del estudio";
     public static final String MOTIVO_SIN_PLANILLA = "El cliente no tiene trabajadores registrados en el periodo";
     public static final String MOTIVO_SIN_ASEGURADOS = "Ningún trabajador tiene remuneración mayor que 0";
 
@@ -31,11 +34,11 @@ public final class GeneradorObligaciones {
 
     /**
      * Decide qué se genera. Confirmado por Beto (02/11/2026): IGV y RENTA siempre, con el mismo cronograma en
-     * MYPE, REMIPE y GENERAL (solo cambia el cálculo del impuesto, no la fecha); PLAME si hay trabajadores;
-     * AFP queda fuera.
-     * SUPUESTO sin confirmar: ESSALUD se genera si hay trabajadores con remuneración mayor que 0; eso NO equivale
-     * a "asegurado" (la columna essalud existe pero ninguna pantalla la llena).
+     * MYPE, REMIPE y GENERAL (solo cambia el cálculo del impuesto, no la fecha); PLAME si hay trabajadores.
      * PLAME: los "otros sujetos a declarar" no existen como dato; hoy solo cuentan los trabajadores.
+     * SIN CONFIRMAR: ESSALUD está apagado. Su código (trabajadores con remuneración mayor que 0, que NO equivale
+     * a "asegurado") se conserva para cuando se confirme la regla y se encienda {@code essaludActivo}.
+     * AFP y quinta tampoco están confirmadas: AFP no tiene cronograma y la quinta tiene su propio motivo.
      */
     public static TiposDelMes tiposDelMes(ReglasMes reglas) {
         if (reglas == null) throw new IllegalArgumentException("las reglas del mes son obligatorias");
@@ -46,7 +49,9 @@ public final class GeneradorObligaciones {
         } else {
             omitidas.add(new Omision(TipoObligacion.PLAME, MOTIVO_SIN_PLANILLA));
         }
-        if (reglas.hayPlanilla() && reglas.hayAsegurados()) {
+        if (!reglas.essaludActivo()) {
+            omitidas.add(new Omision(TipoObligacion.ESSALUD, MOTIVO_ESSALUD_PENDIENTE));
+        } else if (reglas.hayPlanilla() && reglas.hayAsegurados()) {
             generar.add(TipoObligacion.ESSALUD);
         } else {
             omitidas.add(new Omision(TipoObligacion.ESSALUD,

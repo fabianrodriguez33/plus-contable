@@ -76,26 +76,26 @@ class ProgramacionMensualServiceTest {
     }
 
     @Test
-    void conPlanillaGeneraIgvRentaPlameYEssaludConLaFechaDelCronogramaYOmiteQuintaYAfp() {
+    void conPlanillaGeneraIgvRentaYPlameConLaFechaDelCronogramaYOmiteEssaludQuintaYAfp() {
         when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
         conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "1500.00"));
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
         ArgumentCaptor<Obligacion> guardadas = ArgumentCaptor.forClass(Obligacion.class);
-        verify(obligaciones, times(4)).saveAndFlush(guardadas.capture());
+        verify(obligaciones, times(3)).saveAndFlush(guardadas.capture());
         assertThat(guardadas.getAllValues()).extracting(Obligacion::getTipoObligacion)
-                .containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA, TipoObligacion.PLAME,
-                        TipoObligacion.ESSALUD);
+                .containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA, TipoObligacion.PLAME);
         assertThat(guardadas.getAllValues()).allSatisfy(o -> {
             assertThat(o.getClienteId()).isEqualTo(CLIENTE);
             assertThat(o.getPeriodo()).isEqualTo(LocalDate.of(2026, 10, 1));
             assertThat(o.getFechaVencimiento()).isEqualTo(FECHA);
             assertThat(o.getEstado()).isEqualTo(Obligacion.Estado.PENDIENTE);
         });
-        assertThat(r.creadas()).hasSize(4);
+        assertThat(r.creadas()).hasSize(3);
         assertThat(r.yaExistian()).isEmpty();
         assertThat(r.noGeneradas()).containsExactlyInAnyOrder(
+                new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_ESSALUD_PENDIENTE),
                 new Omision(TipoObligacion.RETENCION_QUINTA, ReglaQuinta.MOTIVO_PENDIENTE),
                 new Omision(TipoObligacion.AFP, GeneradorObligaciones.MOTIVO_AFP));
         assertThat(r.fechaVencimiento()).isEqualTo(FECHA);
@@ -111,14 +111,15 @@ class ProgramacionMensualServiceTest {
         assertThat(tiposGuardados(2)).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
         assertThat(r.noGeneradas()).containsExactlyInAnyOrder(
                 new Omision(TipoObligacion.PLAME, GeneradorObligaciones.MOTIVO_SIN_PLANILLA),
-                new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_SIN_PLANILLA),
+                new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_ESSALUD_PENDIENTE),
                 new Omision(TipoObligacion.RETENCION_QUINTA, ReglaQuinta.MOTIVO_PENDIENTE),
                 new Omision(TipoObligacion.AFP, GeneradorObligaciones.MOTIVO_AFP));
     }
 
     @Test
-    void unTrabajadorSinRemuneracionGeneraPlamePeroNoEssalud() {
+    void conEssaludEncendidoUnTrabajadorSinRemuneracionGeneraPlamePeroNoEssalud() {
         when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        parametros.setEssaludActivo(true);
         conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), null), trabajador(LocalDate.of(2026, 2, 1), "0"));
 
         var r = service.programar(CLIENTE, OCTUBRE);
@@ -127,6 +128,19 @@ class ProgramacionMensualServiceTest {
                 TipoObligacion.PLAME);
         assertThat(r.noGeneradas()).contains(
                 new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_SIN_ASEGURADOS));
+    }
+
+    @Test
+    void conEssaludEncendidoYRemuneracionSeGeneraEssalud() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "1500.00"));
+        parametros.setEssaludActivo(true);
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(4)).contains(TipoObligacion.ESSALUD);
+        assertThat(r.noGeneradas()).extracting(Omision::tipo)
+                .containsExactlyInAnyOrder(TipoObligacion.RETENCION_QUINTA, TipoObligacion.AFP);
     }
 
     @Test
@@ -146,7 +160,7 @@ class ProgramacionMensualServiceTest {
 
         service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(tiposGuardados(4)).contains(TipoObligacion.PLAME, TipoObligacion.ESSALUD);
+        assertThat(tiposGuardados(3)).contains(TipoObligacion.PLAME).doesNotContain(TipoObligacion.ESSALUD);
     }
 
     @Test
@@ -158,7 +172,7 @@ class ProgramacionMensualServiceTest {
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(tiposGuardados(4)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
+        assertThat(tiposGuardados(3)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
         assertThat(r.noGeneradas()).contains(new Omision(TipoObligacion.RETENCION_QUINTA, "Falta la UIT de 2026"));
     }
 
@@ -177,8 +191,9 @@ class ProgramacionMensualServiceTest {
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(tiposGuardados(5)).contains(TipoObligacion.RETENCION_QUINTA);
-        assertThat(r.noGeneradas()).extracting(Omision::tipo).containsExactly(TipoObligacion.AFP);
+        assertThat(tiposGuardados(4)).contains(TipoObligacion.RETENCION_QUINTA);
+        assertThat(r.noGeneradas()).extracting(Omision::tipo)
+                .containsExactlyInAnyOrder(TipoObligacion.ESSALUD, TipoObligacion.AFP);
     }
 
     @Test
@@ -189,7 +204,7 @@ class ProgramacionMensualServiceTest {
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(tiposGuardados(4)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
+        assertThat(tiposGuardados(3)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
         assertThat(r.noGeneradas()).contains(
                 new Omision(TipoObligacion.RETENCION_QUINTA, "Ningún trabajador supera las 7 UIT proyectadas"));
     }
@@ -222,10 +237,9 @@ class ProgramacionMensualServiceTest {
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(r.creadas()).extracting(o -> o.tipoObligacion())
-                .containsExactlyInAnyOrder(TipoObligacion.PLAME, TipoObligacion.ESSALUD);
+        assertThat(r.creadas()).extracting(o -> o.tipoObligacion()).containsExactly(TipoObligacion.PLAME);
         assertThat(r.yaExistian()).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
-        verify(obligaciones, times(2)).saveAndFlush(any());
+        verify(obligaciones, times(1)).saveAndFlush(any());
     }
 
     @Test
