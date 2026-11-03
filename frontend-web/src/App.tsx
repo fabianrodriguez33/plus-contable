@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import FichaMaestraPage from './pages/FichaMaestraPage'
 import DeclaracionPage from './pages/DeclaracionPage'
+import CalendarioPage from './pages/CalendarioPage'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route element={<PrivateRoute />}>
         <Route element={<Navbar />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/calendario" element={<CalendarioPage />} />
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />
           <Route path="/clientes/:clienteId" element={<FichaMaestraPage />} />
           <Route path="/obligaciones/:obligacionId/declarar" element={<DeclaracionPage />} />
