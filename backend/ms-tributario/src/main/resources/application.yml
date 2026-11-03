@@ -45,3 +45,10 @@ app:
     essalud-activo: false
     quinta-activa: false
     quinta-umbral-uit: 7
+  ruc:
+    # Proveedor de la consulta de RUC (HU-01). Para cambiarlo: otra implementacion de ConsultaRuc y este valor
+    proveedor: openruc
+    openruc:
+      base-url: ${OPENRUC_BASE_URL:https://openruc.com}
+      connect-timeout-ms: 2000
+      read-timeout-ms: ${OPENRUC_TIMEOUT_MS:3000}

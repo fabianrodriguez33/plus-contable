@@ -1,5 +1,5 @@
 import { tributarioApi } from './apiClient'
-import type { ActivoFijo, Cliente, ResumenSocietario, Socio } from '../types'
+import type { ActivoFijo, Cliente, ConsultaRuc, ResumenSocietario, Socio } from '../types'
 
 const base = (id: number) => `/api/tributario/clientes/${id}`
 
@@ -7,6 +7,10 @@ export const listarClientes = async () => (await tributarioApi.get<Cliente[]>('/
 export const obtenerCliente = async (id: number) => (await tributarioApi.get<Cliente>(base(id))).data
 export const crearCliente = async (c: Cliente) => (await tributarioApi.post<Cliente>('/api/tributario/clientes', c)).data
 export const actualizarCliente = async (id: number, c: Cliente) => (await tributarioApi.put<Cliente>(base(id), c)).data
+
+/** La consulta la hace ms-tributario; el navegador nunca llama al proveedor. */
+export const consultarRuc = async (ruc: string) =>
+  (await tributarioApi.get<ConsultaRuc>(`/api/tributario/ruc/${ruc}/consulta`)).data
 
 export const obtenerResumenSocietario = async (id: number) =>
   (await tributarioApi.get<ResumenSocietario>(`${base(id)}/socios/resumen`)).data
