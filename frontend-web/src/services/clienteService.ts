@@ -14,8 +14,11 @@ export const consultarRuc = async (ruc: string) =>
 
 export const obtenerResumenSocietario = async (id: number) =>
   (await tributarioApi.get<ResumenSocietario>(`${base(id)}/socios/resumen`)).data
+/** El porcentaje no se envía: lo calcula el servidor según el aporte de cada socio. */
 export const guardarSocios = async (id: number, socios: Socio[]) =>
-  (await tributarioApi.put<ResumenSocietario>(`${base(id)}/socios`, socios)).data
+  (await tributarioApi.put<ResumenSocietario>(`${base(id)}/socios`,
+    socios.map(({ nombreCompleto, tipoDocumento, numeroDocumento, aporte, cargo }) =>
+      ({ nombreCompleto, tipoDocumento, numeroDocumento, aporte, cargo })))).data
 export const actualizarAporte = async (id: number, socioId: number, aporte: number) =>
   (await tributarioApi.patch<ResumenSocietario>(`${base(id)}/socios/${socioId}/aporte`, { aporte })).data
 

@@ -1,25 +1,27 @@
 import type { Socio } from '../types'
 
-const aCentimos = (n: number) => Math.round((Number(n) || 0) * 100)
-
-export interface ResumenLocal {
+export interface EstadoEstructura {
   capitalSocialTotal: number
-  porcentajeTotal: number
-  /** 100 menos el porcentaje total: positivo = faltan puntos, negativo = sobran. */
-  diferencia: number
-  completo: boolean
+  /** Socios cuyo aporte es 0 o no es válido: sin aporte no se puede calcular su porcentaje. */
+  sinAporte: number
+  /** Socios agregados en pantalla que todavía no se guardaron: al guardar cambian los porcentajes de todos. */
+  sinGuardar: number
+  puedeGuardar: boolean
 }
 
-/** Totales calculados en centésimas para evitar errores de coma flotante (p. ej. 33.33 + 33.33 + 33.34). */
-export function resumenLocal(socios: Pick<Socio, 'aporte' | 'porcentaje'>[]): ResumenLocal {
-  const aportes = socios.reduce((acc, s) => acc + aCentimos(s.aporte), 0)
-  const porcentajes = socios.reduce((acc, s) => acc + aCentimos(s.porcentaje), 0)
-  const diferencia = 10000 - porcentajes
+const aCentimos = (n: number) => Math.round((Number(n) || 0) * 100)
+
+/**
+ * Estado de la estructura societaria en pantalla. El porcentaje de cada socio no se calcula aquí: lo calcula el
+ * servidor según el aporte (regla del mayor resto) y se muestra después de guardar.
+ */
+export function estadoEstructura(socios: Pick<Socio, 'id' | 'aporte'>[]): EstadoEstructura {
+  const sinAporte = socios.filter((s) => aCentimos(s.aporte) <= 0).length
   return {
-    capitalSocialTotal: aportes / 100,
-    porcentajeTotal: porcentajes / 100,
-    diferencia: diferencia / 100,
-    completo: socios.length > 0 && diferencia === 0,
+    capitalSocialTotal: socios.reduce((acc, s) => acc + aCentimos(s.aporte), 0) / 100,
+    sinAporte,
+    sinGuardar: socios.filter((s) => s.id === undefined).length,
+    puedeGuardar: socios.length > 0 && sinAporte === 0,
   }
 }
 
