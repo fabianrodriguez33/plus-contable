@@ -124,6 +124,19 @@ export default function DatosGeneralesTab({ cliente, esNuevo, onCambio, onGuarda
           <Input label="Dirección fiscal" value={cliente.direccion ?? ''}
             onChange={(e) => onCambio('direccion', e.target.value)} />
         </div>
+        <div className="md:col-span-2">
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" className="mt-0.5" checked={cliente.buenContribuyente ?? false}
+              onChange={(e) => onCambio('buenContribuyente', e.target.checked)} />
+            <span>
+              <span className="font-medium">Buen contribuyente</span>
+              <span className="block text-xs text-slate-500">
+                Si está marcado, las fechas de vencimiento usan el cronograma de buenos contribuyentes. Por defecto: No.
+                No recalcula lo ya programado.
+              </span>
+            </span>
+          </label>
+        </div>
       </div>
 
       {consulta && <PanelConsultaRuc consulta={consulta} />}

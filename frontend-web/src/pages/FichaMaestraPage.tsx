@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Boxes, Building, CalendarClock, FileSignature, FolderOpen, PieChart, Users } from 'lucide-react'
+import { Boxes, Building, CalendarClock, CalendarPlus, FileSignature, FolderOpen, PieChart, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { mensajeError, tributarioApi } from '../services/apiClient'
 import { actualizarCliente, crearCliente, obtenerCliente } from '../services/clienteService'
@@ -13,8 +13,9 @@ import DocumentosPage from './DocumentosPage'
 import TrabajadoresPage from './TrabajadoresPage'
 import AcuerdoPage from './AcuerdoPage'
 import VencimientosPage from './VencimientosPage'
+import ProgramacionPage from './ProgramacionPage'
 
-type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'vencimientos'
+type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'vencimientos' | 'programacion'
 
 const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'general', etiqueta: 'Datos generales', icono: Building },
@@ -24,11 +25,12 @@ const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'activos', etiqueta: 'Activos fijos', icono: Boxes },
   { id: 'acuerdo', etiqueta: 'Acuerdo de servicio', icono: FileSignature },
   { id: 'vencimientos', etiqueta: 'Vencimientos', icono: CalendarClock },
+  { id: 'programacion', etiqueta: 'Programación', icono: CalendarPlus },
 ]
 
 const clienteVacio: Cliente = {
   ruc: '', razonSocial: '', regimenTributario: 'MYPE', condicionHabido: 'HABIDO',
-  direccion: '', usuarioSol: '', claveSol: '',
+  direccion: '', usuarioSol: '', claveSol: '', buenContribuyente: false,
 }
 
 export default function FichaMaestraPage() {
@@ -114,6 +116,7 @@ export default function FichaMaestraPage() {
       {clienteId !== null && tab === 'activos' && <ActivosTab clienteId={clienteId} setError={setError} />}
       {clienteId !== null && tab === 'acuerdo' && <AcuerdoPage />}
       {clienteId !== null && tab === 'vencimientos' && <VencimientosPage />}
+      {clienteId !== null && tab === 'programacion' && <ProgramacionPage />}
     </Card>
   )
 }
