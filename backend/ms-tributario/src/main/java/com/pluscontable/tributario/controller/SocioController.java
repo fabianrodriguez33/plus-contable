@@ -4,6 +4,7 @@ import com.pluscontable.tributario.dto.ActivoFijoDto;
 import com.pluscontable.tributario.dto.AporteDto;
 import com.pluscontable.tributario.dto.ResumenSocietarioDto;
 import com.pluscontable.tributario.dto.SocioDto;
+import com.pluscontable.tributario.dto.SocioEntradaDto;
 import com.pluscontable.tributario.service.PatrimonioLaboralService;
 import com.pluscontable.tributario.service.SocioService;
 import jakarta.validation.Valid;
@@ -31,7 +32,7 @@ public class SocioController {
         return socioService.listar(clienteId);
     }
 
-    /** Socios con capital social total, porcentaje total y diferencia respecto a 100 %. */
+    /** Socios con capital social total, porcentaje total y diferencia respecto a 100 %. El porcentaje lo calcula el sistema. */
     @GetMapping("/socios/resumen")
     public ResumenSocietarioDto resumenSocietario(@PathVariable Long clienteId) {
         return socioService.resumen(clienteId);
@@ -39,14 +40,14 @@ public class SocioController {
 
     @PutMapping("/socios")
     public ResumenSocietarioDto reemplazarSocios(@PathVariable Long clienteId,
-                                                 @RequestBody List<@Valid SocioDto> socios) {
+                                                 @RequestBody List<@Valid SocioEntradaDto> socios) {
         return socioService.reemplazar(clienteId, socios);
     }
 
     @PostMapping("/socios")
     @ResponseStatus(HttpStatus.CREATED)
     public ResumenSocietarioDto registrarSocios(@PathVariable Long clienteId,
-                                                @RequestBody List<@Valid SocioDto> socios) {
+                                                @RequestBody List<@Valid SocioEntradaDto> socios) {
         return socioService.reemplazar(clienteId, socios);
     }
 

@@ -1,23 +1,16 @@
 package com.pluscontable.tributario.dto;
 
 import com.pluscontable.tributario.model.Socio;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
-/** Socio del cliente: aporte al capital (S/) y porcentaje de participación. */
+/** Socio del cliente en las respuestas: aporte al capital (S/) y porcentaje de participación calculado. */
 public record SocioDto(
         Long id,
-        @NotBlank(message = "El nombre del socio es obligatorio") String nombreCompleto,
+        String nombreCompleto,
         String tipoDocumento,
-        @NotBlank(message = "El número de documento del socio es obligatorio") String numeroDocumento,
-        @NotNull(message = "El aporte es obligatorio")
-        @DecimalMin(value = "0.00", message = "El aporte no puede ser negativo") BigDecimal aporte,
-        @NotNull(message = "El porcentaje es obligatorio")
-        @DecimalMin(value = "0.01", message = "El porcentaje debe ser mayor a 0")
-        @DecimalMax(value = "100.00", message = "El porcentaje no puede exceder 100") BigDecimal porcentaje,
+        String numeroDocumento,
+        BigDecimal aporte,
+        BigDecimal porcentaje,
         String cargo) {
 
     public static SocioDto from(Socio s) {
