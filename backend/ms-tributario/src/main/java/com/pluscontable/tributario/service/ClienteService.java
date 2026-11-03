@@ -114,6 +114,9 @@ public class ClienteService {
         c.setDireccion(dto.direccion());
         c.setTelefono(dto.telefono());
         c.setEmail(dto.email() == null || dto.email().isBlank() ? null : dto.email().trim());
+        if (dto.buenContribuyente() != null) {
+            c.setBuenContribuyente(dto.buenContribuyente());
+        }
     }
 
     private void validarRuc(String ruc) {

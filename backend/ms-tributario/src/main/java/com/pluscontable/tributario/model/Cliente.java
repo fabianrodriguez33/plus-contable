@@ -44,6 +44,10 @@ public class Cliente {
     @Column(nullable = false)
     private boolean activo = true;
 
+    /** Marca manual: el cliente usa la fecha del cronograma de buenos contribuyentes (BUEN_CONTRIB_UESP). */
+    @Column(name = "buen_contribuyente", nullable = false)
+    private boolean buenContribuyente = false;
+
     @Column(name = "creado_en", nullable = false)
     private LocalDateTime creadoEn = LocalDateTime.now();
 }

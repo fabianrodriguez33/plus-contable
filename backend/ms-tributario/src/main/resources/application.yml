@@ -36,6 +36,15 @@ app:
     allowed-origins: http://localhost:5173
   storage:
     dir: ./uploads
+  tributario:
+    # UIT por anio, en soles, tomada del decreto supremo del MEF de cada anio. Sin montos en el repositorio:
+    # se carga por entorno (por ejemplo APP_TRIBUTARIO_UIT_2026). Sin UIT de un anio no se evalua la quinta.
+    # La quinta categoria sigue apagada hasta que Beto confirme unidad y formula de proyeccion
+    # (quinta-activa y quinta-sueldos-al-anio).
+    # ESSALUD tambien apagado hasta confirmar la regla del estudio.
+    essalud-activo: false
+    quinta-activa: false
+    quinta-umbral-uit: 7
   ruc:
     # Proveedor de la consulta de RUC (HU-01). Para cambiarlo: otra implementacion de ConsultaRuc y este valor
     proveedor: openruc
