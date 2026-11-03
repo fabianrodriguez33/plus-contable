@@ -10,11 +10,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.pluscontable.tributario.model.Obligacion;
+import com.pluscontable.tributario.model.Trabajador;
 import com.pluscontable.tributario.obligacion.CronogramaConsultaService;
+import com.pluscontable.tributario.obligacion.GeneradorObligaciones;
+import com.pluscontable.tributario.obligacion.GeneradorObligaciones.Omision;
+import com.pluscontable.tributario.obligacion.ParametrosTributarios;
+import com.pluscontable.tributario.obligacion.ReglaQuinta;
 import com.pluscontable.tributario.obligacion.TipoObligacion;
 import com.pluscontable.tributario.repository.ObligacionRepository;
+import com.pluscontable.tributario.repository.TrabajadorRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -31,7 +38,10 @@ class ProgramacionMensualServiceTest {
 
     private final CronogramaConsultaService cronograma = mock(CronogramaConsultaService.class);
     private final ObligacionRepository obligaciones = mock(ObligacionRepository.class);
-    private final ProgramacionMensualService service = new ProgramacionMensualService(cronograma, obligaciones);
+    private final TrabajadorRepository trabajadores = mock(TrabajadorRepository.class);
+    private final ParametrosTributarios parametros = new ParametrosTributarios();
+    private final ProgramacionMensualService service =
+            new ProgramacionMensualService(cronograma, obligaciones, trabajadores, parametros);
 
     @BeforeEach
     void guardarDevuelveLoGuardado() {
@@ -47,28 +57,141 @@ class ProgramacionMensualServiceTest {
         return o;
     }
 
+    private static Trabajador trabajador(LocalDate ingreso, String remuneracion) {
+        Trabajador t = new Trabajador();
+        t.setClienteId(CLIENTE);
+        t.setFechaIngreso(ingreso);
+        t.setRemuneracion(remuneracion == null ? null : new BigDecimal(remuneracion));
+        return t;
+    }
+
+    private void conTrabajadores(Trabajador... lista) {
+        when(trabajadores.findByClienteIdOrderById(CLIENTE)).thenReturn(List.of(lista));
+    }
+
+    private List<TipoObligacion> tiposGuardados(int veces) {
+        ArgumentCaptor<Obligacion> guardadas = ArgumentCaptor.forClass(Obligacion.class);
+        verify(obligaciones, times(veces)).saveAndFlush(guardadas.capture());
+        return guardadas.getAllValues().stream().map(Obligacion::getTipoObligacion).toList();
+    }
+
     @Test
-    void generaIgvRentaPlameEssaludYQuintaConLaFechaDelCronogramaYNoGeneraAfp() {
+    void conPlanillaGeneraIgvRentaPlameYEssaludConLaFechaDelCronogramaYOmiteQuintaYAfp() {
         when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "1500.00"));
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
         ArgumentCaptor<Obligacion> guardadas = ArgumentCaptor.forClass(Obligacion.class);
-        verify(obligaciones, times(5)).saveAndFlush(guardadas.capture());
+        verify(obligaciones, times(4)).saveAndFlush(guardadas.capture());
         assertThat(guardadas.getAllValues()).extracting(Obligacion::getTipoObligacion)
                 .containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA, TipoObligacion.PLAME,
-                        TipoObligacion.ESSALUD, TipoObligacion.RETENCION_QUINTA);
+                        TipoObligacion.ESSALUD);
         assertThat(guardadas.getAllValues()).allSatisfy(o -> {
             assertThat(o.getClienteId()).isEqualTo(CLIENTE);
             assertThat(o.getPeriodo()).isEqualTo(LocalDate.of(2026, 10, 1));
             assertThat(o.getFechaVencimiento()).isEqualTo(FECHA);
             assertThat(o.getEstado()).isEqualTo(Obligacion.Estado.PENDIENTE);
         });
-        assertThat(r.creadas()).hasSize(5);
+        assertThat(r.creadas()).hasSize(4);
         assertThat(r.yaExistian()).isEmpty();
-        assertThat(r.noGeneradas()).containsExactly(TipoObligacion.AFP);
+        assertThat(r.noGeneradas()).containsExactlyInAnyOrder(
+                new Omision(TipoObligacion.RETENCION_QUINTA, ReglaQuinta.MOTIVO_PENDIENTE),
+                new Omision(TipoObligacion.AFP, GeneradorObligaciones.MOTIVO_AFP));
         assertThat(r.fechaVencimiento()).isEqualTo(FECHA);
         assertThat(r.periodo()).isEqualTo(OCTUBRE);
+    }
+
+    @Test
+    void sinTrabajadoresGeneraSoloIgvYRentaYDiceElMotivoDeLoDemas() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(2)).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
+        assertThat(r.noGeneradas()).containsExactlyInAnyOrder(
+                new Omision(TipoObligacion.PLAME, GeneradorObligaciones.MOTIVO_SIN_PLANILLA),
+                new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_SIN_PLANILLA),
+                new Omision(TipoObligacion.RETENCION_QUINTA, ReglaQuinta.MOTIVO_PENDIENTE),
+                new Omision(TipoObligacion.AFP, GeneradorObligaciones.MOTIVO_AFP));
+    }
+
+    @Test
+    void unTrabajadorSinRemuneracionGeneraPlamePeroNoEssalud() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), null), trabajador(LocalDate.of(2026, 2, 1), "0"));
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(3)).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA,
+                TipoObligacion.PLAME);
+        assertThat(r.noGeneradas()).contains(
+                new Omision(TipoObligacion.ESSALUD, GeneradorObligaciones.MOTIVO_SIN_ASEGURADOS));
+    }
+
+    @Test
+    void unTrabajadorQueIngresaDespuesDelPeriodoNoCuenta() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 11, 1), "1500.00"));
+
+        service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(2)).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
+    }
+
+    @Test
+    void unTrabajadorQueIngresaElUltimoDiaDelPeriodoSiCuenta() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 10, 31), "1500.00"));
+
+        service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(4)).contains(TipoObligacion.PLAME, TipoObligacion.ESSALUD);
+    }
+
+    @Test
+    void conLaQuintaActivaPeroSinUitDelAnioSeOmiteConSuMotivo() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "1500.00"));
+        parametros.setQuintaActiva(true);
+        parametros.setQuintaSueldosAlAnio(new BigDecimal("10"));
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(4)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
+        assertThat(r.noGeneradas()).contains(new Omision(TipoObligacion.RETENCION_QUINTA, "Falta la UIT de 2026"));
+    }
+
+    // Valores FICTICIOS de prueba (no son la UIT ni la fórmula real): UIT 1000, umbral 7, 10 sueldos al año.
+    private void quintaActivaConValoresFicticios() {
+        parametros.setQuintaActiva(true);
+        parametros.setQuintaSueldosAlAnio(new BigDecimal("10"));
+        parametros.getUit().put(2026, new BigDecimal("1000"));
+    }
+
+    @Test
+    void conLaQuintaActivaYUnTrabajadorPorEncimaDelUmbralSeGeneraLaQuinta() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        quintaActivaConValoresFicticios();
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "700.01"));
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(5)).contains(TipoObligacion.RETENCION_QUINTA);
+        assertThat(r.noGeneradas()).extracting(Omision::tipo).containsExactly(TipoObligacion.AFP);
+    }
+
+    @Test
+    void conLaQuintaActivaYJustoEnElUmbralNoCorrespondeLaQuinta() {
+        when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        quintaActivaConValoresFicticios();
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "700.00"));
+
+        var r = service.programar(CLIENTE, OCTUBRE);
+
+        assertThat(tiposGuardados(4)).doesNotContain(TipoObligacion.RETENCION_QUINTA);
+        assertThat(r.noGeneradas()).contains(
+                new Omision(TipoObligacion.RETENCION_QUINTA, "Ningún trabajador supera las 7 UIT proyectadas"));
     }
 
     @Test
@@ -92,6 +215,7 @@ class ProgramacionMensualServiceTest {
     @Test
     void loQueYaEstaProgramadoNoSeDuplicaYSeInforma() {
         when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
+        conTrabajadores(trabajador(LocalDate.of(2026, 1, 5), "1500.00"));
         when(obligaciones.findByClienteIdOrderByPeriodoDesc(CLIENTE)).thenReturn(List.of(
                 existente(TipoObligacion.IGV, LocalDate.of(2026, 10, 1)),
                 existente(TipoObligacion.RENTA, LocalDate.of(2026, 10, 1))));
@@ -99,9 +223,9 @@ class ProgramacionMensualServiceTest {
         var r = service.programar(CLIENTE, OCTUBRE);
 
         assertThat(r.creadas()).extracting(o -> o.tipoObligacion())
-                .containsExactlyInAnyOrder(TipoObligacion.PLAME, TipoObligacion.ESSALUD, TipoObligacion.RETENCION_QUINTA);
+                .containsExactlyInAnyOrder(TipoObligacion.PLAME, TipoObligacion.ESSALUD);
         assertThat(r.yaExistian()).containsExactlyInAnyOrder(TipoObligacion.IGV, TipoObligacion.RENTA);
-        verify(obligaciones, times(3)).saveAndFlush(any());
+        verify(obligaciones, times(2)).saveAndFlush(any());
     }
 
     @Test
@@ -112,7 +236,7 @@ class ProgramacionMensualServiceTest {
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
-        assertThat(r.creadas()).hasSize(5);
+        assertThat(r.creadas()).hasSize(2);
         assertThat(r.yaExistian()).isEmpty();
     }
 
@@ -121,14 +245,12 @@ class ProgramacionMensualServiceTest {
         when(cronograma.buscar(CLIENTE, OCTUBRE)).thenReturn(Optional.of(FECHA));
         LocalDate periodo = LocalDate.of(2026, 10, 1);
         when(obligaciones.findByClienteIdOrderByPeriodoDesc(CLIENTE)).thenReturn(List.of(
-                existente(TipoObligacion.IGV, periodo), existente(TipoObligacion.RENTA, periodo),
-                existente(TipoObligacion.PLAME, periodo), existente(TipoObligacion.ESSALUD, periodo),
-                existente(TipoObligacion.RETENCION_QUINTA, periodo)));
+                existente(TipoObligacion.IGV, periodo), existente(TipoObligacion.RENTA, periodo)));
 
         var r = service.programar(CLIENTE, OCTUBRE);
 
         assertThat(r.creadas()).isEmpty();
-        assertThat(r.yaExistian()).hasSize(5);
+        assertThat(r.yaExistian()).hasSize(2);
         verify(obligaciones, never()).saveAndFlush(any());
     }
 

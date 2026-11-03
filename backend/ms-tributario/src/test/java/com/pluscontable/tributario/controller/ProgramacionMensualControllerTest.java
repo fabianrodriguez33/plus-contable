@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.pluscontable.tributario.config.SecurityConfig;
 import com.pluscontable.tributario.dto.ProgramacionMesDto;
+import com.pluscontable.tributario.obligacion.GeneradorObligaciones.Omision;
 import com.pluscontable.tributario.obligacion.TipoObligacion;
 import com.pluscontable.tributario.service.ProgramacionMensualService;
 import io.jsonwebtoken.Jwts;
@@ -56,7 +57,7 @@ class ProgramacionMensualControllerTest {
     void devuelveLoCreadoLoQueYaExistiaYLoQueNoSeGenera() throws Exception {
         when(servicio.programar(7L, YearMonth.of(2026, 10))).thenReturn(new ProgramacionMesDto(
                 YearMonth.of(2026, 10), LocalDate.of(2026, 11, 20), List.of(),
-                List.of(TipoObligacion.IGV), List.of(TipoObligacion.AFP)));
+                List.of(TipoObligacion.IGV), List.of(new Omision(TipoObligacion.AFP, "Sin cronograma propio"))));
 
         mvc.perform(peticion("{\"clienteId\":7,\"periodo\":\"2026-10\"}"))
                 .andExpect(status().isOk())
@@ -64,7 +65,8 @@ class ProgramacionMensualControllerTest {
                 .andExpect(jsonPath("$.fechaVencimiento").value("2026-11-20"))
                 .andExpect(jsonPath("$.creadas", hasSize(0)))
                 .andExpect(jsonPath("$.yaExistian[0]").value("IGV"))
-                .andExpect(jsonPath("$.noGeneradas[0]").value("AFP"));
+                .andExpect(jsonPath("$.noGeneradas[0].tipo").value("AFP"))
+                .andExpect(jsonPath("$.noGeneradas[0].motivo").value("Sin cronograma propio"));
         verify(servicio).programar(7L, YearMonth.of(2026, 10));
     }
 
