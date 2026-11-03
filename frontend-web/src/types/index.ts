@@ -17,6 +17,8 @@ export interface Cliente {
   usuarioSol?: string
   claveSol?: string
   tieneClaveSol?: boolean
+  /** HU-07: marca manual de buen contribuyente; si está marcado se usa el cronograma BUEN_CONTRIB_UESP. */
+  buenContribuyente?: boolean
 }
 
 export type ResultadoConsultaRuc = 'ENCONTRADO' | 'NO_ENCONTRADO' | 'NO_DISPONIBLE' | 'FUERA_DE_COBERTURA'
