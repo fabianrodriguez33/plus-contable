@@ -4,8 +4,8 @@ Trabajo de Jeanpierre Miranda en el Sprint 1 de Plus Contable: HU-03, HU-04, HU-
 
 | | |
 |---|---|
-| Estado | **En `develop`**, fusionado por el PR #2 (28/10/2026). HU-03, 04, 05, 09 y 10 están **hechas**; HU-38 está en curso: falta la tarea 94 (un cliente no ve datos de otro) |
-| Pruebas | Suite completa en verde (03/11/2026): `ms-tributario` 443 ejecutadas y 1 omitida (la de la tarea 94), `ms-auth` 34. La cobertura se mide con JaCoCo: `./mvnw verify` y abrir `target/site/jacoco/index.html` |
+| Estado | **En `develop`**, fusionado por el PR #2 (28/10/2026). HU-03, 04, 05, 09 y 10 están **hechas**; HU-38 tiene **hecha** la tarea 94 (un cliente no ve datos de otro, claim `clienteId`), **pendiente de revisión de Beto** (403 o 404, ver abajo); falta validar la matriz con Beto y el alta de cuentas de cliente (HU-37) |
+| Pruebas | Suite completa en verde (03/11/2026): `ms-tributario` 459 ejecutadas y ninguna omitida, `ms-auth` 40. La cobertura se mide con JaCoCo: `./mvnw verify` y abrir `target/site/jacoco/index.html` |
 
 > **Numeración de tareas.** Los documentos de esta carpeta usan la numeración vieja: las tareas 82, 83, 84 y 85 de HU-38
 > son las tareas **91, 92, 93 y 94** del Sprint Backlog.
@@ -66,8 +66,9 @@ Cada `HU-XX: … (tarea NN)` es un commit. Los diseños de cada HU están en su 
 - Matriz en `SecurityConfig`: `CLIENTE_MYPE` solo consulta; registrar, archivar, guardar, declarar y variar
   vencimiento son de `CONTADOR`/`ADMIN`. Sin token 401, sin permiso 403.
 - `PermisosPorRolTest`: 57 casos con JWT reales.
-- **Falta la tarea 94** (antes 85), que un cliente no vea datos de otro. Está propuesta en HU-38.md (claim `clienteId`
-  en el JWT).
+- **Tarea 94** (antes 85), hecha: un cliente MYPE no ve datos de otro. El JWT lleva el claim `clienteId`, `ms-auth` siembra el
+  rol `CLIENTE_MYPE` y `AccesoCliente` (ms-tributario) responde 403 en el cliente ajeno y sin claim. Detalle en HU-38.md.
+  **Pendiente de revisión de Beto:** hoy al cliente ajeno se le responde 403, y eso le revela que ese cliente existe. Lo ideal es que un cliente MYPE solo "vea" sus propios clientes, es decir, responder 404 como si el otro no existiera. Se propone cambiar a 404 (lanzar `EntityNotFoundException` en `AccesoCliente`) o dejarlo como mejora futura si Beto lo acepta así.
 - `PermisosRutasDelEstudioTest` (tarea 93) cubre las rutas del estudio que no tenían prueba de rol propia.
 
 ### Dependencias con otras historias
@@ -79,7 +80,8 @@ Cada `HU-XX: … (tarea NN)` es un commit. Los diseños de cada HU están en su 
 | Estado | Tareas |
 |---|---|
 | Hecho | 33, 34, 35, 36 · 39, 40, 41, 42 · 45, 46, 47, 48 · 62, 63, 64 · 67, 68, 69, 70 · 92, 93 |
-| Pendiente | 94 (aislamiento entre clientes, HU-38) |
+| Hecha, pendiente de revisión de Beto | 94 (403 o 404 ante el cliente ajeno) |
+| Pendiente | Alta de cuentas de cliente (HU-37, de Julio) |
 | Validación con Beto | Matriz de permisos (`docs/HU-38-matriz-de-permisos.md`) |
 
 ## Cómo levantar
