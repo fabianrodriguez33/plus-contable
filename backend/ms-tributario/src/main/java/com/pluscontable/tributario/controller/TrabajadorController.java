@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.controller;
 
+import com.pluscontable.tributario.config.AccesoCliente;
 import com.pluscontable.tributario.dto.TrabajadorDto;
 import com.pluscontable.tributario.service.TrabajadorService;
 import java.util.List;
@@ -18,6 +19,7 @@ public class TrabajadorController {
 
     @GetMapping
     public List<TrabajadorDto> listar(@PathVariable Long clienteId) {
+        AccesoCliente.exigir(clienteId);
         return service.listar(clienteId);
     }
 

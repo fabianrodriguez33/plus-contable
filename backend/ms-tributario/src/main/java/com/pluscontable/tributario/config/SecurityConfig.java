@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 // HU-38: matriz de permisos (docs/sprint1-jeanpierre/HU-38.md). Lo no listado es solo del estudio.
+                // Las rutas de lectura del cliente MYPE validan ademas que sea su empresa: ver AccesoCliente.
                 .authorizeHttpRequests(a -> a
                         // El contenedor reenvia los errores a /error SIN volver a ejecutar JwtFilter: sin esta regla
                         // todo error (404, 409, 500...) se evaluaba como anonimo y salia como 401.
