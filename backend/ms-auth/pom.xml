@@ -77,6 +77,11 @@
                         <DB_URL>${test.db.url}</DB_URL>
                         <DB_USER>${test.db.user}</DB_USER>
                         <DB_PASSWORD>${test.db.password}</DB_PASSWORD>
+                        <!-- Usuarios por servicio (HT-01): si el .env los define, las pruebas no deben usarlos -->
+                        <AUTH_DB_USER>${test.db.user}</AUTH_DB_USER>
+                        <AUTH_DB_PASSWORD>${test.db.password}</AUTH_DB_PASSWORD>
+                        <TRIBUTARIO_DB_USER>${test.db.user}</TRIBUTARIO_DB_USER>
+                        <TRIBUTARIO_DB_PASSWORD>${test.db.password}</TRIBUTARIO_DB_PASSWORD>
                         <JWT_SECRET>secreto-solo-para-pruebas-de-al-menos-32-bytes</JWT_SECRET>
                         <AES_SECRET_KEY>ClaveDePruebasAES256SoloTests!!!</AES_SECRET_KEY>
                         <AES_IV>IvSoloPruebas123</AES_IV>
