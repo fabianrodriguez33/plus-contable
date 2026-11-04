@@ -15,8 +15,12 @@ CREATE TABLE IF NOT EXISTS auth_schema.usuarios (
     activo            BOOLEAN      NOT NULL DEFAULT TRUE,
     intentos_fallidos INTEGER      NOT NULL DEFAULT 0,
     bloqueado_hasta   TIMESTAMP,
-    creado_en         TIMESTAMP    NOT NULL DEFAULT NOW()
+    creado_en         TIMESTAMP    NOT NULL DEFAULT NOW(),
+    cliente_id        BIGINT
 );
+
+-- HU-38: cuenta de un cliente MYPE; sin FK porque clientes vive en tributario_schema (otro servicio). Bases existentes:
+ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS cliente_id BIGINT;
 
 CREATE TABLE IF NOT EXISTS auth_schema.usuario_roles (
     usuario_id BIGINT NOT NULL REFERENCES auth_schema.usuarios(id) ON DELETE CASCADE,
@@ -39,5 +43,6 @@ CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON auth_schema.bitacora_seguridad(
 
 INSERT INTO auth_schema.roles (nombre, descripcion) VALUES
     ('ADMIN', 'Administrador del estudio'),
-    ('CONTADOR', 'Contador / analista tributario')
+    ('CONTADOR', 'Contador / analista tributario'),
+    ('CLIENTE_MYPE', 'Cliente MYPE: solo lectura de su propia empresa')
 ON CONFLICT (nombre) DO NOTHING;

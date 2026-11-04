@@ -36,6 +36,10 @@ public class Usuario {
     @Column(name = "creado_en", nullable = false)
     private LocalDateTime creadoEn = LocalDateTime.now();
 
+    /** Empresa a la que pertenece la cuenta de un CLIENTE_MYPE; null para el estudio. */
+    @Column(name = "cliente_id")
+    private Long clienteId;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "usuario_roles", schema = "auth_schema",
             joinColumns = @JoinColumn(name = "usuario_id"),
@@ -58,6 +62,8 @@ public class Usuario {
     public LocalDateTime getBloqueadoHasta() { return bloqueadoHasta; }
     public void setBloqueadoHasta(LocalDateTime bloqueadoHasta) { this.bloqueadoHasta = bloqueadoHasta; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
+    public Long getClienteId() { return clienteId; }
+    public void setClienteId(Long clienteId) { this.clienteId = clienteId; }
     public Set<Rol> getRoles() { return roles; }
     public void setRoles(Set<Rol> roles) { this.roles = roles; }
 }
