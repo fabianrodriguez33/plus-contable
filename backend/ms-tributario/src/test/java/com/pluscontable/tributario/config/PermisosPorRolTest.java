@@ -32,7 +32,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -75,6 +74,12 @@ class PermisosPorRolTest {
         when(programacionService.crear(any())).thenReturn(new ObligacionDto(1L, 1L, TipoObligacion.IGV,
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 16), Obligacion.Estado.PENDIENTE,
                 null, null, null));
+        when(obligacionService.buscar(anyLong())).thenReturn(obligacionDe(1L));
+    }
+
+    private static ObligacionDto obligacionDe(long clienteId) {
+        return new ObligacionDto(3L, clienteId, TipoObligacion.IGV, LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 2, 16), Obligacion.Estado.PENDIENTE, null, null, null);
     }
 
     /** Opción de la matriz: método, ruta y si el cliente MYPE puede usarla (el estudio puede todas). */
@@ -97,9 +102,15 @@ class PermisosPorRolTest {
     }
 
     private String token(List<String> roles, long msHastaExpirar) {
+        return token(roles, msHastaExpirar, null);
+    }
+
+    /** Como ms-auth: el claim clienteId solo va en el token de una cuenta de cliente. */
+    private String token(List<String> roles, long msHastaExpirar, Long clienteId) {
         var key = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
-        return Jwts.builder().subject("usuario").claim("roles", roles)
-                .expiration(new Date(System.currentTimeMillis() + msHastaExpirar)).signWith(key).compact();
+        var b = Jwts.builder().subject("usuario").claim("roles", roles);
+        if (clienteId != null) b.claim("clienteId", clienteId);
+        return b.expiration(new Date(System.currentTimeMillis() + msHastaExpirar)).signWith(key).compact();
     }
 
     private int estado(String metodo, String ruta, String token) throws Exception {
@@ -125,7 +136,8 @@ class PermisosPorRolTest {
     @ParameterizedTest(name = "CLIENTE_MYPE {0} {1} permitido={2}")
     @MethodSource("matriz")
     void clienteMypeNoEntraALasOpcionesDelContador(String metodo, String ruta, boolean permitido) throws Exception {
-        int s = estado(metodo, ruta, token(List.of("CLIENTE_MYPE"), 60_000));
+        // las rutas de la matriz son del cliente 1: una cuenta de ese cliente entra a las suyas
+        int s = estado(metodo, ruta, token(List.of("CLIENTE_MYPE"), 60_000, 1L));
         if (permitido) assertThat(s).isNotIn(401, 403);
         else assertThat(s).isEqualTo(403);
     }
@@ -162,6 +174,51 @@ class PermisosPorRolTest {
         assertThat(estado("POST", ruta, null)).isEqualTo(401);
     }
 
-    @Test @Disabled("Tarea 85: requiere el claim clienteId en el JWT (ver HU-38.md)")
-    void clienteNuncaVeDatosDeOtroCliente() { }
+    /** Las seis rutas de lectura que el cliente MYPE puede usar; se prueban con el cliente 1 y el 2. */
+    static Stream<String> rutasDelCliente() {
+        return Stream.of(
+                "/api/tributario/clientes/%d/trabajadores",
+                "/api/tributario/clientes/%d/documentos",
+                "/api/tributario/clientes/%d/documentos/5/archivo",
+                "/api/tributario/clientes/%d/acuerdo",
+                "/api/tributario/obligaciones?clienteId=%d");
+    }
+
+    @ParameterizedTest(name = "cliente 1 en {0}")
+    @MethodSource("rutasDelCliente")
+    void clienteNuncaVeDatosDeOtroCliente(String plantilla) throws Exception {
+        String token = token(List.of("CLIENTE_MYPE"), 60_000, 1L);
+        assertThat(estado("GET", plantilla.formatted(1), token)).isNotIn(401, 403);
+        assertThat(estado("GET", plantilla.formatted(2), token)).isEqualTo(403);
+    }
+
+    @Test
+    void clienteNuncaVeUnaObligacionDeOtroCliente() throws Exception {
+        String token = token(List.of("CLIENTE_MYPE"), 60_000, 1L);
+        when(obligacionService.buscar(3L)).thenReturn(obligacionDe(1L));
+        assertThat(estado("GET", "/api/tributario/obligaciones/3", token)).isNotIn(401, 403);
+        when(obligacionService.buscar(3L)).thenReturn(obligacionDe(2L));
+        assertThat(estado("GET", "/api/tributario/obligaciones/3", token)).isEqualTo(403);
+    }
+
+    @ParameterizedTest(name = "sin claim clienteId en {0}")
+    @MethodSource("rutasDelCliente")
+    void clienteSinClaimNoVeNingunCliente(String plantilla) throws Exception {
+        assertThat(estado("GET", plantilla.formatted(1), token(List.of("CLIENTE_MYPE"), 60_000))).isEqualTo(403);
+    }
+
+    @Test
+    void clienteSinClaimNoVeObligaciones() throws Exception {
+        assertThat(estado("GET", "/api/tributario/obligaciones/3", token(List.of("CLIENTE_MYPE"), 60_000))).isEqualTo(403);
+    }
+
+    @Test
+    void elEstudioSigueViendoTodosLosClientes() throws Exception {
+        for (String rol : List.of("CONTADOR", "ADMIN")) {
+            String token = token(List.of(rol), 60_000);
+            assertThat(estado("GET", "/api/tributario/clientes/2/trabajadores", token)).isNotIn(401, 403);
+            when(obligacionService.buscar(3L)).thenReturn(obligacionDe(2L));
+            assertThat(estado("GET", "/api/tributario/obligaciones/3", token)).isNotIn(401, 403);
+        }
+    }
 }
