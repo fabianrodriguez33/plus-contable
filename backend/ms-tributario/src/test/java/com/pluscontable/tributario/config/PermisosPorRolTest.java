@@ -192,6 +192,23 @@ class PermisosPorRolTest {
         assertThat(estado("GET", plantilla.formatted(2), token)).isEqualTo(403);
     }
 
+    @ParameterizedTest(name = "cliente 1000 en {0}")
+    @MethodSource("rutasDelCliente")
+    void clienteConIdMayorA127SoloVeSuEmpresa(String plantilla) throws Exception {
+        String token = token(List.of("CLIENTE_MYPE"), 60_000, 1000L);
+        assertThat(estado("GET", plantilla.formatted(1000), token)).isNotIn(401, 403);
+        assertThat(estado("GET", plantilla.formatted(1001), token)).isEqualTo(403);
+    }
+
+    @Test
+    void clienteConIdMayorA127SoloVeLasObligacionesDeSuEmpresa() throws Exception {
+        String token = token(List.of("CLIENTE_MYPE"), 60_000, 1000L);
+        when(obligacionService.buscar(3L)).thenReturn(obligacionDe(1000L));
+        assertThat(estado("GET", "/api/tributario/obligaciones/3", token)).isNotIn(401, 403);
+        when(obligacionService.buscar(3L)).thenReturn(obligacionDe(1001L));
+        assertThat(estado("GET", "/api/tributario/obligaciones/3", token)).isEqualTo(403);
+    }
+
     @Test
     void clienteNuncaVeUnaObligacionDeOtroCliente() throws Exception {
         String token = token(List.of("CLIENTE_MYPE"), 60_000, 1L);

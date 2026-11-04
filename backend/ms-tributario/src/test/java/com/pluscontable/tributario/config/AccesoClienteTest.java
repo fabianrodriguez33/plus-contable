@@ -54,4 +54,25 @@ class AccesoClienteTest {
         SecurityContextHolder.getContext().setAuthentication(sinDetalles);
         assertThatThrownBy(() -> AccesoCliente.exigir(1L)).isInstanceOf(AccessDeniedException.class);
     }
+
+    // Los ids por encima de 127 no se comparten entre cajas de Long: aquí el id del token y el de la ruta son objetos distintos
+
+    @Test
+    void elClienteConIdMayorA127AccedeASuPropiaEmpresa() {
+        entrarComo("CLIENTE_MYPE", 1000L);
+        assertThatCode(() -> AccesoCliente.exigir(1000L)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void elClienteConIdMayorA127NoAccedeALaEmpresaVecina() {
+        entrarComo("CLIENTE_MYPE", 1000L);
+        assertThatThrownBy(() -> AccesoCliente.exigir(1001L)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> AccesoCliente.exigir(999L)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void elIdSeCompararPorSuValorCompletoNoPorSusBitsBajos() {
+        entrarComo("CLIENTE_MYPE", 1000L);
+        assertThatThrownBy(() -> AccesoCliente.exigir(1000L + (1L << 32))).isInstanceOf(AccessDeniedException.class);
+    }
 }
