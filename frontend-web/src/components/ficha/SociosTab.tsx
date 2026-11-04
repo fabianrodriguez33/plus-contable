@@ -1,15 +1,15 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { AlertTriangle, Check, CheckCircle2, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, Info, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { mensajeError } from '../../services/apiClient'
 import { actualizarAporte, guardarSocios, obtenerResumenSocietario } from '../../services/clienteService'
-import type { Socio } from '../../types'
-import { mensajeDiferencia, resumenLocal, soles } from '../../utils/societario'
+import type { ResumenSocietario, Socio } from '../../types'
+import { estadoEstructura, mensajeDiferencia, soles } from '../../utils/societario'
 import Button from '../Button'
 import { Input, Select } from '../Input'
 import Table, { Td } from '../Table'
 
 const socioVacio: Socio = {
-  nombreCompleto: '', tipoDocumento: 'DNI', numeroDocumento: '', aporte: 0, porcentaje: 0, cargo: '',
+  nombreCompleto: '', tipoDocumento: 'DNI', numeroDocumento: '', aporte: 0, cargo: '',
 }
 
 interface Props {
@@ -20,31 +20,35 @@ interface Props {
 
 export default function SociosTab({ clienteId, setError, setOk }: Props) {
   const [socios, setSocios] = useState<Socio[]>([])
+  const [guardado, setGuardado] = useState<ResumenSocietario | null>(null)
   const [nuevo, setNuevo] = useState<Socio>(socioVacio)
   const [editando, setEditando] = useState<number | null>(null)
   const [aporteEditado, setAporteEditado] = useState('')
 
   useEffect(() => {
-    obtenerResumenSocietario(clienteId).then((r) => setSocios(r.socios)).catch((e) => setError(mensajeError(e)))
+    obtenerResumenSocietario(clienteId)
+      .then((r) => { setSocios(r.socios); setGuardado(r) })
+      .catch((e) => setError(mensajeError(e)))
   }, [clienteId, setError])
 
-  const r = resumenLocal(socios)
+  const estado = estadoEstructura(socios)
+  const hayCambiosSinGuardar = estado.sinGuardar > 0 || socios.length !== (guardado?.socios.length ?? 0)
 
   const agregar = (e: FormEvent) => {
     e.preventDefault()
     setError('')
-    if (Number(nuevo.porcentaje) <= 0) { setError('El porcentaje debe ser mayor a 0'); return }
-    if (Number(nuevo.aporte) < 0) { setError('El aporte no puede ser negativo'); return }
-    setSocios([...socios, { ...nuevo, aporte: Number(nuevo.aporte), porcentaje: Number(nuevo.porcentaje) }])
+    if (Number(nuevo.aporte) <= 0) { setError('El aporte debe ser mayor a 0: sin aporte no se puede calcular el porcentaje'); return }
+    setSocios([...socios, { ...nuevo, aporte: Number(nuevo.aporte) }])
     setNuevo(socioVacio)
   }
 
   const persistir = async () => {
     setError('')
     try {
-      const guardado = await guardarSocios(clienteId, socios)
-      setSocios(guardado.socios)
-      setOk(`Estructura societaria guardada. Capital social total: ${soles(guardado.capitalSocialTotal)}`)
+      const resumen = await guardarSocios(clienteId, socios)
+      setSocios(resumen.socios)
+      setGuardado(resumen)
+      setOk(`Estructura societaria guardada. Capital social total: ${soles(resumen.capitalSocialTotal)}`)
     } catch (err) {
       setError(mensajeError(err))
     }
@@ -59,18 +63,18 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
   const guardarAporte = async (i: number) => {
     setError('')
     const aporte = Number(aporteEditado)
-    if (aporteEditado.trim() === '' || Number.isNaN(aporte) || aporte < 0) {
-      setError('El aporte debe ser un monto válido, mayor o igual a 0')
+    if (aporteEditado.trim() === '' || Number.isNaN(aporte) || aporte <= 0) {
+      setError('El aporte debe ser un monto válido, mayor a 0')
       return
     }
     const socio = socios[i]
     try {
       if (socio.id !== undefined) {
-        // socio ya guardado: se persiste solo el aporte y el capital social se recalcula en el servidor
+        // socio ya guardado: el servidor guarda el aporte y recalcula el porcentaje de todos los socios
         const actualizado = await actualizarAporte(clienteId, socio.id, aporte)
-        const delServidor = actualizado.socios.find((s) => s.id === socio.id)
-        setSocios(socios.map((s, j) => (j === i && delServidor ? { ...s, aporte: delServidor.aporte } : s)))
-        setOk(`Aporte de ${socio.nombreCompleto} actualizado (${soles(delServidor?.aporte ?? aporte)})`)
+        setGuardado(actualizado)
+        setSocios(socios.map((s) => actualizado.socios.find((d) => d.id === s.id && s.id !== undefined) ?? s))
+        setOk(`Aporte de ${socio.nombreCompleto} actualizado. Los porcentajes se recalcularon: capital social ${soles(actualizado.capitalSocialTotal)}`)
       } else {
         setSocios(socios.map((s, j) => (j === i ? { ...s, aporte } : s)))
       }
@@ -81,6 +85,11 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
   }
 
   const st = <K extends keyof Socio>(k: K, v: Socio[K]) => setNuevo((s) => ({ ...s, [k]: v }))
+
+  const celdaPorcentaje = (s: Socio) => {
+    if (hayCambiosSinGuardar || s.porcentaje === undefined) return <span className="text-slate-400">al guardar</span>
+    return <>{Number(s.porcentaje).toFixed(2)}%</>
+  }
 
   return (
     <div className="space-y-5">
@@ -93,12 +102,13 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
           </Select>
           <Input label="N.º documento" value={nuevo.numeroDocumento} required
             onChange={(e) => st('numeroDocumento', e.target.value)} />
-          <Input label="Aporte (S/)" type="number" step="0.01" min="0" value={nuevo.aporte || ''} required
+          <Input label="Aporte (S/)" type="number" step="0.01" min="0.01" value={nuevo.aporte || ''} required
             onChange={(e) => st('aporte', Number(e.target.value))} />
-          <Input label="% participación" type="number" step="0.01" min="0.01" max="100"
-            value={nuevo.porcentaje || ''} required onChange={(e) => st('porcentaje', Number(e.target.value))} />
           <Input label="Cargo" value={nuevo.cargo ?? ''} onChange={(e) => st('cargo', e.target.value)} />
         </div>
+        <p className="flex items-center gap-2 text-sm text-slate-500">
+          <Info size={16} /> El porcentaje de participación lo calcula el sistema según el aporte de cada socio.
+        </p>
         <Button type="submit" variant="secondary"><Plus size={16} /> Agregar socio</Button>
       </form>
 
@@ -111,7 +121,7 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
             <Td>
               {editando === i ? (
                 <div className="flex items-center gap-1">
-                  <input type="number" step="0.01" min="0" autoFocus aria-label="Nuevo aporte"
+                  <input type="number" step="0.01" min="0.01" autoFocus aria-label="Nuevo aporte"
                     className="w-28 rounded border border-slate-300 px-2 py-1 text-sm"
                     value={aporteEditado} onChange={(e) => setAporteEditado(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') guardarAporte(i); if (e.key === 'Escape') setEditando(null) }} />
@@ -126,7 +136,7 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
                 </span>
               )}
             </Td>
-            <Td>{Number(s.porcentaje).toFixed(2)}%</Td>
+            <Td>{celdaPorcentaje(s)}</Td>
             <Td>{s.cargo}</Td>
             <Td>
               <Button variant="danger" aria-label="Quitar" onClick={() => setSocios(socios.filter((_, j) => j !== i))}>
@@ -140,20 +150,39 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Capital social total</p>
-          <p className="text-2xl font-semibold text-slate-900" data-testid="capital-total">{soles(r.capitalSocialTotal)}</p>
+          <p className="text-2xl font-semibold text-slate-900" data-testid="capital-total">{soles(estado.capitalSocialTotal)}</p>
         </div>
-        <div className={`rounded-lg border p-4 ${
-          r.completo ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            {r.completo ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-            Total participación: {r.porcentajeTotal.toFixed(2)}%
-          </p>
-          <p className="text-sm" data-testid="diferencia">{mensajeDiferencia(r.diferencia)}</p>
-        </div>
+        {estado.sinAporte > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <AlertTriangle size={18} /> Estructura incompleta
+            </p>
+            <p className="text-sm" data-testid="diferencia">
+              {estado.sinAporte === 1 ? '1 socio no tiene aporte' : `${estado.sinAporte} socios no tienen aporte`}:
+              registre el aporte para calcular los porcentajes.
+            </p>
+          </div>
+        ) : hayCambiosSinGuardar || !guardado ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700">
+            <p className="flex items-center gap-2 text-sm font-semibold"><Info size={18} /> Participación</p>
+            <p className="text-sm" data-testid="diferencia">Los porcentajes se calculan al guardar y suman 100.00%.</p>
+          </div>
+        ) : (
+          <div className={`rounded-lg border p-4 ${
+            guardado.completo ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              {guardado.completo ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+              Total participación: {Number(guardado.porcentajeTotal).toFixed(2)}%
+            </p>
+            <p className="text-sm" data-testid="diferencia">{mensajeDiferencia(guardado.diferencia)}</p>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={!r.completo} onClick={persistir}><Save size={16} /> Guardar estructura societaria</Button>
+        <Button disabled={!estado.puedeGuardar || !hayCambiosSinGuardar} onClick={persistir}>
+          <Save size={16} /> Guardar estructura societaria
+        </Button>
       </div>
     </div>
   )

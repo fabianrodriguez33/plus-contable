@@ -47,7 +47,8 @@ export interface Socio {
   tipoDocumento: string
   numeroDocumento: string
   aporte: number
-  porcentaje: number
+  /** Lo calcula el servidor según el aporte; no se envía al guardar. Ausente en socios aún sin guardar. */
+  porcentaje?: number
   cargo?: string
 }
 
@@ -57,6 +58,8 @@ export interface ResumenSocietario {
   porcentajeTotal: number
   diferencia: number
   completo: boolean
+  /** Socios con aporte 0 (registros anteriores a la regla automática). */
+  sociosSinAporte: number
 }
 
 export interface ActivoFijo {
