@@ -40,8 +40,11 @@ public class JwtFilter extends OncePerRequestFilter {
                 List<?> roles = claims.get("roles", List.class);
                 var authorities = (roles == null ? List.<SimpleGrantedAuthority>of()
                         : roles.stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r)).toList());
-                SecurityContextHolder.getContext().setAuthentication(
-                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities));
+                var auth = new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                // HU-38: empresa de la cuenta de cliente; el token del estudio no lo trae
+                Number clienteId = claims.get("clienteId", Number.class);
+                auth.setDetails(new DatosToken(clienteId == null ? null : clienteId.longValue()));
+                SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (JwtException | IllegalArgumentException ignored) {
                 // token invalido/expirado: el request queda sin autenticar y recibe 401
             }

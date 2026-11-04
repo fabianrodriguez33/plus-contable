@@ -96,7 +96,7 @@ public class AuthService {
         log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", null, ip);
 
         List<String> roles = u.getRoles().stream().map(Rol::getNombre).sorted().toList();
-        String token = jwtProvider.generate(u.getUsername(), roles);
+        String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId());
         return new LoginResponse(token, "Bearer", jwtProvider.getExpiration().toSeconds(),
                 new UserDto(u.getId(), u.getUsername(), u.getNombreCompleto(), roles));
     }

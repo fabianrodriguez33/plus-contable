@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.controller;
 
+import com.pluscontable.tributario.config.AccesoCliente;
 import com.pluscontable.tributario.dto.DocumentoDto;
 import com.pluscontable.tributario.model.DocumentoLegal;
 import com.pluscontable.tributario.service.ExpedienteService;
@@ -28,6 +29,7 @@ public class DocumentoController {
 
     @GetMapping
     public List<DocumentoDto> listar(@PathVariable Long clienteId) {
+        AccesoCliente.exigir(clienteId);
         return service.listar(clienteId);
     }
 
@@ -42,6 +44,7 @@ public class DocumentoController {
 
     @GetMapping("/{id}/archivo")
     public ResponseEntity<Resource> descargar(@PathVariable Long clienteId, @PathVariable Long id) {
+        AccesoCliente.exigir(clienteId);
         DocumentoLegal d = service.buscar(clienteId, id);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)

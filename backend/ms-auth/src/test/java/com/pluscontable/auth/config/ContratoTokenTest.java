@@ -69,4 +69,16 @@ class ContratoTokenTest {
         assertThat(claims.getSubject()).isEqualTo("contador1");
         assertThat(claims.get("roles", List.class)).containsExactly("CONTADOR");
     }
+
+    /** HU-38: ms-tributario lee clienteId (número) del token de un CLIENTE_MYPE para aislar los datos entre clientes. */
+    @Test
+    void elTokenDeUnClienteMypeLlevaElClaimClienteIdComoNumero() throws Exception {
+        String token = proveedor.generate("cliente1", List.of("CLIENTE_MYPE"), 7L);
+
+        JsonNode contenido = parte(token, 1);
+
+        assertThat(contenido.get("roles").get(0).asText()).isEqualTo("CLIENTE_MYPE");
+        assertThat(contenido.get("clienteId").isIntegralNumber()).isTrue();
+        assertThat(contenido.get("clienteId").asLong()).isEqualTo(7L);
+    }
 }

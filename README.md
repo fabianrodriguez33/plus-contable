@@ -207,6 +207,6 @@ Si algo falla, quita las cuatro variables del `.env` y reinicia los servicios: v
 `AislamientoPorUsuarioPostgresTest` (en `ms-tributario`) crea una base temporal, le aplica los `schema.sql` reales de ambos servicios, ejecuta el script de usuarios y comprueba que `ms-tributario` recibe «permiso denegado» al consultar `auth_schema` y `ms-auth` al consultar `tributario_schema`, y que cada servicio puede ejecutar su propio `schema.sql` con su usuario nuevo. Elimina todo al terminar.
 
 ## Sprint 1 · Jeanpierre Miranda
-HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas. Ya están en `develop` (PR #2); de HU-38 falta la tarea 94, que un cliente no vea datos de otro.
+HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas. Ya están en `develop` (PR #2). La tarea 94 de HU-38 (un cliente nunca ve datos de otro) está **hecha** con el claim `clienteId` del token, pero **pendiente de revisión de Beto**: hoy responde 403 al cliente ajeno y se propone 404 (ver `docs/sprint1-jeanpierre/README.md`). Falta HU-37 (alta de cuentas de cliente).
 
 Detalle, tecnologías y estado: [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).

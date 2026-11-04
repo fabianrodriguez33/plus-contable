@@ -29,10 +29,17 @@ public class JwtProvider {
     }
 
     public String generate(String username, List<String> roles) {
+        return generate(username, roles, null);
+    }
+
+    /** HU-38: el claim clienteId solo va en el token de una cuenta de cliente; el del estudio no lo lleva. */
+    public String generate(String username, List<String> roles, Long clienteId) {
         Date now = new Date();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(username)
-                .claim("roles", roles)
+                .claim("roles", roles);
+        if (clienteId != null) builder.claim("clienteId", clienteId);
+        return builder
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration.toMillis()))
                 .signWith(key)

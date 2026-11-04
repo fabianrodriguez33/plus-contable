@@ -186,4 +186,14 @@ class AuthServiceTest {
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
     }
+
+    /** HU-38: la cuenta de un cliente MYPE lleva su empresa en el token; la del estudio no. */
+    @Test
+    void elTokenLlevaElClienteIdSoloSiLaCuentaEsDeUnCliente() {
+        assertThat(jwt.parse(entrar("Clave123*").token()).containsKey("clienteId")).isFalse();
+
+        ana.setClienteId(7L);
+
+        assertThat(jwt.parse(entrar("Clave123*").token()).get("clienteId", Number.class).longValue()).isEqualTo(7L);
+    }
 }

@@ -64,4 +64,17 @@ class JwtProviderTest {
         assertThat(proveedor.parse("no-es-un-jwt")).isNull();
         assertThat(proveedor.parse("a.b.c")).isNull();
     }
+
+    @Test
+    void tokenDeUnaCuentaDeClienteLlevaElClaimClienteId() {
+        Claims claims = proveedor.parse(proveedor.generate("cliente1", List.of("CLIENTE_MYPE"), 7L));
+
+        assertThat(claims.get("clienteId", Number.class).longValue()).isEqualTo(7L);
+    }
+
+    @Test
+    void tokenSinClienteNoLlevaElClaimClienteId() {
+        assertThat(proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"), null)).containsKey("clienteId")).isFalse();
+        assertThat(proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"))).containsKey("clienteId")).isFalse();
+    }
 }

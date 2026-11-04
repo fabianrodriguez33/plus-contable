@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.controller;
 
+import com.pluscontable.tributario.config.AccesoCliente;
 import com.pluscontable.tributario.dto.CambioVencimientoDto;
 import com.pluscontable.tributario.dto.DeclaracionDto;
 import com.pluscontable.tributario.dto.ObligacionDto;
@@ -31,12 +32,16 @@ public class ObligacionController {
     /** PROVISIONAL hasta HU-07: listado mínimo para elegir obligaciones en HU-10. */
     @GetMapping
     public List<ObligacionDto> listar(@RequestParam Long clienteId) {
+        AccesoCliente.exigir(clienteId);
         return service.listar(clienteId);
     }
 
     @GetMapping("/{id}")
     public ObligacionDto buscar(@PathVariable Long id) {
-        return service.buscar(id);
+        // primero se carga: un id inexistente sigue dando 404 al estudio, y al cliente solo se le abre su propia obligacion
+        ObligacionDto dto = service.buscar(id);
+        AccesoCliente.exigir(dto.clienteId());
+        return dto;
     }
 
     @PatchMapping("/{id}/declaracion")
