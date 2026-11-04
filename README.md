@@ -155,7 +155,7 @@ Si no usas esas opciones, Maven busca una base llamada `plus_contable_test` en e
 
 `./mvnw verify` (en `backend/ms-auth` o en `backend/ms-tributario`) corre las pruebas y genera el reporte de JaCoCo. Ábrelo en `target/site/jacoco/index.html`. La definición de terminado pide al menos 70 % de cobertura.
 
-> Si definiste `AUTH_DB_USER` o `TRIBUTARIO_DB_USER` en tu `.env`, las pruebas también los leen. Con una base desechable, pon esas variables y `DB_USER`/`DB_PASSWORD` apuntando a ella al correr `./mvnw verify`.
+> Las pruebas no leen `DB_USER`, `DB_PASSWORD`, `AUTH_DB_USER`, `AUTH_DB_PASSWORD`, `TRIBUTARIO_DB_USER` ni `TRIBUTARIO_DB_PASSWORD` de tu `.env`: el `pom.xml` los fija con `test.db.user` y `test.db.password` (por defecto `postgres`). Para usar una base desechable pásala como en «Correr las pruebas» (`./mvnw verify -Dtest.db.url=... -Dtest.db.password=...`). **Nunca** la apuntes a `plus_contable_db`.
 
 ### Problemas frecuentes
 
