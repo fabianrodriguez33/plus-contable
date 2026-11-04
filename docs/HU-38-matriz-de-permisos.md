@@ -73,21 +73,21 @@ Leyenda de la columna **¿Distingue entre clientes?**
 |---|---|---|---|---|---|---|
 | `GET /api/tributario/clientes` | 401 | 403 | 403 | Sí | Estudio: todos (lista todos los clientes) | `ClienteControllerTest`; `TokenEntreServiciosTest` |
 | `POST /api/tributario/clientes` | 401 | 403 | 403 | Sí | Estudio: todos | `ClienteControllerTest` (contador, admin, `CLIENTE_MYPE`, sin rol y sin token); `ManejoDeErroresHttpTest` |
-| `GET /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** (regla general) |
-| `PUT /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `GET /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos (devuelve usuario y clave SOL descifrados) | **Sin prueba de rol propia** |
-| `PUT /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `GET /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `PUT /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `GET /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos (devuelve usuario y clave SOL descifrados) | `PermisosRutasDelEstudioTest` |
+| `PUT /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `POST /api/tributario/clientes/{id}/trabajadores` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `POST /api/tributario/clientes/{id}/documentos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `PUT /api/tributario/clientes/{id}/acuerdo` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `GET /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
 | `GET /api/tributario/clientes/{id}/socios/resumen` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
-| `PUT /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `POST /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `PUT /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `POST /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `PATCH /api/tributario/clientes/{id}/socios/{socioId}/aporte` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
-| `GET /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `POST /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `DELETE /api/tributario/clientes/{id}/activos/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `GET /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `POST /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `DELETE /api/tributario/clientes/{id}/activos/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `POST /api/tributario/obligaciones` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest`; `altaDeObligacionRespetaRolesExistentes` |
 | `POST /api/tributario/obligaciones/programacion` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest`; `ProgramacionMensualControllerTest` (401) |
 | `PATCH /api/tributario/obligaciones/{id}/declaracion` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
@@ -119,11 +119,10 @@ La propuesta de solución (claim `clienteId` en el token) está en [`sprint1-jea
 
 - **El estudio ve todos los clientes.** No hay cartera por contador: cualquier `CONTADOR` o `ADMIN` lee y modifica cualquier cliente
   (`ClienteService` lista todos). Es el diseño actual; si cada contador debe ver solo su cartera, es otra decisión y otra tarea.
-- **Rutas del estudio sin prueba de rol propia:** `GET` y `PUT /clientes/{id}`, las dos de `/sol`, `PUT` y `POST` de `/socios`, y las tres
-  de `/activos`. Hoy las cubre la regla general, comprobada en la medición, pero ninguna prueba lo fija. Una prueba que recorra todas las rutas
-  de los controladores contra los cuatro roles cerraría el hueco.
-- **`GET /clientes/{id}/sol` devuelve la clave SOL descifrada** al estudio. Es solo del estudio, pero es la ruta más sensible y no tiene prueba
-  de rol propia.
+- **Rutas del estudio con prueba de rol:** `GET` y `PUT /clientes/{id}`, las dos de `/sol`, `PUT` y `POST` de `/socios`, y las tres
+  de `/activos` las cubre `PermisosRutasDelEstudioTest` (tarea 93): sin token 401, sin rol y `CLIENTE_MYPE` 403, `CONTADOR` y `ADMIN` pasan.
+- **`GET /clientes/{id}/sol` devuelve la clave SOL descifrada** al estudio. Es solo del estudio y es la ruta más sensible; su rol lo fija
+  `PermisosRutasDelEstudioTest`.
 - **No existe cierre de sesión en el servidor** (`POST /api/auth/logout` responde 404): hoy el token se descarta solo en el navegador.
 
 ## Qué falta para cerrar la tarea 91

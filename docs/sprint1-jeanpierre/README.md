@@ -1,58 +1,20 @@
-# Sprint 1 · Jeanpierre Miranda — rama `feature/jeanpierre-sprint1`
+# Sprint 1 · Jeanpierre Miranda
 
 Trabajo de Jeanpierre Miranda en el Sprint 1 de Plus Contable: HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 (28 pts).
 
 | | |
 |---|---|
-| Rama | `feature/jeanpierre-sprint1` |
-| Creada desde | `main` en `cc48860` ("estructura inicial"), como pide la guía del sprint |
-| Estado | Solo local: sin push ni Pull Request |
-| Pruebas | 97 unitarias en verde, 1 desactivada (tarea 85) |
+| Estado | **En `develop`**, fusionado por el PR #2 (28/10/2026). HU-03, 04, 05, 09 y 10 están **hechas**; HU-38 está en curso: falta la tarea 94 (un cliente no ve datos de otro) |
+| Pruebas | Suite completa en verde (03/11/2026): `ms-tributario` 443 ejecutadas y 1 omitida (la de la tarea 94), `ms-auth` 34. La cobertura se mide con JaCoCo: `./mvnw verify` y abrir `target/site/jacoco/index.html` |
 
-## ⚠️ Compatibilidad con las otras ramas
+> **Numeración de tareas.** Los documentos de esta carpeta usan la numeración vieja: las tareas 82, 83, 84 y 85 de HU-38
+> son las tareas **91, 92, 93 y 94** del Sprint Backlog.
 
-Esta rama **no es compatible directamente** con `develop` ni con `feature/seguridad-jwt`. Las tres parten de
-`cc48860`, pero el equipo y esta rama crearon por separado los mismos archivos de `ms-tributario` y del frontend con
-contenido distinto. Git los marca como conflicto *add/add*: no los puede combinar solo.
+## Integración con las otras ramas (nota histórica)
 
-Simulación de merge (`git merge-tree`, 2026-10-22):
-
-| Contra | Archivos en conflicto |
-|---|---|
-| `origin/develop` | **16** |
-| `origin/feature/seguridad-jwt` | **11** |
-
-Archivos en conflicto con ambas ramas:
-
-- `config/SecurityConfig.java` — aquí está el control por rol de HU-38
-- `controller/TrabajadorController.java`, `dto/TrabajadorDto.java`, `model/Trabajador.java` — HU-03
-- `controller/DocumentoController.java`, `dto/DocumentoDto.java`, `model/DocumentoLegal.java`,
-  `repository/DocumentoRepository.java`, `service/ExpedienteService.java` — HU-04
-- `resources/schema.sql`
-- `frontend-web/src/App.tsx`
-
-Solo con `develop`: `pom.xml`, `model/Cliente.java`, `package.json`, `package-lock.json` e `index.css`. Esta rama
-copió esos archivos de `feature/seguridad-jwt`, que ya los cambió respecto de `develop`.
-
-**Diferencias de fondo** (no solo de texto) que hay que decidir al integrar:
-
-| Tema | Equipo (`develop` / `seguridad-jwt`) | Esta rama |
-|---|---|---|
-| Tabla `trabajadores` | `regimen_laboral` obligatorio, SUNAFIL/MTPE/EsSalud | Datos de contrato del extranjero; tipo de documento DNI/CE/PASAPORTE/PTP |
-| Tabla `documentos_legales` | Sin fecha de emisión ni versión; admite `COPIA_LITERAL` | `fecha_emision` y `version` obligatorias (historial) |
-| Descarga de documentos | `GET /api/tributario/documentos/{id}/descargar` | `GET /api/tributario/clientes/{id}/documentos/{doc}/archivo` (valida que el documento sea del cliente) |
-| Validación de trabajador | Anotaciones en el DTO, un error a la vez | En el servicio; lista todos los campos faltantes juntos |
-| Seguridad | Cualquier usuario autenticado puede todo | Matriz por rol (HU-38) |
-| `App.tsx` | Login, dashboard, ficha maestra | Solo las rutas de estas historias |
-
-`schema.sql` usa `CREATE TABLE IF NOT EXISTS`: **si la base ya tiene las tablas del equipo, las de esta rama no se
-crean.** Mientras se trabaje aquí, usar una base limpia (`docker compose down -v`).
-
-**Ramas por HU en el remoto:** existen `feature/HU-03-nomina`, `HU-04-documentos`, `HU-05-acuerdo-honorarios`,
-`HU-09-declaracion`, `HU-10-variar-fecha` y `HU-38-permisos`, vacías y creadas desde `develop`. Si el equipo
-trabaja con una rama por HU, la integración natural es llevar los commits de cada HU de esta rama a su rama
-(son commits separados por tarea, con el ID de la HU en el mensaje) y resolver ahí los conflictos sobre el código de
-`develop`. **Decisión pendiente con el equipo; no se ha subido nada.**
+La rama de trabajo salía de `main` (`cc48860`) y no era compatible con `develop`. Al integrar el 22/10 se resolvieron los
+conflictos a mano (commits `5b8bd74` y `08d9010`) y el trabajo llegó a `develop` por el PR #2. Ya no hay ramas
+pendientes de integrar.
 
 ## Tecnologías
 
@@ -104,40 +66,26 @@ Cada `HU-XX: … (tarea NN)` es un commit. Los diseños de cada HU están en su 
 - Matriz en `SecurityConfig`: `CLIENTE_MYPE` solo consulta; registrar, archivar, guardar, declarar y variar
   vencimiento son de `CONTADOR`/`ADMIN`. Sin token 401, sin permiso 403.
 - `PermisosPorRolTest`: 57 casos con JWT reales.
-- **Falta la tarea 85**, que un cliente no vea datos de otro. Está propuesta en HU-38.md (claim `clienteId` en el
-  JWT) y pendiente de acordar con Ricardo.
+- **Falta la tarea 94** (antes 85), que un cliente no vea datos de otro. Está propuesta en HU-38.md (claim `clienteId`
+  en el JWT).
+- `PermisosRutasDelEstudioTest` (tarea 93) cubre las rutas del estudio que no tenían prueba de rol propia.
 
-### Dependencias provisionales
-- `Cliente` y `ClienteRepository` (HU-01, Julio) están copiados tal cual de `feature/seguridad-jwt`.
-- `Obligacion` y `GET /api/tributario/obligaciones?clienteId=` son **PROVISIONALES** hasta integrar HU-07 (Ricardo).
+### Dependencias con otras historias
+- `Cliente` (HU-01) y `Obligacion` (HU-07) ya vienen de `develop`: `ObligacionService` agrega las operaciones de
+  HU-09 y HU-10 sobre la obligación que crea HU-07.
 
-## Estado en el Excel
+## Estado en el Sprint Backlog
 
 | Estado | Tareas |
 |---|---|
-| Hecho | 33, 34, 35, 36 · 39, 40, 41, 42 · 45, 46, 47, 48 · 62, 63, 64 · 67, 68, 69, 70 · 83, 84 |
-| Diseño en borrador, falta validar | 32, 38, 44, 61, 66, 82 |
-| Integración, necesita PostgreSQL | 37, 43, 49, 65 |
-| Bloqueada por el acuerdo con Ricardo | 85 |
+| Hecho | 33, 34, 35, 36 · 39, 40, 41, 42 · 45, 46, 47, 48 · 62, 63, 64 · 67, 68, 69, 70 · 92, 93 |
+| Pendiente | 94 (aislamiento entre clientes, HU-38) |
+| Validación con Beto | Matriz de permisos (`docs/HU-38-matriz-de-permisos.md`) |
 
 ## Cómo levantar
 
-```bash
-docker compose up -d                                  # PostgreSQL 16 en :5432
-cd backend/ms-tributario && ./mvnw spring-boot:run    # API en :8082
-cd frontend-web && npm install && npm run dev         # Web en :5173
-```
-
-Rutas de la web: `/clientes/{id}/trabajadores`, `/documentos`, `/acuerdo`, `/vencimientos` y
-`/obligaciones/{id}/declarar`.
-
-Pruebas sin base de datos:
-
-```bash
-cd backend/ms-tributario && ./mvnw test -Dtest="*ServiceTest,PermisosPorRolTest"
-```
-
-`MsTributarioApplicationTests` (contextLoads) necesita PostgreSQL. Esta rama no incluye `ms-auth`; para obtener un
-token real hay que levantarlo desde `feature/seguridad-jwt`.
+Los pasos del entorno completo (base de datos, `ms-auth`, `ms-tributario` y la web) están en el
+[README del proyecto](../../README.md#cómo-levantar-el-entorno-de-desarrollo). Las pruebas y la cobertura, en su
+sección «Correr las pruebas» y «Cobertura de pruebas».
 
 Dependencias pendientes y decisiones abiertas: [NOTAS.md](NOTAS.md).
