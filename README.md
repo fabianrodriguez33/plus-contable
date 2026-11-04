@@ -206,10 +206,7 @@ Si algo falla, quita las cuatro variables del `.env` y reinicia los servicios: v
 
 `AislamientoPorUsuarioPostgresTest` (en `ms-tributario`) crea una base temporal, le aplica los `schema.sql` reales de ambos servicios, ejecuta el script de usuarios y comprueba que `ms-tributario` recibe «permiso denegado» al consultar `auth_schema` y `ms-auth` al consultar `tributario_schema`, y que cada servicio puede ejecutar su propio `schema.sql` con su usuario nuevo. Elimina todo al terminar.
 
-## Rama `feature/jeanpierre-sprint1` (Sprint 1 · Jeanpierre Miranda)
-HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas unitarias.
+## Sprint 1 · Jeanpierre Miranda
+HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas. Ya están en `develop` (PR #2); de HU-38 falta la tarea 94, que un cliente no vea datos de otro.
 
-> ⚠️ Esta rama sale de `main` y **no se integra directamente** con `develop` (16 archivos en conflicto) ni con
-> `feature/seguridad-jwt` (11). Antes de unirla hay que resolver esos conflictos a mano.
-
-Detalle, tecnologías, compatibilidad y cómo levantarla: [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).
+Detalle, tecnologías y estado: [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).
