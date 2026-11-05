@@ -1,0 +1,55 @@
+@startuml
+!pragma layout smetana
+title HU-03 · Modelo de datos de los trabajadores (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.trabajadores" as trabajadores {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * nombre_completo : VARCHAR(200)
+  * tipo_documento : DNI | CE | PASAPORTE | PTP
+  * numero_documento : VARCHAR(20)
+  * extranjero : BOOLEAN = false
+    nacionalidad : VARCHAR(60)
+    regimen_laboral : MYPE | REMIPE | GENERAL
+  * sistema_pensionario : ONP | AFP
+    nombre_afp : VARCHAR(60)
+  * fecha_ingreso : DATE
+    remuneracion : NUMERIC(12,2)  CHECK (remuneracion >= 0)
+  * registro_sunafil : BOOLEAN = false
+  * registro_mtpe : BOOLEAN = false
+  * essalud : BOOLEAN = false
+  * quinta_categoria : BOOLEAN = false
+    tipo_contrato : VARCHAR(40)
+    fecha_inicio_contrato : DATE
+    fecha_fin_contrato : DATE
+  UNIQUE (cliente_id, tipo_documento, numero_documento)
+}
+
+clientes ||--o{ trabajadores : cliente_id, ON DELETE CASCADE
+
+note bottom of trabajadores
+  Nacional y extranjero comparten la tabla. Un documento no se repite dentro del cliente.
+  regimen_laboral, registro_sunafil, registro_mtpe, essalud y quinta_categoria existen en la tabla,
+  pero la entidad Trabajador no los usa. Los datos de contrato del extranjero se exigen en TrabajadorService, no en la base.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

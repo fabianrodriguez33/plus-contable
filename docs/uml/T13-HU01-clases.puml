@@ -1,81 +1,117 @@
 @startuml
 !pragma layout smetana
-title T13 · HU-01 · Clases de Cliente y sus credenciales SOL (código de develop)
+title T13 · HU-01 · Clases del cliente, sus credenciales SOL y la consulta de RUC (código de develop)
 skinparam classAttributeIconSize 0
 skinparam shadowing false
 
-class ClienteController {
-  +listar(): List<ClienteDto>
-  +obtener(id): ClienteDto
-  +crear(dto): ClienteDto
-  +actualizar(id, dto): ClienteDto
-  +guardarSol(id, dto)
-  +obtenerSol(id): CredencialSolDto
+package "controller" {
+  class ClienteController {
+    +listar(): List<ClienteDto>
+    +obtener(id): ClienteDto
+    +crear(dto): ClienteDto
+    +actualizar(id, dto): ClienteDto
+    +guardarSol(id, dto): void
+    +obtenerSol(id): CredencialSolDto
+  }
 }
 
-class ClienteService {
-  +listar(): List<ClienteDto>
-  +obtener(id): ClienteDto
-  +crear(dto): ClienteDto
-  +actualizar(id, dto): ClienteDto
-  +guardarCredencialSol(clienteId, dto)
-  +obtenerCredencialSol(clienteId): CredencialSolDto
-  +buscar(id): Cliente
-}
-
-class RucValidator <<utilidad>> {
-  {static} +PREFIJOS = {10, 15, 17, 20}
-  {static} +motivoInvalido(ruc): String
-  {static} +esValido(ruc): boolean
+package "service" {
+  class ClienteService {
+    +listar(): List<ClienteDto>
+    +obtener(id): ClienteDto
+    +crear(dto): ClienteDto
+    +actualizar(id, dto): ClienteDto
+    +guardarCredencialSol(clienteId, dto): void
+    +obtenerCredencialSol(clienteId): CredencialSolDto
+    +buscar(id): Cliente
+    -guardarSolSiViene(clienteId, dto): void
+    -aplicar(c, dto): void
+    -validarRuc(ruc): void
+  }
+  class RucValidator <<utilidad>> {
+    +{static} PREFIJOS: Set<String>
+    +{static} motivoInvalido(ruc): String
+    +{static} esValido(ruc): boolean
+  }
 }
 
 class AesUtil {
-  +encrypt(texto): String
-  +decrypt(texto): String
-  +esLegado(texto): boolean
+  +encrypt(plainText): String
+  +decrypt(cipherText): String
+  +esLegado(cipherText): boolean
 }
 
-class Cliente {
-  id: Long
-  ruc: String
-  razonSocial: String
-  regimenTributario: Regimen
-  condicionHabido: CondicionHabido
-  direccion: String
-  telefono: String
-  email: String
-  activo: boolean
-  creadoEn: LocalDateTime
+package "ruc" {
+  class ConsultaRucController {
+    +consultar(ruc): ConsultaRucDto
+  }
+  class ConsultaRucService {
+    +consultar(ruc): ConsultaRucDto
+  }
+  interface ConsultaRuc {
+    consultar(ruc): ResultadoConsulta
+  }
+  class OpenRucConsulta {
+    +consultar(ruc): ResultadoConsulta
+  }
+  class DatosRuc <<record>> {
+    ruc: String
+    razonSocial: String
+    estado: String
+    condicion: String
+    direccion: String
+    ubigeo: String
+    fuente: String
+    fechaDatos: LocalDate
+  }
+  class ConsultaRucDto <<record>> {
+    resultado: Resultado
+    mensaje: String
+    datos: Sugerencia
+    avisos: List<String>
+  }
 }
 
-enum "Cliente.Regimen" as Regimen {
-  MYPE
-  REMIPE
-  GENERAL
+package "model" {
+  class Cliente {
+    id: Long
+    ruc: String
+    razonSocial: String
+    regimenTributario: Regimen
+    condicionHabido: CondicionHabido
+    direccion: String
+    telefono: String
+    email: String
+    activo: boolean
+    buenContribuyente: boolean
+  }
+  class CredencialSol {
+    id: Long
+    clienteId: Long
+    usuarioSolCifrado: String
+    claveSolCifrada: String
+  }
 }
 
-enum "Cliente.CondicionHabido" as Condicion {
-  HABIDO
-  NO_HABIDO
-}
-
-class CredencialSol {
-  id: Long
-  clienteId: Long
-  usuarioSolCifrado: String
-  claveSolCifrada: String
-  actualizadoEn: LocalDateTime
-}
-
-class ClienteDto <<record>> {
-  id, ruc, razonSocial, regimenTributario,
-  condicionHabido, direccion, telefono, email,
-  usuarioSol, claveSol, tieneClaveSol
-}
-
-class CredencialSolDto <<record>> {
-  usuarioSol
-  claveSol
+package "dto" {
+  class ClienteDto <<record>> {
+    id: Long
+    ruc: String
+    razonSocial: String
+    regimenTributario: Regimen
+    condicionHabido: CondicionHabido
+    direccion: String
+    telefono: String
+    email: String
+    usuarioSol: String
+    claveSol: String
+    tieneClaveSol: Boolean
+    buenContribuyente: Boolean
+  }
+  class CredencialSolDto <<record>> {
+    usuarioSol: String
+    claveSol: String
+  }
 }
 
 interface ClienteRepository {
@@ -95,14 +131,24 @@ ClienteService --> AesUtil : cifra y descifra SOL
 ClienteService ..> CredencialSolDto
 ClienteRepository ..> Cliente
 CredencialSolRepository ..> CredencialSol
-Cliente --> Regimen
-Cliente --> Condicion
 Cliente "1" <-- "0..1" CredencialSol : cliente_id (único)
+ConsultaRucController --> ConsultaRucService
+ConsultaRucService ..> RucValidator : valida el RUC
+ConsultaRucService --> ConsultaRuc
+ConsultaRuc <|.. OpenRucConsulta
+OpenRucConsulta ..> DatosRuc
+ConsultaRucService ..> ConsultaRucDto : datos sugeridos y avisos
 
 note right of ClienteDto
-  usuarioSol y claveSol solo viajan de entrada:
-  la respuesta devuelve tieneClaveSol, no la clave.
+  usuarioSol y claveSol solo viajan de entrada: la respuesta devuelve tieneClaveSol, no la clave.
+  buenContribuyente es opcional: si no viene, al crear queda en false y al actualizar se conserva.
 end note
 
-footer Fuente: backend/ms-tributario (controller, service, model, dto, repository) en develop 6db0036
+note bottom of ConsultaRucService
+  Solo consulta RUC que empiezan con 20 (el proveedor cubre personas jurídicas); con otro prefijo
+  responde FUERA_DE_COBERTURA. Un estado distinto de ACTIVO o una condición distinta de HABIDO
+  avisa, pero no bloquea el alta. La consulta solo sugiere datos: no guarda nada.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario (controller, service, ruc, model, dto, repository, config/AesUtil)
 @enduml
