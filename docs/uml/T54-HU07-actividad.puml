@@ -40,7 +40,8 @@ else (Programación mensual)
     stop
   endif
   :CronogramaConsultaService.buscar(clienteId, periodo);
-  :Selecciona fecha según grupo final del RUC;
+  :Selecciona el grupo del cronograma: último dígito del RUC o, si el cliente está marcado «buen contribuyente», BUEN_CONTRIB_UESP;
+:GrupoRucCronograma.paraCliente(ruc, buenContribuyente);
   if (¿Cliente y cronograma disponibles?) then (no)
     :Rechaza cliente inexistente o periodo sin fecha;
     stop
@@ -65,6 +66,9 @@ legend bottom
   activarlas por parámetros. AFP carece de su
   propio cronograma y siempre se omite.
   No se distingue fecha por régimen tributario.
+  El cliente «buen contribuyente» (marca manual en la
+  ficha) usa el cronograma BUEN_CONTRIB_UESP en lugar
+  del último dígito del RUC.
 endlegend
-footer Contraste: origin/develop fc1a225582b620c6cf46c36695190549ace1f9b2 · ObligacionProgramacionService, ProgramacionMensualController, ProgramacionMensualService, CronogramaConsultaService, GeneradorObligaciones
+footer Corregido el 05/11/2026 contra develop (commit 0406de0): cronograma de buen contribuyente. Contraste original: origin/develop fc1a225582b620c6cf46c36695190549ace1f9b2 · ObligacionProgramacionService, ProgramacionMensualController, ProgramacionMensualService, CronogramaConsultaService, GeneradorObligaciones
 @enduml
