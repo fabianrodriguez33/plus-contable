@@ -1,6 +1,6 @@
 # Trazabilidad de diagramas UML — Sprint 1
 
-Todos los diagramas salen del código de `develop` (commit `6db0036`; el de la tarea 62, del commit `5adfb88`). Fuente `.puml` (PlantUML) en esta carpeta e imagen `.png` con el mismo nombre en `img/`. Para regenerarlas: `java -jar plantuml.jar -tpng -charset UTF-8 -o img *.puml` desde `docs/uml/`.
+Los diagramas originales se contrastaron con versiones anteriores de `develop`. T22 y T54 se revisaron de nuevo contra `origin/develop` `fc1a225582b620c6cf46c36695190549ace1f9b2` (03/11/2026). Fuente `.puml` (PlantUML) en esta carpeta e imagen `.png` con el mismo nombre en `img/`. Para regenerarlas: `java -jar plantuml.jar -tpng -charset UTF-8 -o img *.puml` desde `docs/uml/`.
 
 ## Alcance
 
@@ -23,11 +23,11 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 
 | Tarea | Historia | Diagrama | Clases y archivos que lo respaldan | Pruebas relacionadas (en `develop`) |
 |---|---|---|---|---|
-| 22 | HU-36 | [`T22-HU36-actividad`](T22-HU36-actividad.puml) · [png](img/T22-HU36-actividad.png) | `LoginPage.tsx`, `authService.ts`, `apiClient.ts`, `PrivateRoute.tsx`, `AuthController.login`, `AuthService.login`, `JwtProvider` | `AuthServiceTest`, `AuthControllerTest`, `JwtProviderTest` |
+| 22 | HU-36 | [`T22-HU36-actividad`](T22-HU36-actividad.puml) · [png](img/T22-HU36-actividad.png) | `LoginPage.tsx`, `authService.ts`, `jwtSession.ts`, `apiClient.ts`, `PrivateRoute.tsx`, `AuthController.login`, `AuthService.login`, `JwtProvider`. Contraste: `fc1a225` (PR #6 fusionado) | `AuthServiceTest`, `AuthControllerTest`, `JwtProviderTest`, `authService.test.tsx` |
 | 35 | HU-03 | [`T35-HU03-clases`](T35-HU03-clases.puml) · [png](img/T35-HU03-clases.png) | `TrabajadorController`, `TrabajadorService`, `Trabajador`, `TrabajadorDto`, `TrabajadorRepository` | `TrabajadorServiceTest`, `PermisosPorRolTest` |
 | 41 | HU-04 | [`T41-HU04-secuencia`](T41-HU04-secuencia.puml) · [png](img/T41-HU04-secuencia.png) | `DocumentoController`, `ExpedienteService.archivar`, `DocumentoLegal`, `DocumentoRepository`, `GlobalExceptionHandler` | `ExpedienteServiceTest`, `PermisosPorRolTest` |
 | 48 | HU-05 | [`T48-HU05-clases`](T48-HU05-clases.puml) · [png](img/T48-HU05-clases.png) | `AcuerdoController`, `AcuerdoService`, `AcuerdoServicio`, `HonorarioHistorial`, `AcuerdoDto`, `AcuerdoRepository`, `HonorarioHistorialRepository` | `AcuerdoServiceTest`, `PermisosPorRolTest` |
-| 54 | HU-07 | [`T54-HU07-actividad`](T54-HU07-actividad.puml) · [png](img/T54-HU07-actividad.png) | `ObligacionController.crear`, `ObligacionProgramacionService`, `ObligacionInputValidator`, `CronogramaConsultaService`, `GrupoRucCronograma`. **Respaldo parcial**: ver nota abajo | `ObligacionProgramacionServiceTest`, `ObligacionInputValidatorTest`, `Hu07ComponentesTest`, `Hu07PostgresIntegrationTest`, `CronogramaYGeneradorTest`, `GrupoRucCronogramaTest`, `CronogramaSunatLoaderTest` |
+| 54 | HU-07 | [`T54-HU07-actividad`](T54-HU07-actividad.puml) · [png](img/T54-HU07-actividad.png) | Alta manual: `ObligacionController.crear`, `ObligacionProgramacionService`. Programación: `ProgramacionMensualController`, `ProgramacionMensualService`, `CronogramaConsultaService`, `GeneradorObligaciones`, `ReglaQuinta`, `ParametrosTributarios`. Contraste: `fc1a225` | `ObligacionProgramacionServiceTest`, `ProgramacionMensualServiceTest`, `ProgramacionMensualControllerTest`, `ReglaQuintaTest` |
 | 67 | HU-09 | [`T67-HU09-estados`](T67-HU09-estados.puml) · [png](img/T67-HU09-estados.png) | `Obligacion.Estado`, `ObligacionService.declarar` y `cambiarVencimiento`, `DeclaracionDto` | `ObligacionServiceTest` |
 | 73 | HU-10 | [`T73-HU10-secuencia`](T73-HU10-secuencia.puml) · [png](img/T73-HU10-secuencia.png) | `ObligacionController.cambiarVencimiento`, `ObligacionService.cambiarVencimiento`, `VencimientoHistorial`, `VencimientoHistorialRepository` | `ObligacionServiceTest` |
 | 62 | HU-08 | [`T62-HU08-secuencia-calendario`](T62-HU08-secuencia-calendario.puml) · [png](img/T62-HU08-secuencia-calendario.png) | `CalendarioController`, `CalendarioService`, `CalendarioObligacionDto`, `VencimientoTributario`, `ObligacionService.listar`, `SecurityConfig`. Código de `develop` en el commit `5adfb88` (PR #5 fusionado) | `CalendarioServiceTest`, `CalendarioPermisosTest`, `VencimientoTributarioTest` |
@@ -35,11 +35,11 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 ## Lo que el diseño no puede respaldar con código
 
 - **Roles:** `CLIENTE_MYPE` aparece en `SecurityConfig` de ms-tributario, pero no se siembra en `auth_schema.roles`. Hoy no existe ninguna cuenta con ese rol.
-- **Usuario de base de datos:** ambos servicios usan el mismo usuario `postgres`. No hay usuario por esquema (tarea 4 pendiente).
-- **Cronograma SUNAT:** la tabla `cronograma_tributario` se carga al arrancar (84 filas), pero ningún flujo la consulta para calcular vencimientos.
+- **Usuarios de base de datos (PR #10 fusionado):** el código y `docker-compose.yml` admiten `AUTH_DB_USER`/`AUTH_DB_PASSWORD` y `TRIBUTARIO_DB_USER`/`TRIBUTARIO_DB_PASSWORD`. El respaldo `DB_USER`/`DB_PASSWORD` continúa disponible. El README indica que los usuarios por servicio son opcionales; no se ha verificado que cada desarrollador haya migrado su base local.
+- **Cronograma SUNAT:** la tabla `cronograma_tributario` se carga al arrancar (84 filas) y `ProgramacionMensualService` la consulta para programar obligaciones. El alta manual sigue recibiendo una fecha explícita.
 - **`GET /api/auth/me`:** existe y exige token, pero el frontend no lo invoca.
-- **Pruebas del contrato del token entre servicios:** `ContratoTokenTest` (ms-auth) y `TokenEntreServiciosTest` (ms-tributario) existen en el PR #7 (`feature/pruebas-julio-s1`), todavía sin fusionar. No se citan arriba porque no están en `develop`.
-- **Tarea 54 (HU-07), el diagrama pedido régimen + último dígito del RUC → fecha límite no existe como flujo.** El alta recibe la fecha en la solicitud. `CronogramaConsultaService.buscar` y `GeneradorObligaciones.preparar` existen, pero solo los usan las pruebas, y el régimen tributario no interviene en ningún cálculo. El diagrama muestra el alta real y, en un carril aparte, la consulta existente sin conectar.
+- **Pruebas del contrato del token entre servicios (PR #7 fusionado):** `ContratoTokenTest` (ms-auth) y `TokenEntreServiciosTest` (ms-tributario) ya están en `develop`.
+- **Tarea 54 (HU-07):** la programación mensual usa el último dígito del RUC para seleccionar la fecha del cronograma. IGV y RENTA se generan; PLAME requiere trabajadores ingresados al cierre del mes. El régimen no cambia la selección de fecha. ESSALUD y quinta están desactivadas por defecto, aunque existen parámetros para activarlas; AFP se omite siempre porque falta su cronograma propio. El alta manual sigue siendo un flujo separado.
 - **Tarea 79 (HU-13):** no hay código en `develop`, así que no se diagrama. La tarea 62 (HU-08) se diagramó después de fusionar el PR #5 (ver su fila en el bloque 2).
 - **Tarea 85 (HU-37):** tampoco hay código; se hizo como diseño previo (ver abajo).
 
