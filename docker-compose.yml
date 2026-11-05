@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: plus-contable-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en .env (ver .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-plus_contable_db}
+      # Usuarios por servicio (HT-01). Si las contrasenas estan vacias no se crean y los servicios usan DB_USER
+      AUTH_DB_USER: ${AUTH_DB_USER:-ms_auth}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-}
+      TRIBUTARIO_DB_USER: ${TRIBUTARIO_DB_USER:-ms_tributario}
+      TRIBUTARIO_DB_PASSWORD: ${TRIBUTARIO_DB_PASSWORD:-}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Solo se ejecuta al crear el volumen; para una base existente ver el README
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/roles-por-servicio.sql:/db/roles-por-servicio.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-plus_contable_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

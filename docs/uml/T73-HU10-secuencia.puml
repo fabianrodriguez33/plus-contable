@@ -1,0 +1,43 @@
+@startuml
+title T73 · HU-10 · Secuencia: cambiar el vencimiento de varias obligaciones (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\nVencimientosPage" as FE
+participant "ObligacionController" as OC
+participant "ObligacionService" as OS
+participant "ObligacionRepository" as OR
+participant "VencimientoHistorialRepository" as HR
+database "tributario_schema" as DB
+
+U -> FE : marca obligaciones y elige la nueva fecha
+FE -> OC : PATCH /api/tributario/obligaciones/vencimiento\n{obligacionIds, nuevaFecha}
+OC -> OS : cambiarVencimiento(dto)
+OS -> OS : exige al menos un id y la nueva fecha
+alt faltan datos
+  OS --> FE : 400 "Faltan o son inválidos: ..."
+end
+OS -> OR : findAllById(ids distintos)
+OR --> OS : obligaciones
+alt alguna no existe
+  OS --> FE : 404 "Obligación no encontrada"
+end
+OS -> OS : revisa cada una:\nya DECLARADO, o nuevaFecha anterior al periodo
+alt hay rechazos
+  OS --> FE : 400 "No se cambió ninguna fecha: ..."
+else sin rechazos
+  loop por cada obligación con fecha distinta
+    OS -> HR : save(fechaAnterior, fechaNueva)
+    HR -> DB : INSERT vencimientos_historial
+    OS -> OS : setFechaVencimiento(nuevaFecha)
+  end
+  OS -> OR : saveAll(obligaciones)
+  OR -> DB : UPDATE obligaciones
+  OS --> OC : List<ObligacionDto>
+  OC --> FE : 200
+  FE --> U : muestra los nuevos vencimientos
+end
+
+footer Fuente: ObligacionService.cambiarVencimiento, ObligacionController, VencimientosPage.tsx (develop 6db0036)
+@enduml

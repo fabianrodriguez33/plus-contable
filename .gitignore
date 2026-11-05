@@ -1,33 +1,16 @@
-# Java/Spring Boot
-target/
-*.class
-*.jar
-*.war
-.mvn/
-
-# Node.js/React
 node_modules/
 dist/
-build/
-.vite/
-.env
-.env.local
-
-# Kotlin/Android
-.gradle/
-build/
-*.iml
-.idea/
-local.properties
-*.apk
-
-# Python
-__pycache__/
-*.py[cod]
-venv/
-.env
-
-# General
-.DS_Store
-Thumbs.db
+target/
+uploads/
 *.log
+.idea/
+.vscode/
+
+# Padron reducido del RUC de SUNAT (~394 MB zip, ~1.6 GB txt): nunca se versiona
+padron_reducido_*
+*padron*.zip
+*padron*.txt
+data/padron/
+
+# Secretos locales (la plantilla es .env.example)
+.env

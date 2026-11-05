@@ -1,0 +1,53 @@
+@startuml
+title T7 · HT-03 · Secuencia de autenticación y validación del token (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Usuario del estudio" as U
+participant "frontend-web\n(LoginPage, authService,\napiClient)" as FE
+participant "ms-auth\nAuthController" as AC
+participant "AuthService" as AS
+database "auth_schema" as DBA
+participant "JwtProvider" as JP
+participant "ms-tributario\nJwtFilter" as TF
+participant "SecurityConfig\n(matriz de roles)" as SC
+participant "Controller\nde ms-tributario" as TC
+
+== Inicio de sesión ==
+U -> FE : usuario y contraseña
+FE -> AC : POST /api/auth/login {username, password}
+AC -> AS : login(request, ip)
+AS -> DBA : busca usuario, valida activo y bloqueo,\ncompara hash BCrypt, escribe bitacora_seguridad
+AS -> JP : generate(username, roles)
+JP --> AS : JWT HS256 {sub, roles, iat, exp = +8 h}
+AS --> AC : LoginResponse {token, "Bearer", expiraEnSegundos, usuario}
+AC --> FE : 200
+FE -> FE : guarda token y usuario en localStorage
+
+== Llamada protegida a ms-tributario ==
+FE -> TF : GET /api/tributario/... \nAuthorization: Bearer <JWT>
+TF -> TF : verifica firma y exp con el secreto compartido\n(JWT_SECRET); roles -> ROLE_<rol>
+alt token ausente, vencido, alterado o malformado
+  TF --> FE : 401
+else token válido
+  TF -> SC : ¿el rol puede usar esta ruta y método?
+  alt rol no permitido
+    SC --> FE : 403
+  else rol permitido
+    SC -> TC : ejecuta
+    TC --> FE : 200 (o 400/404/409 con {"mensaje": ...})
+  end
+end
+
+note over TF
+  ms-tributario no consulta a ms-auth: comparte solo el secreto del JWT.
+  El mismo esquema aplica a GET /api/auth/me en ms-auth.
+end note
+note over JP
+  Roles sembrados en auth_schema: ADMIN y CONTADOR.
+  CLIENTE_MYPE lo reconoce SecurityConfig de ms-tributario,
+  pero no existe en auth_schema.roles.
+end note
+
+footer Fuente: AuthService, JwtProvider, ms-tributario JwtFilter y SecurityConfig, apiClient.ts (develop 6db0036)
+@enduml

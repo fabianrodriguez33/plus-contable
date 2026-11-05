@@ -1,0 +1,55 @@
+@startuml
+title T22 · HU-36 · Actividad: iniciar sesión (código de develop)
+skinparam shadowing false
+
+|Usuario|
+start
+:Escribe usuario y contraseña
+y pulsa Ingresar;
+
+|frontend-web|
+:authService.login() envía
+POST /api/auth/login;
+
+|ms-auth|
+if (¿Existe el usuario?) then (no)
+  :Bitácora LOGIN_FALLIDO\n401 "Usuario o contraseña incorrectos";
+  stop
+endif
+if (¿Está activo?) then (no)
+  :Bitácora LOGIN_RECHAZADO\n403 "Usuario inactivo";
+  stop
+endif
+if (¿Tiene bloqueo vigente?) then (sí)
+  :Bitácora LOGIN_BLOQUEADO\n423 con los minutos restantes;
+  stop
+endif
+:Si el bloqueo ya venció,\nreinicia el contador de intentos;
+if (¿La contraseña coincide con el hash BCrypt?) then (no)
+  :Suma 1 al contador de intentos fallidos;
+  if (¿Llegó a 5 intentos?) then (sí)
+    :Bloquea la cuenta 15 minutos\nBitácora CUENTA_BLOQUEADA\n423;
+  else (no)
+    :Bitácora LOGIN_FALLIDO\n401 "Usuario o contraseña incorrectos";
+  endif
+  stop
+endif
+:Reinicia intentos y bloqueo\nBitácora LOGIN_EXITOSO;
+:Genera el JWT con usuario y roles\n(HS256, vence en 8 horas);
+:Responde 200 con token y usuario;
+
+|frontend-web|
+:Guarda el token y el usuario en localStorage;
+:Navega a la pantalla principal "/";
+
+|Usuario|
+stop
+
+|frontend-web|
+note right
+  Ante cualquier error LoginPage muestra el mensaje
+  del servidor y no guarda sesión.
+end note
+
+footer Fuente: AuthService.login, JwtProvider, LoginPage.tsx, authService.ts (develop 6db0036)
+@enduml

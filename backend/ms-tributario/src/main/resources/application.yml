@@ -1,0 +1,54 @@
+server:
+  port: 8082
+
+spring:
+  config:
+    # .env en la raiz del repo (ver .env.example); las variables del sistema tienen prioridad
+    import: optional:file:./.env[.properties],optional:file:../../.env[.properties]
+  application:
+    name: ms-tributario
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/plus_contable_db}
+    # Usuario propio del servicio (HT-01); si no se define, usa DB_USER y DB_PASSWORD
+    username: ${TRIBUTARIO_DB_USER:${DB_USER}}
+    password: ${TRIBUTARIO_DB_PASSWORD:${DB_PASSWORD}}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+app:
+  jwt:
+    # Debe ser identico al de ms-auth
+    secret: ${JWT_SECRET}
+  aes:
+    secret-key: ${AES_SECRET_KEY}
+    # IV fijo del cifrado antiguo (CBC): solo para leer valores sin prefijo v2:
+    legacy-iv: ${AES_IV}
+  cors:
+    allowed-origins: http://localhost:5173
+  storage:
+    dir: ./uploads
+  tributario:
+    # UIT por anio, en soles, tomada del decreto supremo del MEF de cada anio. Sin montos en el repositorio:
+    # se carga por entorno (por ejemplo APP_TRIBUTARIO_UIT_2026). Sin UIT de un anio no se evalua la quinta.
+    # La quinta categoria sigue apagada hasta que Beto confirme unidad y formula de proyeccion
+    # (quinta-activa y quinta-sueldos-al-anio).
+    # ESSALUD tambien apagado hasta confirmar la regla del estudio.
+    essalud-activo: false
+    quinta-activa: false
+    quinta-umbral-uit: 7
+  ruc:
+    # Proveedor de la consulta de RUC (HU-01). Para cambiarlo: otra implementacion de ConsultaRuc y este valor
+    proveedor: openruc
+    openruc:
+      base-url: ${OPENRUC_BASE_URL:https://openruc.com}
+      connect-timeout-ms: 2000
+      read-timeout-ms: ${OPENRUC_TIMEOUT_MS:3000}

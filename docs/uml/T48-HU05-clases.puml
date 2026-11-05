@@ -1,0 +1,78 @@
+@startuml
+!pragma layout smetana
+title T48 · HU-05 · Clases del acuerdo de servicio y el historial de honorarios (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class AcuerdoController {
+  +vigente(clienteId): AcuerdoDto
+  +guardar(clienteId, dto): AcuerdoDto
+}
+
+class AcuerdoService {
+  +vigente(clienteId): AcuerdoDto
+  +guardar(clienteId, dto): AcuerdoDto
+  -validar(dto)
+  -exigirCliente(clienteId)
+}
+
+class AcuerdoServicio {
+  id: Long
+  clienteId: Long
+  serviciosContratados: String
+  honorarioMensual: BigDecimal
+  honorarioDesde: LocalDate
+  fechaInicio: LocalDate
+}
+
+class HonorarioHistorial {
+  id: Long
+  acuerdoId: Long
+  monto: BigDecimal
+  vigenteDesde: LocalDate
+  vigenteHasta: LocalDate
+}
+
+class AcuerdoDto <<record>> {
+  id, serviciosContratados, honorarioMensual,
+  honorarioDesde, fechaInicio
+  historial: List<Historial>
+}
+
+class "AcuerdoDto.Historial" as HistorialDto <<record>> {
+  monto
+  vigenteDesde
+  vigenteHasta
+}
+
+interface AcuerdoRepository {
+  findByClienteId(clienteId)
+}
+interface HonorarioHistorialRepository {
+  findByAcuerdoIdOrderByVigenteDesdeDesc(acuerdoId)
+}
+interface ClienteRepository {
+  existsById(id)
+}
+
+AcuerdoController --> AcuerdoService
+AcuerdoController ..> AcuerdoDto
+AcuerdoService --> AcuerdoRepository
+AcuerdoService --> HonorarioHistorialRepository
+AcuerdoService --> ClienteRepository : el cliente debe existir
+AcuerdoRepository ..> AcuerdoServicio
+HonorarioHistorialRepository ..> HonorarioHistorial
+AcuerdoDto *-- "0..*" HistorialDto
+AcuerdoServicio "0..1" --> "1" Cliente : cliente_id (único)
+AcuerdoServicio "1" <-- "0..*" HonorarioHistorial : acuerdo_id
+
+note bottom of AcuerdoService
+  guardar(): sin acuerdo previo crea uno con honorarioDesde = fechaInicio.
+  Con acuerdo previo y honorario distinto: honorarioDesde de la entrada (hoy si
+  no viene) debe ser posterior al vigente; archiva el monto anterior en
+  HonorarioHistorial (vigenteHasta = nuevo desde - 1 día) y fija el nuevo.
+  validar(): honorarioMensual > 0 y fechaInicio obligatorios.
+end note
+
+footer Fuente: AcuerdoController, AcuerdoService, AcuerdoDto, model.AcuerdoServicio, model.HonorarioHistorial (develop 6db0036)
+@enduml
