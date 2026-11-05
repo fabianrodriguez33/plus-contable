@@ -10,12 +10,32 @@ Sistema Web y Móvil para la Centralización y Control de Obligaciones Tributari
 ## Stack Tecnológico
 - **Backend:** Spring Boot (ms-auth, ms-tributario)
 - **Frontend Web:** React + TypeScript + Vite
-- **Frontend Móvil:** Kotlin Multiplatform + Compose
+- **Frontend Móvil:** Kotlin Multiplatform + Compose (planificado, sin código aún)
 - **Base de Datos:** PostgreSQL
-- **RPA:** Python + Selenium/Puppeteer
+- **RPA:** Python + Selenium/Puppeteer (planificado, sin código aún)
 
 ## Cliente
 V&F Asesores Empresarial - Sr. Villegas Calizaya Juvencio Ausberto
+
+## Estado del Sprint 1
+
+Cierre del Sprint 1 al 05/11/2026. Una tarea o historia cuenta como hecha solo si está **fusionada en `develop`**. La aceptación del cliente (Beto) sigue pendiente de revisión en todas las historias.
+
+**Qué hay hecho:** 11 de 15 historias (62 de 85 puntos) y 79 de 94 tareas: ficha maestra del cliente, socios y capital, nómina de trabajadores, expediente de documentos, acuerdo de honorarios, programación mensual de obligaciones, calendario de vencimientos, registro de la declaración, variación del vencimiento, y los permisos por perfil con el aislamiento entre clientes. Funciona en `ms-auth`, `ms-tributario` y `frontend-web`. No existe código de la app móvil ni del RPA.
+
+**Pendiente, apagado o incompleto:**
+
+- **ESSALUD:** no se genera (`app.tributario.essalud-activo = false`); la pantalla de programación dice «Pendiente de confirmar la regla del estudio».
+- **Quinta categoría:** no se genera (`app.tributario.quinta-activa = false`); dice «Pendiente de regla de proyección». La UIT de cada año se carga desde el entorno: el repositorio no trae ningún monto.
+- **AFP:** nunca se genera, porque tiene su propio cronograma y aún no lo tenemos.
+- **HU-07:** falta el criterio «con régimen y RUC registrados, se generan los vencimientos del mes» y la tarea 58.
+- **HU-36:** no hay endpoint de cierre de sesión (`POST /api/auth/logout` responde 404): el token sigue válido hasta vencer (8 horas) y solo se descarta en el navegador. Faltan las tareas 24 y 25.
+- **HU-13 (constancia de pago) y HU-37 (acceso del cliente):** sin empezar.
+- **Cuentas de cliente:** el rol `CLIENTE_MYPE` y el claim `clienteId` existen en `ms-auth`, pero todavía no hay forma de crear cuentas de cliente (HU-37).
+- **HU-38:** la matriz de permisos ([docs/HU-38-matriz-de-permisos.md](docs/HU-38-matriz-de-permisos.md)) está pendiente de validar con Beto, y también si a un cliente que pide datos de otra empresa se le responde 403 (hoy) o 404.
+- **No incluido en esta entrega:** las correcciones de UML de Ricardo (PR #17), el rediseño visual (PR #21, en borrador) y la rama `feature/HU-13-pago`.
+
+Las cifras exactas de pruebas de cada cambio están en la descripción de su PR; los incidentes del sprint, en la bitácora de Incidencias del equipo (fuera del repositorio). El trabajo de Jeanpierre está detallado en [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).
 
 ## Cómo levantar el entorno de desarrollo
 
