@@ -1,0 +1,98 @@
+@startuml
+!pragma layout smetana
+title HU-38 · Clases del control por perfil y del aislamiento entre clientes (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+package "ms-auth" {
+  class AuthService {
+    +login(request, ip): LoginResponse
+    +me(username): UserDto
+  }
+  class JwtProvider {
+    +generate(username, roles): String
+    +generate(username, roles, clienteId): String
+    +parse(token): Claims
+  }
+  class Usuario {
+    username: String
+    nombreCompleto: String
+    activo: boolean
+    clienteId: Long
+    roles: Set<Rol>
+  }
+  class Rol {
+    nombre: String
+    descripcion: String
+  }
+  interface UsuarioRepository {
+    +findByUsername(username): Optional<Usuario>
+  }
+}
+
+package "ms-tributario · config" {
+  class SecurityConfig {
+    ~ESTUDIO: String[]
+    ~ESTUDIO_Y_CLIENTE: String[]
+    +filterChain(http, jwtFilter): SecurityFilterChain
+  }
+  class JwtFilter {
+    #doFilterInternal(request, response, chain): void
+  }
+  class DatosToken <<record>> {
+    clienteId: Long
+  }
+  class AccesoCliente {
+    +{static} exigir(clienteIdPedido): void
+  }
+}
+
+package "ms-tributario · controller" {
+  class TrabajadorController {
+    +listar(clienteId)
+  }
+  class DocumentoController {
+    +listar(clienteId)
+    +descargar(clienteId, id)
+  }
+  class AcuerdoController {
+    +vigente(clienteId)
+  }
+  class ObligacionController {
+    +listar(clienteId)
+    +buscar(id)
+  }
+}
+
+AuthService --> UsuarioRepository
+AuthService --> JwtProvider : generate(username, roles, clienteId)
+UsuarioRepository ..> Usuario
+Usuario "*" -- "*" Rol : usuario_roles
+SecurityConfig --> JwtFilter : lo antepone al filtro de usuario y clave
+JwtFilter ..> DatosToken : guarda el clienteId del token en la autenticación
+AccesoCliente ..> DatosToken : lee el clienteId de la sesión
+TrabajadorController ..> AccesoCliente : exigir(clienteId)
+DocumentoController ..> AccesoCliente : exigir(clienteId)
+AcuerdoController ..> AccesoCliente : exigir(clienteId)
+ObligacionController ..> AccesoCliente : exigir(clienteId o el de la obligación)
+
+note bottom of JwtProvider
+  El token lleva sub y roles. Solo la cuenta de un cliente
+  (Usuario.clienteId no nulo) lleva además el claim clienteId.
+  ms-tributario no consulta auth_schema: confía en el token.
+end note
+
+note top of SecurityConfig
+  CLIENTE_MYPE solo entra a seis rutas de lectura (ESTUDIO_Y_CLIENTE):
+  trabajadores, documentos, archivo del documento, acuerdo,
+  obligaciones del cliente y una obligación por id.
+  Todo lo demás es solo del estudio (ESTUDIO: CONTADOR y ADMIN).
+end note
+
+note bottom of AccesoCliente
+  Estudio (CONTADOR, ADMIN): sin restricción. CLIENTE_MYPE: solo si el clienteId de su token
+  es el pedido. Si es otro, o el token no trae clienteId, lanza AccessDeniedException (403).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ms-auth (AuthService, JwtProvider, Usuario, Rol) y ms-tributario (SecurityConfig, JwtFilter, DatosToken, AccesoCliente, controllers)
+@enduml

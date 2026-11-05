@@ -32,6 +32,16 @@ No se hacen diagramas de casos de uso (indicación del profesor: el proyecto se 
 | 73 | HU-10 | [`T73-HU10-secuencia`](T73-HU10-secuencia.puml) · [png](img/T73-HU10-secuencia.png) | `ObligacionController.cambiarVencimiento`, `ObligacionService.cambiarVencimiento`, `VencimientoHistorial`, `VencimientoHistorialRepository` | `ObligacionServiceTest` |
 | 62 | HU-08 | [`T62-HU08-secuencia-calendario`](T62-HU08-secuencia-calendario.puml) · [png](img/T62-HU08-secuencia-calendario.png) | `CalendarioController`, `CalendarioService`, `CalendarioObligacionDto`, `VencimientoTributario`, `ObligacionService.listar`, `SecurityConfig`. Código de `develop` en el commit `5adfb88` (PR #5 fusionado) | `CalendarioServiceTest`, `CalendarioPermisosTest`, `VencimientoTributarioTest` |
 
+## Bloque 3 — diagramas documentados el 05/11/2026 a partir del código de `develop` (commit `0406de0`)
+
+Estándar para las historias hechas: clases, secuencia y entidad-relación por historia (HT-01 y HT-03 con las excepciones indicadas en cada fila). Se documentaron **después** de escribir el código, el 05/11/2026; no son diseños previos. Cada diagrama lleva en su pie la leyenda «Documentado el 05/11/2026 a partir del código de develop (commit …)» y se verificó con un script que comprueba que cada clase, método, campo, tabla y columna dibujados existen en ese commit.
+
+| Historia | Diagrama | Clases y archivos que lo respaldan | Pruebas relacionadas (en `develop`) |
+|---|---|---|---|
+| HU-38 | [`HU38-clases`](HU38-clases.puml) · [png](img/HU38-clases.png) | ms-auth: `AuthService`, `JwtProvider`, `Usuario`, `Rol`, `UsuarioRepository`. ms-tributario: `SecurityConfig`, `JwtFilter`, `DatosToken`, `AccesoCliente`, `TrabajadorController`, `DocumentoController`, `AcuerdoController`, `ObligacionController` | `PermisosPorRolTest`, `PermisosRutasDelEstudioTest`, `AccesoClienteTest`, `JwtProviderTest`, `ContratoTokenTest`, `AuthServiceTest`, `TokenEntreServiciosTest` |
+| HU-38 | [`HU38-secuencia-acceso-cliente`](HU38-secuencia-acceso-cliente.puml) · [png](img/HU38-secuencia-acceso-cliente.png) | `AuthController.login`, `AuthService.login`, `JwtProvider.generate`, `JwtFilter.doFilterInternal`, `SecurityConfig.filterChain`, `DocumentoController.listar`, `AccesoCliente.exigir`, `ExpedienteService.listar` | `PermisosPorRolTest`, `AccesoClienteTest`, `AuthServiceTest`, `ContratoTokenTest` |
+| HU-38 | [`HU38-er-usuarios-roles`](HU38-er-usuarios-roles.puml) · [png](img/HU38-er-usuarios-roles.png) | `ms-auth/src/main/resources/schema.sql` (`usuarios.cliente_id`, `roles`, `usuario_roles`), `Usuario`, `Rol` | `ClienteMypeEsquemaPostgresTest`, `AuthServiceTest` |
+
 ## Lo que el diseño no puede respaldar con código
 
 - **Roles:** `CLIENTE_MYPE` aparece en `SecurityConfig` de ms-tributario, pero no se siembra en `auth_schema.roles`. Hoy no existe ninguna cuenta con ese rol.
