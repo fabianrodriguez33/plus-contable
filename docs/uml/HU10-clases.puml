@@ -1,0 +1,72 @@
+@startuml
+!pragma layout smetana
+title HU-10 · Clases del cambio de vencimiento y su historial (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class ObligacionController {
+  +cambiarVencimiento(dto): List<ObligacionDto>
+}
+
+class ObligacionService {
+  +cambiarVencimiento(dto): List<ObligacionDto>
+}
+
+class CambioVencimientoDto <<record>> {
+  obligacionIds: List<Long>
+  nuevaFecha: LocalDate
+}
+
+class Obligacion {
+  id: Long
+  clienteId: Long
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+}
+
+class VencimientoHistorial {
+  id: Long
+  obligacionId: Long
+  fechaAnterior: LocalDate
+  fechaNueva: LocalDate
+}
+
+class ObligacionDto <<record>> {
+  id: Long
+  clienteId: Long
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+}
+
+interface ObligacionRepository {
+  findByClienteIdOrderByPeriodoDesc(clienteId)
+}
+interface VencimientoHistorialRepository {
+  findByObligacionIdOrderByCambiadoEnDesc(obligacionId)
+}
+
+ObligacionController --> ObligacionService
+ObligacionController ..> CambioVencimientoDto
+ObligacionService --> ObligacionRepository
+ObligacionService --> VencimientoHistorialRepository
+ObligacionService ..> ObligacionDto
+ObligacionRepository ..> Obligacion
+VencimientoHistorialRepository ..> VencimientoHistorial
+Obligacion "1" <-- "0..*" VencimientoHistorial : obligacion_id
+
+note bottom of ObligacionService
+  cambiarVencimiento(): cambia la fecha límite de una o varias obligaciones, todas o ninguna.
+  Exige al menos un id y la nueva fecha. Rechaza (400) si alguna ya está DECLARADO o si la nueva fecha
+  es anterior a su periodo; si algún id no existe, 404. Por cada obligación con fecha distinta guarda la
+  fecha anterior y la nueva en vencimientos_historial.
+end note
+
+note right of ObligacionController
+  Solo el estudio (CONTADOR, ADMIN) puede cambiar vencimientos:
+  PATCH /api/tributario/obligaciones/vencimiento.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ObligacionController, ObligacionService, CambioVencimientoDto, model.Obligacion, model.VencimientoHistorial
+@enduml

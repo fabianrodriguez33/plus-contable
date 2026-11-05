@@ -1,0 +1,44 @@
+@startuml
+!pragma layout smetana
+title HU-08 · Modelo de datos que lee el calendario de vencimientos (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.obligaciones" as obligaciones {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+    tipo_obligacion : VARCHAR(30)
+  * periodo : DATE
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO = PENDIENTE
+    fecha_declaracion : DATE
+    numero_formulario : VARCHAR(30)
+    monto_determinado : NUMERIC(14,2)
+  UNIQUE (cliente_id, tipo_obligacion, periodo)
+}
+
+clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
+
+note bottom of obligaciones
+  El calendario solo lee obligaciones del cliente y filtra en memoria por fecha, periodo, estado y situación.
+  No consulta cronograma_tributario: las fechas ya se guardaron al programar las obligaciones (HU-07).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

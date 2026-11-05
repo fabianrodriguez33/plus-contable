@@ -1,0 +1,90 @@
+@startuml
+!pragma layout smetana
+title HU-09 · Clases de la declaración de una obligación (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class ObligacionController {
+  +buscar(id): ObligacionDto
+  +declarar(id, dto): ObligacionDto
+}
+
+class ObligacionService {
+  +buscar(obligacionId): ObligacionDto
+  +declarar(obligacionId, dto): ObligacionDto
+  -obtener(obligacionId): Obligacion
+}
+
+class AccesoCliente {
+  +{static} exigir(clienteIdPedido): void
+}
+
+class Obligacion {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+}
+
+enum "Obligacion.Estado" as Estado {
+  PENDIENTE
+  DECLARADO
+}
+
+enum TipoObligacion {
+  IGV
+  RENTA
+  PLAME
+  ESSALUD
+  RETENCION_QUINTA
+  AFP
+}
+
+class DeclaracionDto <<record>> {
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+}
+
+class ObligacionDto <<record>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+  +{static} from(o): ObligacionDto
+}
+
+interface ObligacionRepository {
+  findByClienteIdOrderByPeriodoDesc(clienteId)
+}
+
+ObligacionController --> ObligacionService
+ObligacionController ..> DeclaracionDto
+ObligacionController ..> ObligacionDto
+ObligacionController ..> AccesoCliente : exigir(clienteId de la obligación) al buscar
+ObligacionService --> ObligacionRepository
+ObligacionService ..> ObligacionDto
+ObligacionRepository ..> Obligacion
+Obligacion --> Estado
+Obligacion --> TipoObligacion
+Obligacion "0..*" --> "1" Cliente : cliente_id
+
+note bottom of ObligacionService
+  declarar(): solo una obligación PENDIENTE (si no, 400 "La obligación ya fue declarada").
+  Exige fecha de declaración (no futura ni anterior al periodo), número de formulario
+  (hasta 30 caracteres) y monto determinado (no negativo); todos los errores van juntos en un 400.
+  Pasa el estado de PENDIENTE a DECLARADO. El comentario del código indica que HU-13 parte de este estado.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ObligacionController, ObligacionService, DeclaracionDto, ObligacionDto, model.Obligacion, TipoObligacion, AccesoCliente
+@enduml

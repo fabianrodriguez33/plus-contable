@@ -1,0 +1,54 @@
+@startuml
+!pragma layout smetana
+title HU-10 · Modelo de datos del cambio de vencimiento y su historial (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.obligaciones" as obligaciones {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+    tipo_obligacion : VARCHAR(30)
+  * periodo : DATE
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO = PENDIENTE
+    fecha_declaracion : DATE
+    numero_formulario : VARCHAR(30)
+    monto_determinado : NUMERIC(14,2)
+  UNIQUE (cliente_id, tipo_obligacion, periodo)
+}
+
+entity "tributario_schema.vencimientos_historial" as vencimientos_historial {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * fecha_anterior : DATE
+  * fecha_nueva : DATE
+  * cambiado_en : TIMESTAMP = ahora
+}
+
+clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
+obligaciones ||--o{ vencimientos_historial : obligacion_id, ON DELETE CASCADE
+
+note bottom of vencimientos_historial
+  Cada cambio de fecha guarda la fecha anterior y la nueva con el momento del cambio.
+  No se cambia el vencimiento de una obligación DECLARADO.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml
