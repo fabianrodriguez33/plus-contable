@@ -4,147 +4,161 @@ title T1 · HT-01 · Modelo de datos de tributario_schema (schema.sql de ms-trib
 skinparam shadowing false
 hide circle
 
-entity "clientes" as clientes {
+entity "tributario_schema.clientes" as clientes {
   * id : BIGSERIAL <<PK>>
   --
-  * ruc : VARCHAR(11) <<UNIQUE>> (11 dígitos)
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
   * razon_social : VARCHAR(200)
   * regimen_tributario : MYPE | REMIPE | GENERAL
-  * condicion_habido : HABIDO | NO_HABIDO
-  direccion, telefono, email
-  * activo : BOOLEAN
-  * creado_en : TIMESTAMP
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
 }
 
-entity "credenciales_sol" as credenciales {
+entity "tributario_schema.credenciales_sol" as credenciales_sol {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK, UNIQUE>>
   * usuario_sol_cifrado : VARCHAR(300)
   * clave_sol_cifrada : VARCHAR(300)
-  * actualizado_en : TIMESTAMP
+  * actualizado_en : TIMESTAMP = ahora
 }
 
-entity "documentos_legales" as documentos {
+entity "tributario_schema.documentos_legales" as documentos_legales {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
   * tipo : MINUTA | COPIA_LITERAL | VIGENCIA_PODERES | FICHA_RUC
-  * version : INT
+  * version : INT = 1
   * fecha_emision : DATE
-  * nombre_archivo, content_type
+  * nombre_archivo : VARCHAR(255)
+  * content_type : VARCHAR(100)
   * tamano_bytes : BIGINT
   * ruta_almacenamiento : VARCHAR(400)
-  * subido_en : TIMESTAMP
+  * subido_en : TIMESTAMP = ahora
   UNIQUE (cliente_id, tipo, version)
 }
 
-entity "socios" as socios {
+entity "tributario_schema.socios" as socios {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
-  * nombre_completo, tipo_documento, numero_documento
-  * aporte : NUMERIC(14,2) >= 0
-  * porcentaje : NUMERIC(5,2) (0, 100]
-  cargo : VARCHAR(80)
+  * nombre_completo : VARCHAR(200)
+  * tipo_documento : VARCHAR(10) = DNI
+  * numero_documento : VARCHAR(20)
+  * aporte : NUMERIC(14,2) = 0  CHECK (aporte >= 0)
+  * porcentaje : NUMERIC(5,2)  CHECK (porcentaje > 0 AND porcentaje <= 100)
+    cargo : VARCHAR(80)
 }
 
-entity "activos_fijos" as activos {
+entity "tributario_schema.activos_fijos" as activos_fijos {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
-  codigo, categoria
+    codigo : VARCHAR(40)
   * descripcion : VARCHAR(250)
-  * valor_adquisicion : NUMERIC(14,2)
-  fecha_adquisicion : DATE
+    categoria : VARCHAR(80)
+  * valor_adquisicion : NUMERIC(14,2)  CHECK (valor_adquisicion >= 0)
+    fecha_adquisicion : DATE
 }
 
-entity "trabajadores" as trabajadores {
+entity "tributario_schema.trabajadores" as trabajadores {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
-  * nombre_completo
+  * nombre_completo : VARCHAR(200)
   * tipo_documento : DNI | CE | PASAPORTE | PTP
-  * numero_documento
-  * extranjero : BOOLEAN
-  nacionalidad
+  * numero_documento : VARCHAR(20)
+  * extranjero : BOOLEAN = false
+    nacionalidad : VARCHAR(60)
+    regimen_laboral : MYPE | REMIPE | GENERAL
   * sistema_pensionario : ONP | AFP
-  nombre_afp
+    nombre_afp : VARCHAR(60)
   * fecha_ingreso : DATE
-  remuneracion : NUMERIC(12,2)
-  tipo_contrato, fecha_inicio_contrato, fecha_fin_contrato
+    remuneracion : NUMERIC(12,2)  CHECK (remuneracion >= 0)
+  * registro_sunafil : BOOLEAN = false
+  * registro_mtpe : BOOLEAN = false
+  * essalud : BOOLEAN = false
+  * quinta_categoria : BOOLEAN = false
+    tipo_contrato : VARCHAR(40)
+    fecha_inicio_contrato : DATE
+    fecha_fin_contrato : DATE
   UNIQUE (cliente_id, tipo_documento, numero_documento)
 }
 
-entity "acuerdos_servicio" as acuerdos {
+entity "tributario_schema.acuerdos_servicio" as acuerdos_servicio {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK, UNIQUE>>
-  servicios_contratados : VARCHAR(1000)
-  * honorario_mensual : NUMERIC(12,2) > 0
+    servicios_contratados : VARCHAR(1000)
+  * honorario_mensual : NUMERIC(12,2)  CHECK (honorario_mensual > 0)
   * honorario_desde : DATE
   * fecha_inicio : DATE
 }
 
-entity "honorarios_historial" as honorarios {
+entity "tributario_schema.honorarios_historial" as honorarios_historial {
   * id : BIGSERIAL <<PK>>
   --
   * acuerdo_id : BIGINT <<FK>>
   * monto : NUMERIC(12,2)
-  * vigente_desde, vigente_hasta : DATE
+  * vigente_desde : DATE
+  * vigente_hasta : DATE
 }
 
-entity "obligaciones" as obligaciones {
+entity "tributario_schema.obligaciones" as obligaciones {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
-  tipo_obligacion : IGV | RENTA | PLAME | ESSALUD |\n RETENCION_QUINTA | AFP (nulo en filas antiguas)
-  * periodo : DATE (primer día del mes)
+    tipo_obligacion : VARCHAR(30)
+  * periodo : DATE
   * fecha_vencimiento : DATE
-  * estado : PENDIENTE | DECLARADO
-  fecha_declaracion : DATE
-  numero_formulario : VARCHAR(30)
-  monto_determinado : NUMERIC(14,2)
+  * estado : PENDIENTE | DECLARADO = PENDIENTE
+    fecha_declaracion : DATE
+    numero_formulario : VARCHAR(30)
+    monto_determinado : NUMERIC(14,2)
   UNIQUE (cliente_id, tipo_obligacion, periodo)
 }
 
-entity "vencimientos_historial" as venc_hist {
+entity "tributario_schema.vencimientos_historial" as vencimientos_historial {
   * id : BIGSERIAL <<PK>>
   --
   * obligacion_id : BIGINT <<FK>>
   * fecha_anterior : DATE
   * fecha_nueva : DATE
-  * cambiado_en : TIMESTAMP
+  * cambiado_en : TIMESTAMP = ahora
 }
 
-entity "cronograma_tributario" as cronograma {
-  * periodo_tributario : DATE (día 1)
+entity "tributario_schema.cronograma_tributario" as cronograma_tributario {
+  * periodo_tributario : DATE  CHECK (EXTRACT(DAY FROM periodo_tributario) = 1)
   * ultimo_digito_ruc : VARCHAR(20)
-  --
   * fecha_vencimiento : DATE
   UNIQUE (periodo_tributario, ultimo_digito_ruc)
 }
 
-clientes ||--o| credenciales
-clientes ||--o{ documentos
-clientes ||--o{ socios
-clientes ||--o{ activos
-clientes ||--o{ trabajadores
-clientes ||--o| acuerdos
-acuerdos ||--o{ honorarios
-clientes ||--o{ obligaciones
-obligaciones ||--o{ venc_hist
-
-note bottom of cronograma
-  Sin clave foránea: es una tabla de consulta que se carga desde
-  cronograma_sunat_2026.csv (84 filas = 12 periodos x 7 grupos).
-  Ningún flujo del alta de obligaciones la consulta hoy.
-end note
+clientes ||--o| credenciales_sol : cliente_id, ON DELETE CASCADE
+clientes ||--o{ documentos_legales : cliente_id, ON DELETE CASCADE
+clientes ||--o{ socios : cliente_id, ON DELETE CASCADE
+clientes ||--o{ activos_fijos : cliente_id, ON DELETE CASCADE
+clientes ||--o{ trabajadores : cliente_id, ON DELETE CASCADE
+clientes ||--o| acuerdos_servicio : cliente_id, ON DELETE CASCADE
+acuerdos_servicio ||--o{ honorarios_historial : acuerdo_id, ON DELETE CASCADE
+clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
+obligaciones ||--o{ vencimientos_historial : obligacion_id, ON DELETE CASCADE
 
 note top of clientes
   Todas las claves foráneas a clientes son ON DELETE CASCADE.
   Las Claves SOL se guardan cifradas (AES/GCM, prefijo v2:).
 end note
 
-footer Fuente: backend/ms-tributario/src/main/resources/schema.sql (develop 6db0036)
+note bottom of cronograma_tributario
+  Sin clave foránea: tabla de consulta cargada desde cronograma_sunat_2026.csv al arrancar
+  (84 filas = 12 periodos x 7 grupos de RUC, incluido BUEN_CONTRIB_UESP).
+  La lee CronogramaConsultaService para la programación mensual (HU-07).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
 @enduml

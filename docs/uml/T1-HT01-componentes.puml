@@ -19,13 +19,16 @@ node "ms-auth  (Spring Boot 3.3.5, Java 21)  :8081" {
 }
 
 node "ms-tributario  (Spring Boot 3.3.5, Java 21)  :8082" {
-  component "Controllers\nCliente, Socio, Trabajador,\nDocumento, Acuerdo, Obligacion, Health" as TC
-  component "Services\nCliente, Socio, Trabajador, Expediente,\nAcuerdo, Obligacion, ObligacionProgramacion,\nPatrimonioLaboral" as TS
-  component "JwtFilter + SecurityConfig\n(matriz de permisos por rol)" as TF
+  component "Controllers\nCliente, ConsultaRuc, Socio, Trabajador,\nDocumento, Acuerdo, Obligacion,\nProgramacionMensual, Calendario, Health" as TC
+  component "Services\nCliente, ConsultaRuc, Socio, Trabajador,\nExpediente, Acuerdo, Obligacion,\nObligacionProgramacion, ProgramacionMensual,\nCalendario, PatrimonioLaboral" as TS
+  component "JwtFilter + SecurityConfig + AccesoCliente\n(matriz de permisos por rol y\naislamiento entre clientes)" as TF
   component "AesUtil\n(Claves SOL: AES/GCM, prefijo v2:)" as AES
   component "CronogramaSunatLoader\n(carga el CSV 2026 al arrancar)" as CL
+  component "OpenRucConsulta\n(consulta de RUC)" as OR
   component "GlobalExceptionHandler" as GE
 }
+
+cloud "OpenRUC\nhttps://openruc.com" as EXT
 
 database "PostgreSQL 16\nplus_contable_db" as DB {
   folder "auth_schema" as AUTH
@@ -40,9 +43,11 @@ FE --> TC : /api/tributario/**\nAuthorization: Bearer <JWT>
 AC --> AS
 AS --> JP
 AF ..> JP
-TF ..> TC : autoriza por rol
+TF ..> TC : autoriza por rol\ny por cliente
 TC --> TS
 TS --> AES
+TS --> OR
+OR --> EXT : HTTP
 TS --> FS : guarda y lee PDF
 CL --> TRIB
 AS --> AUTH : JDBC
@@ -52,12 +57,14 @@ TS --> TRIB : JDBC
 note bottom of TF
   ms-tributario NO llama a ms-auth: valida el JWT por su cuenta con el mismo
   secreto compartido (variable JWT_SECRET). No hay llamada HTTP entre servicios.
+  El token lleva roles y, en la cuenta de un cliente, el claim clienteId.
 end note
 
 note bottom of DB
-  Una sola base y un solo usuario de conexión (postgres) para ambos servicios.
-  No existe usuario por esquema (tarea 4 pendiente).
+  Por defecto ambos servicios se conectan con DB_USER. Con AUTH_DB_USER y
+  TRIBUTARIO_DB_USER (opcionales, PR #10) cada servicio solo accede a su esquema:
+  db/roles-por-servicio.sql crea los usuarios.
 end note
 
-footer Fuente: backend/ms-auth, backend/ms-tributario, frontend-web y docker-compose.yml en develop (6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-auth, backend/ms-tributario, frontend-web, docker-compose.yml y db/
 @enduml
