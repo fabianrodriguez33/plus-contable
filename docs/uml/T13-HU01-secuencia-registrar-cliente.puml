@@ -1,10 +1,14 @@
 @startuml
-title T13 · HU-01 · Secuencia: registrar un cliente MYPE (código de develop)
+title T13 · HU-01 · Secuencia: consultar el RUC y registrar un cliente MYPE (código de develop)
 skinparam shadowing false
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\nFichaMaestraPage" as FE
+participant "frontend-web\n(FichaMaestraPage,\nDatosGeneralesTab)" as FE
+participant "ConsultaRucController" as CRC
+participant "ConsultaRucService" as CRS
+participant "OpenRucConsulta" as ORC
+participant "OpenRUC\n(servicio externo)" as EXT
 participant "ClienteController" as CC
 participant "ClienteService" as CS
 participant "RucValidator" as RV
@@ -13,21 +17,40 @@ participant "AesUtil" as AES
 participant "CredencialSolRepository" as SR
 database "tributario_schema" as DB
 
-U -> FE : completa RUC, razón social, régimen\n(y opcionalmente usuario y clave SOL)
-FE -> CC : POST /api/tributario/clientes\nAuthorization: Bearer <JWT>
-CC -> CS : crear(dto)
-CS -> RV : motivoInvalido(ruc)
+== Consulta opcional del RUC (solo sugiere datos) ==
+U -> FE : escribe el RUC y pulsa consultar
+FE -> CRC : clienteService.consultarRuc(ruc): GET /api/tributario/ruc/{ruc}/consulta
+CRC -> CRS : ConsultaRucService.consultar(ruc)
+CRS -> RV : RucValidator.motivoInvalido(ruc)
+alt RUC inválido
+  CRS --> FE : 400 con el motivo
+else el RUC no empieza con 20
+  CRS --> FE : FUERA_DE_COBERTURA: ingrese los datos manualmente
+else
+  CRS -> ORC : OpenRucConsulta.consultar(ruc)
+  ORC -> EXT : consulta HTTP
+  EXT --> ORC : datos o error
+  ORC --> CRS : Encontrado, NoEncontrado o NoDisponible
+  CRS --> FE : ConsultaRucDto: ENCONTRADO con datos sugeridos y avisos\n(estado distinto de ACTIVO o condición distinta de HABIDO),\nNO_ENCONTRADO o NO_DISPONIBLE
+end
+FE --> U : sugiere razón social, dirección y condición para que las revise
+
+== Alta del cliente ==
+U -> FE : completa RUC, razón social y régimen\n(y opcionalmente usuario y clave SOL, buen contribuyente)
+FE -> CC : clienteService.crearCliente(): POST /api/tributario/clientes\nAuthorization: Bearer <JWT>
+CC -> CS : ClienteService.crear(dto)
+CS -> RV : RucValidator.motivoInvalido(ruc)
 alt RUC inválido
   CS --> FE : 400 (ValidationException con el motivo)
 end
-CS -> CR : existsByRuc(ruc)
+CS -> CR : ClienteRepository.existsByRuc(ruc)
 alt RUC ya registrado
   CS --> FE : 400 "Ya existe un cliente registrado con el RUC ..."
 end
 CS -> CR : save(cliente)
 CR -> DB : INSERT clientes
 alt vienen usuario y clave SOL
-  CS -> AES : encrypt(usuarioSol), encrypt(claveSol)\n(AES/GCM, prefijo v2:)
+  CS -> AES : AesUtil.encrypt(usuarioSol), AesUtil.encrypt(claveSol)\n(AES/GCM, prefijo v2:)
   CS -> SR : save(credencial)
   SR -> DB : INSERT credenciales_sol (cifradas)
 else viene solo uno de los dos
@@ -38,5 +61,5 @@ CS --> CC : ClienteDto (tieneClaveSol, sin la clave)
 CC --> FE : 201 Created
 FE --> U : muestra el cliente en la ficha
 
-footer Fuente: ClienteController.crear, ClienteService.crear, RucValidator, AesUtil (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ConsultaRucController, ConsultaRucService, OpenRucConsulta, ClienteController, ClienteService, RucValidator, AesUtil, clienteService.ts
 @enduml

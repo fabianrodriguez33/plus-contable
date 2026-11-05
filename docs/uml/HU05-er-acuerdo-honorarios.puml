@@ -1,0 +1,50 @@
+@startuml
+!pragma layout smetana
+title HU-05 · Modelo de datos del acuerdo de servicio y su historial de honorarios (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.acuerdos_servicio" as acuerdos_servicio {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK, UNIQUE>>
+    servicios_contratados : VARCHAR(1000)
+  * honorario_mensual : NUMERIC(12,2)  CHECK (honorario_mensual > 0)
+  * honorario_desde : DATE
+  * fecha_inicio : DATE
+}
+
+entity "tributario_schema.honorarios_historial" as honorarios_historial {
+  * id : BIGSERIAL <<PK>>
+  --
+  * acuerdo_id : BIGINT <<FK>>
+  * monto : NUMERIC(12,2)
+  * vigente_desde : DATE
+  * vigente_hasta : DATE
+}
+
+clientes ||--o| acuerdos_servicio : cliente_id, ON DELETE CASCADE
+acuerdos_servicio ||--o{ honorarios_historial : acuerdo_id, ON DELETE CASCADE
+
+note bottom of honorarios_historial
+  Un acuerdo por cliente. Al cambiar el honorario, el anterior pasa a este historial
+  con su vigencia (vigente_hasta es el día anterior al nuevo honorario).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

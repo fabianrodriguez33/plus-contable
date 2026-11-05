@@ -1,0 +1,43 @@
+@startuml
+title HU-03 · Secuencia: registrar un trabajador (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(TrabajadoresPage,\nexpedienteService)" as FE
+participant "TrabajadorController" as TC
+participant "TrabajadorService" as TS
+participant "ClienteRepository" as CR
+participant "TrabajadorRepository" as TR
+participant "GlobalExceptionHandler" as GE
+database "tributario_schema" as DB
+
+U -> FE : completa los datos del trabajador (nacional o extranjero) y pulsa Registrar
+FE -> TC : expedienteService.registrarTrabajador(): POST /api/tributario/clientes/{id}/trabajadores\nAuthorization: Bearer <JWT>
+TC -> TS : TrabajadorService.registrar(clienteId, dto)
+TS -> CR : ClienteRepository.existsById(clienteId)
+alt el cliente no existe
+  TS --> FE : 404 "Cliente no encontrado"
+end
+TS -> TS : validar(dto): reúne todos los campos faltantes o inválidos
+note right
+  Obligatorios: nombre, tipo y número de documento, sistema pensionario y fecha de ingreso.
+  Con AFP, nombreAfp. Remuneración no negativa.
+  Si es extranjero: tipo distinto de DNI, nacionalidad, tipoContrato y fechaInicioContrato.
+end note
+alt faltan o son inválidos
+  TS --> FE : 400 "Faltan o son inválidos: ..." (todos juntos; la pantalla los resalta)
+end
+TS -> TR : save(trabajador)\n(los datos de extranjería solo si extranjero = true)
+TR -> DB : INSERT trabajadores
+alt ya existe ese tipo y número de documento en el cliente
+  DB --> GE : violación de uq_trabajadores_cliente_documento
+  GE --> FE : 409 "Ya existe un trabajador con ese tipo y número de documento en este cliente"
+else guardado
+  TS --> TC : TrabajadorDto
+  TC --> FE : 200
+  FE --> U : el trabajador aparece en la lista con su sistema pensionario
+end
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: TrabajadorController, TrabajadorService, TrabajadorRepository, GlobalExceptionHandler, TrabajadoresPage y expedienteService.ts
+@enduml

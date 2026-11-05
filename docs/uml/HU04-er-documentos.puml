@@ -1,0 +1,46 @@
+@startuml
+!pragma layout smetana
+title HU-04 · Modelo de datos del expediente de documentos legales (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.documentos_legales" as documentos_legales {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : MINUTA | COPIA_LITERAL | VIGENCIA_PODERES | FICHA_RUC
+  * version : INT = 1
+  * fecha_emision : DATE
+  * nombre_archivo : VARCHAR(255)
+  * content_type : VARCHAR(100)
+  * tamano_bytes : BIGINT
+  * ruta_almacenamiento : VARCHAR(400)
+  * subido_en : TIMESTAMP = ahora
+  UNIQUE (cliente_id, tipo, version)
+}
+
+clientes ||--o{ documentos_legales : cliente_id, ON DELETE CASCADE
+
+note bottom of documentos_legales
+  Cada subida es una versión nueva: no se sobrescribe nada. El PDF queda en disco
+  (app.storage.dir/{clienteId}/{uuid}.pdf) y aquí solo su ruta relativa.
+  El CHECK admite COPIA_LITERAL (versión anterior); el código usa MINUTA, VIGENCIA_PODERES y FICHA_RUC.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

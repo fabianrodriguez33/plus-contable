@@ -1,0 +1,59 @@
+@startuml
+!pragma layout smetana
+title HU-38 · Modelo de datos de los perfiles y la cuenta de cliente (schema.sql de ms-auth en develop)
+skinparam shadowing false
+hide circle
+skinparam linetype ortho
+
+entity "auth_schema.usuarios" as usuarios {
+  * id : BIGSERIAL <<PK>>
+  --
+  * username : VARCHAR(60) <<UNIQUE>>
+  * password_hash : VARCHAR(100)
+  * nombre_completo : VARCHAR(150)
+  email : VARCHAR(150)
+  * activo : BOOLEAN = true
+  * intentos_fallidos : INTEGER = 0
+  bloqueado_hasta : TIMESTAMP
+  * creado_en : TIMESTAMP
+  cliente_id : BIGINT  (sin FK; NULL en el estudio)
+}
+
+entity "auth_schema.roles" as roles {
+  * id : BIGSERIAL <<PK>>
+  --
+  * nombre : VARCHAR(50) <<UNIQUE>>
+  descripcion : VARCHAR(200)
+}
+
+entity "auth_schema.usuario_roles" as usuario_roles {
+  * usuario_id : BIGINT <<PK, FK>>
+  * rol_id : BIGINT <<PK, FK>>
+}
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)
+  * razon_social : VARCHAR(200)
+}
+
+usuarios ||--o{ usuario_roles : ON DELETE CASCADE
+roles ||--o{ usuario_roles : ON DELETE CASCADE
+usuarios }o..o| clientes : cliente_id\n(referencia lógica, sin clave foránea:\notro esquema y otro servicio)
+
+note right of roles
+  Filas sembradas por schema.sql: ADMIN (administrador del estudio),
+  CONTADOR (contador / analista tributario) y
+  CLIENTE_MYPE (cliente MYPE: solo lectura de su propia empresa).
+end note
+
+note bottom of usuarios
+  cliente_id solo se llena en la cuenta de un cliente MYPE y viaja en el token
+  como claim clienteId. Las bases existentes lo reciben con
+  ALTER TABLE ... ADD COLUMN IF NOT EXISTS. Todavía no existe el alta de cuentas
+  de cliente (HU-37): hoy no hay cuentas con ese rol.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-auth/src/main/resources/schema.sql, Usuario, Rol y tributario_schema.clientes (solo referencia)
+@enduml

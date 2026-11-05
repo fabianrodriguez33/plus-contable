@@ -1,0 +1,44 @@
+@startuml
+!pragma layout smetana
+title HU-01 · Modelo de datos del cliente y sus credenciales SOL (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.credenciales_sol" as credenciales_sol {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK, UNIQUE>>
+  * usuario_sol_cifrado : VARCHAR(300)
+  * clave_sol_cifrada : VARCHAR(300)
+  * actualizado_en : TIMESTAMP = ahora
+}
+
+clientes ||--o| credenciales_sol : cliente_id, ON DELETE CASCADE
+
+note bottom of credenciales_sol
+  usuario_sol_cifrado y clave_sol_cifrada se guardan cifrados con AesUtil (AES/GCM, prefijo v2:).
+  Una sola credencial por cliente (cliente_id UNIQUE).
+end note
+
+note top of clientes
+  ruc: 11 dígitos y único. buen_contribuyente es una marca manual de la ficha:
+  con ella el cronograma usa el grupo BUEN_CONTRIB_UESP en lugar del último dígito del RUC.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

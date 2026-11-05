@@ -1,0 +1,84 @@
+@startuml
+!pragma layout smetana
+title HU-04 · Clases del expediente de documentos legales (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+class DocumentoController {
+  +listar(clienteId): List<DocumentoDto>
+  +archivar(clienteId, tipo, fechaEmision, archivo): DocumentoDto
+  +descargar(clienteId, id): ResponseEntity<Resource>
+}
+
+class ExpedienteService {
+  +listar(clienteId): List<DocumentoDto>
+  +archivar(clienteId, tipo, fechaEmision, archivo): DocumentoDto
+  +buscar(clienteId, documentoId): DocumentoLegal
+  +cargar(d): Resource
+  -validar(tipo, fechaEmision, archivo): void
+  -esPdf(archivo): boolean
+  -nombreSeguro(original): String
+  -borrarSilencioso(p): void
+  -exigirCliente(clienteId): void
+}
+
+class AccesoCliente {
+  +{static} exigir(clienteIdPedido): void
+}
+
+class DocumentoLegal {
+  id: Long
+  clienteId: Long
+  tipo: Tipo
+  version: int
+  fechaEmision: LocalDate
+  nombreArchivo: String
+  contentType: String
+  tamanoBytes: long
+  rutaAlmacenamiento: String
+}
+
+enum "DocumentoLegal.Tipo" as TipoDocumento {
+  MINUTA
+  VIGENCIA_PODERES
+  FICHA_RUC
+}
+
+class DocumentoDto <<record>> {
+  id: Long
+  tipo: Tipo
+  version: int
+  fechaEmision: LocalDate
+  nombreArchivo: String
+  tamanoBytes: long
+  subidoEn: LocalDateTime
+  +{static} from(d): DocumentoDto
+}
+
+interface DocumentoRepository {
+  findByClienteIdOrderByTipoAscVersionDesc(clienteId)
+  findTopByClienteIdAndTipoOrderByVersionDesc(clienteId, tipo)
+}
+interface ClienteRepository {
+  existsById(id)
+}
+
+DocumentoController --> ExpedienteService
+DocumentoController ..> DocumentoDto
+DocumentoController ..> AccesoCliente : exigir(clienteId) al listar y descargar
+ExpedienteService --> DocumentoRepository
+ExpedienteService --> ClienteRepository : el cliente debe existir
+ExpedienteService ..> DocumentoDto
+DocumentoRepository ..> DocumentoLegal
+DocumentoLegal --> TipoDocumento
+DocumentoLegal "0..*" --> "1" Cliente : cliente_id
+
+note bottom of ExpedienteService
+  archivar(): solo PDF (content-type y firma "%PDF-"), máximo 10 MB, fecha de emisión obligatoria
+  y no futura. Cada subida crea una versión nueva (última + 1); las anteriores se conservan.
+  El archivo va a disco ({clienteId}/{uuid}.pdf); si falla el guardado en base, se borra.
+  buscar(): un documento de otro cliente se responde como si no existiera.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: DocumentoController, ExpedienteService, DocumentoDto, model.DocumentoLegal, AccesoCliente
+@enduml

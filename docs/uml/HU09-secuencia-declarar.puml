@@ -1,0 +1,54 @@
+@startuml
+title HU-09 · Secuencia: declarar un periodo (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(DeclaracionPage,\nobligacionService)" as FE
+participant "ObligacionController" as OC
+participant "AccesoCliente" as ACC
+participant "ObligacionService" as OS
+participant "ObligacionRepository" as OR
+database "tributario_schema" as DB
+
+U -> FE : abre la declaración de una obligación
+FE -> OC : obligacionService.buscarObligacion(): GET /api/tributario/obligaciones/{id}\nAuthorization: Bearer <JWT>
+OC -> OS : ObligacionService.buscar(obligacionId)
+OS -> OR : findById(obligacionId)
+alt la obligación no existe
+  OS --> FE : 404 "Obligación no encontrada"
+end
+OS --> OC : ObligacionDto
+OC -> ACC : AccesoCliente.exigir(clienteId de la obligación)
+OC --> FE : 200 ObligacionDto
+FE --> U : muestra la obligación y el formulario de declaración
+
+U -> FE : indica fecha de declaración, número de formulario y monto determinado
+FE -> OC : obligacionService.declarar(): PATCH /api/tributario/obligaciones/{id}/declaracion\n{fechaDeclaracion, numeroFormulario, montoDeterminado}
+OC -> OS : ObligacionService.declarar(obligacionId, dto)
+OS -> OR : findById(obligacionId)
+alt la obligación no existe
+  OS --> FE : 404 "Obligación no encontrada"
+end
+alt el estado no es PENDIENTE
+  OS --> FE : 400 "La obligación ya fue declarada"
+end
+OS -> OS : valida y reúne los errores
+note right
+  Fecha: obligatoria, no futura y no anterior al periodo.
+  Formulario: obligatorio, hasta 30 caracteres.
+  Monto: obligatorio y no negativo.
+end note
+alt faltan o son inválidos
+  OS --> FE : 400 "Faltan o son inválidos: ..."
+else datos válidos
+  OS -> OS : fecha, formulario y monto; estado = DECLARADO
+  OS -> OR : save(obligacion)
+  OR -> DB : UPDATE obligaciones
+  OS --> OC : ObligacionDto
+  OC --> FE : 200
+  FE --> U : muestra la obligación declarada
+end
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ObligacionController, ObligacionService.declarar y buscar, AccesoCliente, ObligacionRepository, DeclaracionPage y obligacionService.ts
+@enduml

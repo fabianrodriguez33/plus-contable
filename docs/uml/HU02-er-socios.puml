@@ -1,0 +1,43 @@
+@startuml
+!pragma layout smetana
+title HU-02 · Modelo de datos de los socios y el capital social (schema.sql de ms-tributario en develop)
+skinparam shadowing false
+hide circle
+
+entity "tributario_schema.clientes" as clientes {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+    direccion : VARCHAR(250)
+  * activo : BOOLEAN = true
+  * creado_en : TIMESTAMP = ahora
+    telefono : VARCHAR(20)
+    email : VARCHAR(150)
+  * buen_contribuyente : BOOLEAN = false
+}
+
+entity "tributario_schema.socios" as socios {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * nombre_completo : VARCHAR(200)
+  * tipo_documento : VARCHAR(10) = DNI
+  * numero_documento : VARCHAR(20)
+  * aporte : NUMERIC(14,2) = 0  CHECK (aporte >= 0)
+  * porcentaje : NUMERIC(5,2)  CHECK (porcentaje > 0 AND porcentaje <= 100)
+    cargo : VARCHAR(80)
+}
+
+clientes ||--o{ socios : cliente_id, ON DELETE CASCADE
+
+note bottom of socios
+  porcentaje lo calcula PorcentajesSocietarios (mayor resto, 2 decimales) y se guarda;
+  la base exige 0 < porcentaje <= 100 y aporte >= 0, y el servicio exige aporte > 0.
+  El capital social total es la suma de los aportes (no se guarda).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: backend/ms-tributario/src/main/resources/schema.sql
+@enduml

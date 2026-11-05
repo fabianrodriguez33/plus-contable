@@ -1,0 +1,88 @@
+@startuml
+!pragma layout smetana
+title HU-08 · Clases del calendario de vencimientos (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+package "calendario" {
+  class CalendarioController {
+    +listar(clienteId, desde, hasta, periodo, estado, situacion): List<CalendarioObligacionDto>
+  }
+  class CalendarioService {
+    +listar(clienteId, desde, hasta, periodo, estado, situacion): List<CalendarioObligacionDto>
+  }
+  enum "CalendarioService.Situacion" as Situacion {
+    PROXIMO
+    VENCIDO
+  }
+  class CalendarioObligacionDto <<record>> {
+    obligacion: ObligacionDto
+    diasRestantes: long
+    vencimientoPasado: boolean
+    +{static} from(obligacion, clock): CalendarioObligacionDto
+    +fechaVencimiento(): LocalDate
+  }
+  class VencimientoTributario <<record>> {
+    fechaVencimiento: LocalDate
+    +diasRestantes(clock): long
+    +vencido(clock): boolean
+  }
+}
+
+package "service" {
+  class ObligacionService {
+    +listar(clienteId): List<ObligacionDto>
+  }
+}
+
+class ObligacionDto <<record>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+}
+
+class Obligacion {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+}
+
+interface ObligacionRepository {
+  findByClienteIdOrderByPeriodoDesc(clienteId)
+}
+
+CalendarioController --> CalendarioService
+CalendarioController ..> CalendarioObligacionDto
+CalendarioService --> ObligacionService : listar(clienteId)
+CalendarioService ..> Situacion
+CalendarioService ..> CalendarioObligacionDto : from(obligacion, clock)
+CalendarioObligacionDto o-- ObligacionDto
+CalendarioObligacionDto ..> VencimientoTributario : calcula los días
+ObligacionService --> ObligacionRepository
+ObligacionService ..> ObligacionDto
+ObligacionRepository ..> Obligacion
+Obligacion "0..*" --> "1" Cliente : cliente_id
+
+note bottom of CalendarioService
+  listar(): valida clienteId > 0, desde <= hasta, periodo = primer día del mes y, para PROXIMO, hasta >= hoy.
+  Lee las obligaciones del cliente y filtra en memoria por fecha, periodo, estado y situación
+  (PROXIMO: vence hoy o después; VENCIDO: antes de hoy). Ordena por vencimiento y luego por id.
+  Usa un Clock inyectable: las pruebas fijan «hoy».
+end note
+
+note right of CalendarioController
+  Ruta solo del estudio (CONTADOR, ADMIN): no está entre las
+  seis rutas de lectura abiertas a CLIENTE_MYPE.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: calendario/ (CalendarioController, CalendarioService, CalendarioObligacionDto, VencimientoTributario), ObligacionService, ObligacionRepository
+@enduml
