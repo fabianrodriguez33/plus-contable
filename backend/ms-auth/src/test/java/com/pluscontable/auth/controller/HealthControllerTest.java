@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.pluscontable.auth.config.JwtProvider;
 import com.pluscontable.auth.config.SecurityConfig;
+import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -20,6 +21,7 @@ class HealthControllerTest {
 
     @Autowired MockMvc mvc;
     @MockBean JwtProvider jwtProvider;
+    @MockBean TokenRevocadoRepository revocados;
 
     @Test
     void respondeUpSinSesion() throws Exception {

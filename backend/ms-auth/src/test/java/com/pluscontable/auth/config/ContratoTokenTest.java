@@ -42,12 +42,21 @@ class ContratoTokenTest {
         Set<String> nombres = Set.copyOf(StreamSupport.stream(
                 java.util.Spliterators.spliteratorUnknownSize(contenido.fieldNames(), 0), false).toList());
 
-        assertThat(nombres).containsExactlyInAnyOrder("sub", "roles", "iat", "exp");
+        assertThat(nombres).containsExactlyInAnyOrder("sub", "roles", "iat", "exp", "jti");
         assertThat(contenido.get("sub").asText()).isEqualTo("contador1");
         assertThat(contenido.get("roles").isArray()).isTrue();
         assertThat(StreamSupport.stream(contenido.get("roles").spliterator(), false).map(JsonNode::asText).toList())
                 .containsExactly("CONTADOR", "ADMIN");
         assertThat(contenido.get("exp").asLong()).isGreaterThan(contenido.get("iat").asLong());
+    }
+
+    /** HU-36 (tarea 2): el jti es un UUID de texto y distinto en cada token; ms-tributario no lo usa. */
+    @Test
+    void elJtiEsUnUuidDistintoEnCadaToken() throws Exception {
+        String a = parte(proveedor.generate("contador1", List.of("CONTADOR")), 1).get("jti").asText();
+        String b = parte(proveedor.generate("contador1", List.of("CONTADOR")), 1).get("jti").asText();
+
+        assertThat(java.util.UUID.fromString(a)).isNotEqualTo(java.util.UUID.fromString(b));
     }
 
     @Test
@@ -68,6 +77,8 @@ class ContratoTokenTest {
 
         assertThat(claims.getSubject()).isEqualTo("contador1");
         assertThat(claims.get("roles", List.class)).containsExactly("CONTADOR");
+        // HU-36: el claim jti extra no impide que ms-tributario lo verifique ni cambia lo que lee
+        assertThat(claims.getId()).isNotBlank();
     }
 
     /** HU-38: ms-tributario lee clienteId (número) del token de un CLIENTE_MYPE para aislar los datos entre clientes. */
