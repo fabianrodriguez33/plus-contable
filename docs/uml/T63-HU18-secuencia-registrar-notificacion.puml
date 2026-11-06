@@ -1,0 +1,72 @@
+@startuml
+title T63 · HU-18 · Secuencia: registrar una notificación del Buzón SOL y marcarla atendida (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(pantalla del Buzón SOL)" as FE
+participant "NotificacionSolController" as NC
+participant "NotificacionSolService" as NS
+participant "ClienteService" as CS
+participant "NotificacionSolRepository" as NR
+database "tributario_schema" as DB
+
+== Registrar la notificación ==
+U -> FE : elige el cliente e indica tipo, fecha de recepción y plazo de respuesta
+FE -> NC : POST /api/tributario/clientes/{clienteId}/notificaciones\n{tipo, fechaRecepcion, plazoRespuesta}\nAuthorization: Bearer <JWT>
+NC -> NS : registrar(clienteId, dto)
+NS -> CS : buscar(clienteId)
+alt el cliente no existe
+  NS --> FE : 404 "Cliente no encontrado"
+end
+NS -> NS : valida y reúne los errores
+note right
+  Tipo: obligatorio y uno de ESQUELA, CARTA_INDUCTIVA o COMUNICADO.
+  Fecha de recepción: obligatoria.
+  Plazo de respuesta: obligatorio; sin plazo no se guarda.
+  Supuesto: la recepción no es futura y el plazo no es anterior a la recepción.
+end note
+alt faltan o son inválidos (por ejemplo, sin plazo)
+  NS --> FE : 400 "Faltan o son inválidos: ..."
+else datos válidos
+  NS -> NR : save(notificación, estado PENDIENTE)
+  NR -> DB : INSERT notificaciones_sol
+  NS --> NC : NotificacionSolDto
+  NC --> FE : 201
+  FE --> U : la notificación aparece en los pendientes del cliente
+end
+
+== Ver los pendientes del cliente ==
+U -> FE : abre los pendientes de un cliente
+FE -> NC : GET /api/tributario/clientes/{clienteId}/notificaciones?estado=PENDIENTE
+NC -> NS : pendientes(clienteId)
+NS -> CS : buscar(clienteId)
+NS -> NR : findByClienteIdAndEstadoOrderByPlazoRespuestaAsc(clienteId, PENDIENTE)
+NR -> DB : SELECT notificaciones_sol
+NS --> FE : 200 lista ordenada por plazo (la más urgente primero)
+note right
+  Supuesto: se ordenan por plazo de respuesta ascendente.
+end note
+
+== Marcar como atendida ==
+U -> FE : marca la notificación como atendida
+FE -> NC : PATCH /api/tributario/notificaciones/{id}/atencion
+NC -> NS : marcarAtendida(notificacionId)
+NS -> NR : findById(notificacionId)
+alt la notificación no existe
+  NS --> FE : 404 "Notificación no encontrada"
+end
+alt ya estaba atendida
+  NS --> FE : 400 "La notificación ya fue atendida"
+else estaba pendiente
+  NS -> NS : estado = ATENDIDA; fechaAtencion = hoy
+  NS -> NR : save(notificación)
+  NR -> DB : UPDATE notificaciones_sol
+  NS --> FE : 200 NotificacionSolDto
+  FE --> U : sale de la lista de pendientes
+end
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-18 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, GlobalExceptionHandler, SecurityConfig
+@enduml
