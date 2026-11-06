@@ -1,0 +1,94 @@
+@startuml
+!pragma layout smetana
+title T63 · HU-18 · Clases del registro de notificaciones del Buzón SOL (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class NotificacionSolController <<nuevo>> {
+  +registrar(clienteId, dto): NotificacionSolDto
+  +pendientes(clienteId): List<NotificacionSolDto>
+  +marcarAtendida(id): NotificacionSolDto
+}
+
+class NotificacionSolService <<nuevo>> {
+  +registrar(clienteId, dto): NotificacionSolDto
+  +pendientes(clienteId): List<NotificacionSolDto>
+  +marcarAtendida(notificacionId): NotificacionSolDto
+  -validar(dto): void
+}
+
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+
+class NotificacionSol <<nuevo>> {
+  id: Long
+  clienteId: Long
+  tipo: TipoNotificacion
+  fechaRecepcion: LocalDate
+  plazoRespuesta: LocalDate
+  estado: EstadoNotificacion
+  fechaAtencion: LocalDate
+  registradoEn: LocalDateTime
+}
+
+enum TipoNotificacion <<nuevo>> {
+  ESQUELA
+  CARTA_INDUCTIVA
+  COMUNICADO
+}
+
+enum EstadoNotificacion <<nuevo>> {
+  PENDIENTE
+  ATENDIDA
+}
+
+class NotificacionSolEntradaDto <<record, nuevo>> {
+  tipo: TipoNotificacion
+  fechaRecepcion: LocalDate
+  plazoRespuesta: LocalDate
+}
+
+class NotificacionSolDto <<record, nuevo>> {
+  id: Long
+  clienteId: Long
+  tipo: TipoNotificacion
+  fechaRecepcion: LocalDate
+  plazoRespuesta: LocalDate
+  estado: EstadoNotificacion
+  fechaAtencion: LocalDate
+  +{static} from(n): NotificacionSolDto
+}
+
+interface NotificacionSolRepository <<nuevo>> {
+  findByClienteIdAndEstadoOrderByPlazoRespuestaAsc(clienteId, estado)
+}
+
+NotificacionSolController --> NotificacionSolService
+NotificacionSolController ..> NotificacionSolEntradaDto
+NotificacionSolController ..> NotificacionSolDto
+NotificacionSolService --> ClienteService : buscar(clienteId)
+NotificacionSolService --> NotificacionSolRepository
+NotificacionSolService ..> NotificacionSolDto
+NotificacionSolRepository ..> NotificacionSol
+NotificacionSol --> TipoNotificacion
+NotificacionSol --> EstadoNotificacion
+NotificacionSol "0..*" --> "1" Cliente : cliente_id
+
+note bottom of NotificacionSolService
+  registrar(): el tipo es esquela, carta inductiva o comunicado; exige cliente, tipo, fecha de recepción y
+  plazo; sin plazo no se guarda (400). La notificación nace PENDIENTE y queda en la lista de pendientes
+  del cliente. marcarAtendida(): pasa a ATENDIDA.
+end note
+
+note right of NotificacionSolEntradaDto
+  Supuesto: plazoRespuesta es la fecha límite de respuesta (una fecha, no una cantidad de días).
+  Supuesto: la fecha de recepción no es futura y el plazo no es anterior a la fecha de recepción.
+  Supuesto: no se guarda descripción ni archivo de la notificación en esta historia.
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas; el cliente MYPE no las ve.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-18 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, GlobalExceptionHandler (errores {"mensaje"}), SecurityConfig (rutas no listadas son del estudio)
+@enduml

@@ -1,0 +1,128 @@
+@startuml
+!pragma layout smetana
+title T6 · HU-13 · Clases del registro de la constancia de pago (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class ObligacionController <<existe>> {
+  +buscar(id): ObligacionDto
+  +declarar(id, dto): ObligacionDto
+  +registrarPago(id, dto): ObligacionDto  <<nuevo>>
+  +listarPagos(id): List<PagoDto>  <<nuevo>>
+}
+
+class ObligacionService <<existe>> {
+  +buscar(obligacionId): ObligacionDto
+  +declarar(obligacionId, dto): ObligacionDto
+}
+
+class PagoObligacionService <<nuevo>> {
+  +registrar(obligacionId, dto): ObligacionDto
+  +listar(obligacionId): List<PagoDto>
+  -validar(dto, obligacion): void
+  -saldo(obligacion): BigDecimal
+}
+
+class AccesoCliente <<existe>> {
+  +{static} exigir(clienteIdPedido): void
+}
+
+class Obligacion <<cambia>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+}
+
+enum "Obligacion.Estado" as Estado <<cambia>> {
+  PENDIENTE
+  DECLARADO
+  PAGO_PARCIAL  <<nuevo>>
+  PAGADO  <<nuevo>>
+}
+
+class PagoObligacion <<nuevo>> {
+  id: Long
+  obligacionId: Long
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+  registradoEn: LocalDateTime
+}
+
+class PagoEntradaDto <<record, nuevo>> {
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+}
+
+class PagoDto <<record, nuevo>> {
+  id: Long
+  obligacionId: Long
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+  +{static} from(p): PagoDto
+}
+
+class ObligacionDto <<record, cambia>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+  montoPagado: BigDecimal  <<nuevo>>
+  saldo: BigDecimal  <<nuevo>>
+}
+
+interface ObligacionRepository <<existe>> {
+  findByClienteIdOrderByPeriodoDesc(clienteId)
+}
+
+interface PagoObligacionRepository <<nuevo>> {
+  findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
+  sumaPagada(obligacionId): BigDecimal
+}
+
+ObligacionController --> ObligacionService
+ObligacionController --> PagoObligacionService
+ObligacionController ..> AccesoCliente : exigir(clienteId de la obligación) al consultar
+ObligacionController ..> PagoEntradaDto
+ObligacionController ..> PagoDto
+ObligacionController ..> ObligacionDto
+PagoObligacionService --> ObligacionRepository
+PagoObligacionService --> PagoObligacionRepository
+PagoObligacionService ..> PagoObligacion
+PagoObligacionService ..> ObligacionDto
+ObligacionRepository ..> Obligacion
+PagoObligacionRepository ..> PagoObligacion
+Obligacion --> Estado
+PagoObligacion "0..*" --> "1" Obligacion : obligacion_id
+
+note bottom of PagoObligacionService
+  registrar(): solo sobre una obligación DECLARADO o PAGO_PARCIAL (criterio 3).
+  Con la suma de pagos igual al monto determinado pasa a PAGADO (criterio 1);
+  si es menor, queda PAGO_PARCIAL y se informa el saldo (criterio 2).
+  El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
+end note
+
+note right of PagoEntradaDto
+  Supuesto: la constancia se registra como número de constancia (texto, hasta 30 caracteres);
+  el archivo adjunto queda fuera de esta historia.
+  Supuesto: una obligación admite varios pagos; saldo = montoDeterminado menos la suma de pagos.
+  Supuesto: no se admite un pago mayor que el saldo.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-13 y el código y la base de develop (de04c4f). Código existente: ObligacionController, ObligacionService, DeclaracionDto, ObligacionDto, model.Obligacion, AccesoCliente
+@enduml
