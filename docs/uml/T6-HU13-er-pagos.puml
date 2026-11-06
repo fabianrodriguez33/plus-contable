@@ -1,0 +1,57 @@
+@startuml
+!pragma layout smetana
+title T6 · HU-13 · Modelo de datos de los pagos de una obligación (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.obligaciones" as obligaciones <<cambia>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+    tipo_obligacion : VARCHAR(30)
+  * periodo : DATE
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO | PAGO_PARCIAL | PAGADO = PENDIENTE
+    fecha_declaracion : DATE
+    numero_formulario : VARCHAR(30)
+    monto_determinado : NUMERIC(14,2)
+  UNIQUE (cliente_id, tipo_obligacion, periodo)
+}
+
+entity "tributario_schema.pagos_obligacion" as pagos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * fecha_pago : DATE
+  * monto_pagado : NUMERIC(14,2)  CHECK (monto_pagado > 0)
+  * numero_constancia : VARCHAR(30)
+  * registrado_en : TIMESTAMP = ahora
+  UNIQUE (obligacion_id, numero_constancia)
+}
+
+clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
+obligaciones ||--o{ pagos : obligacion_id, ON DELETE CASCADE
+
+note bottom of obligaciones
+  Cambio: el CHECK de estado admite PAGO_PARCIAL y PAGADO.
+  Supuesto: se recrea con nombre estable (ck_obligaciones_estado), igual que ck_obligaciones_tipo en HU-07.
+  El estado depende de la suma de pagos frente a monto_determinado.
+end note
+
+note bottom of pagos
+  Supuesto: la constancia es un número de constancia (texto); sin archivo adjunto.
+  Supuesto: una obligación admite varios pagos; el mismo número de constancia no se repite en una obligación.
+  Supuesto: ON DELETE CASCADE como el resto de tablas hijas del esquema.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-13 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (obligaciones y clientes)
+@enduml
