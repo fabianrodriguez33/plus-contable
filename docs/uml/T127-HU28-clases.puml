@@ -1,0 +1,115 @@
+@startuml
+!pragma layout smetana
+title T127 · HU-28 · Clases de la programación del cobro periódico de honorarios (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class CobroHonorarioController <<nuevo>> {
+  +programar(clienteId, dto): ProgramacionCobroDto
+  +pendientes(clienteId): List<CobroHonorarioDto>
+}
+
+class CobroHonorarioService <<nuevo>> {
+  +programar(clienteId, dto): ProgramacionCobroDto
+  +pendientes(clienteId): List<CobroHonorarioDto>
+  -fechasDeCobro(periodicidad, desde, hasta): List<LocalDate>
+}
+
+class AcuerdoService <<existe>> {
+  +vigente(clienteId): AcuerdoDto
+}
+
+class AcuerdoServicio <<existe>> {
+  id: Long
+  clienteId: Long
+  honorarioMensual: BigDecimal
+  honorarioDesde: LocalDate
+  fechaInicio: LocalDate
+}
+
+class ProgramacionCobro <<nuevo>> {
+  id: Long
+  clienteId: Long
+  periodicidad: Periodicidad
+  creadaEn: LocalDateTime
+}
+
+class CobroHonorario <<nuevo>> {
+  id: Long
+  clienteId: Long
+  programacionId: Long
+  fechaCobro: LocalDate
+  monto: BigDecimal
+  estado: EstadoCobro
+}
+
+enum Periodicidad <<nuevo>> {
+  MENSUAL
+  QUINCENAL
+}
+
+enum EstadoCobro <<nuevo>> {
+  PENDIENTE
+}
+
+class ProgramacionCobroEntradaDto <<record, nuevo>> {
+  periodicidad: Periodicidad
+}
+
+class ProgramacionCobroDto <<record, nuevo>> {
+  periodicidad: Periodicidad
+  cobrosGenerados: int
+  cobrosYaExistentes: int
+  cobros: List<CobroHonorarioDto>
+}
+
+class CobroHonorarioDto <<record, nuevo>> {
+  id: Long
+  fechaCobro: LocalDate
+  monto: BigDecimal
+  estado: EstadoCobro
+}
+
+interface ProgramacionCobroRepository <<nuevo>> {
+  findByClienteId(clienteId)
+}
+
+interface CobroHonorarioRepository <<nuevo>> {
+  findByClienteIdAndEstadoOrderByFechaCobroAsc(clienteId, estado)
+  existsByClienteIdAndFechaCobro(clienteId, fecha)
+}
+
+CobroHonorarioController --> CobroHonorarioService
+CobroHonorarioController ..> ProgramacionCobroEntradaDto
+CobroHonorarioController ..> ProgramacionCobroDto
+CobroHonorarioService --> AcuerdoService : vigente(clienteId)
+CobroHonorarioService --> ProgramacionCobroRepository
+CobroHonorarioService --> CobroHonorarioRepository
+AcuerdoService ..> AcuerdoServicio
+ProgramacionCobroDto o-- CobroHonorarioDto
+ProgramacionCobroRepository ..> ProgramacionCobro
+CobroHonorarioRepository ..> CobroHonorario
+ProgramacionCobro --> Periodicidad
+CobroHonorario --> EstadoCobro
+CobroHonorario "0..*" --> "1" ProgramacionCobro : programacion_id
+ProgramacionCobro "0..1" --> "1" Cliente : cliente_id
+
+note bottom of CobroHonorarioService
+  programar(): exige el acuerdo de honorarios del cliente (criterio 3); según la periodicidad (criterio 2)
+  genera los cobros PENDIENTES en las fechas acordadas (criterio 1); pendientes() alimenta la ficha del cliente (criterio 4).
+  El sistema programa los cobros; no emite comprobantes de pago.
+end note
+
+note right of Periodicidad
+  Supuesto: MENSUAL = un cobro por mes, el mismo día del mes que la fecha de inicio del acuerdo
+  (el último día del mes si ese día no existe). QUINCENAL = dos cobros por mes, los días 15 y último.
+  Supuesto: monto MENSUAL = honorario mensual; monto QUINCENAL = honorario mensual entre 2.
+  Supuesto: se generan los cobros de los próximos 12 meses desde hoy; volver a programar no duplica fechas.
+  Supuesto: cambiar el acuerdo después no modifica los cobros ya generados.
+  Supuesto: HU-28 solo crea cobros PENDIENTE; HU-29 agrega PAGADO y el pago parcial.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-28 y el código y la base de develop (de04c4f). Código existente: AcuerdoService, AcuerdoServicio, HonorarioHistorial, GlobalExceptionHandler, FichaMaestraPage (pestañas de la ficha)
+@enduml

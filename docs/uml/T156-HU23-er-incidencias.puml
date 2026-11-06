@@ -1,0 +1,50 @@
+@startuml
+!pragma layout smetana
+title T156 · HU-23 · Modelo de datos de las incidencias del servicio contable (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN = true
+}
+
+entity "tributario_schema.incidencias" as inc <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * tipo : CAIDA_PORTAL_SOL | CLIENTE_NO_ENVIA_DOCUMENTOS | RECHAZO_FRACCIONAMIENTO | OTRO
+  * fecha : DATE
+  * descripcion : VARCHAR(1000)
+  * registrada_por : VARCHAR(60)
+  * registrada_en : TIMESTAMP = ahora
+}
+
+entity "tributario_schema.incidencias_clientes" as ic <<nuevo>> {
+  * incidencia_id : BIGINT <<PK>> <<FK>>
+  * cliente_id : BIGINT <<PK>> <<FK>>
+  --
+  INDEX (cliente_id)
+}
+
+inc ||--|{ ic : incidencia_id, ON DELETE CASCADE
+clientes ||--o{ ic : cliente_id, ON DELETE CASCADE
+
+note bottom of ic
+  Una fila por cliente asociado: una incidencia de un cliente tiene una fila; una general tiene una por cada cliente
+  de la cartera activa (criterio 3). El historial de un cliente (criterio 2) es (cliente_id) -> incidencias.
+end note
+
+note right of inc
+  Supuesto: tipos CAIDA_PORTAL_SOL, CLIENTE_NO_ENVIA_DOCUMENTOS, RECHAZO_FRACCIONAMIENTO y OTRO (la lista «definida con el cliente» no está en el repositorio).
+  Supuesto: registrada_por guarda el usuario del token (criterio 4).
+  Supuesto: cartera activa = clientes con activo = true al registrar; los que ingresen después no se asocian.
+  Supuesto: ON DELETE CASCADE como el resto de las tablas hijas del cliente.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-23 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y su columna activo)
+@enduml

@@ -1,0 +1,56 @@
+@startuml
+!pragma layout smetana
+title T72 · HU-20 · Modelo de datos de los proveedores y las compras del cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * condicion_habido : HABIDO | NO_HABIDO
+}
+
+entity "tributario_schema.proveedores" as prov <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>  CHECK (ruc ~ '^[0-9]{11}$')
+    razon_social : VARCHAR(200)
+    condicion_habido : HABIDO | NO_HABIDO
+    condicion_registrada_en : DATE
+  * fuente : MANUAL = MANUAL
+}
+
+entity "tributario_schema.compras_cliente" as compras <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * proveedor_id : BIGINT <<FK>>
+  * periodo : DATE  -- primer día del mes
+  * comprobante : VARCHAR(30)
+  * fecha_comprobante : DATE
+  * igv : NUMERIC(14,2)  CHECK (igv >= 0)
+  UNIQUE (cliente_id, proveedor_id, comprobante)
+  INDEX (cliente_id, periodo)
+}
+
+clientes ||--o{ compras : cliente_id, ON DELETE CASCADE
+prov ||--o{ compras : proveedor_id
+
+note bottom of prov
+  La condición es del proveedor y la comparten todos los clientes. Nula = SIN_VERIFICAR (criterio 1).
+  Habido -> compra apta para crédito fiscal (criterio 2); No Habido -> en riesgo (criterio 3).
+end note
+
+note right of compras
+  Supuesto: la condición Habido/No Habido se ingresa a mano; la columna fuente solo admite MANUAL.
+  Supuesto: las compras se cargan a mano mientras HU-25 no defina de dónde salen al sistema.
+  Supuesto: el mismo comprobante de un proveedor no se repite en un cliente.
+  Para automatizar: ampliar fuente (por ejemplo, SUNAT_PADRON) y guardar la fecha de cada consulta.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-20 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y condicion_habido)
+@enduml
