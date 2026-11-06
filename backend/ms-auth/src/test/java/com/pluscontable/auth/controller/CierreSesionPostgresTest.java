@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pluscontable.auth.config.JwtProvider;
+import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class CierreSesionPostgresTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired JwtProvider jwt;
+    @Autowired TokenRevocadoRepository revocados;
     @Value("${app.seed.admin-username}") String admin;
     @Value("${app.seed.admin-password}") String clave;
 
@@ -95,6 +97,8 @@ class CierreSesionPostgresTest {
                 "SELECT count(*) FROM auth_schema.bitacora_seguridad WHERE evento = 'LOGOUT' AND username = ?",
                 Integer.class, admin);
         assertThat(eventos).isEqualTo(1);
+        var guardado = revocados.findById(claims.getId()).orElseThrow();
+        assertThat(guardado.getRevocadoEn()).isBetween(java.time.LocalDateTime.now().minusMinutes(1), java.time.LocalDateTime.now().plusMinutes(1));
     }
 
     @Test

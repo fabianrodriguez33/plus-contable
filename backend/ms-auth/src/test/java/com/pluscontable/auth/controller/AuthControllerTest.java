@@ -195,4 +195,18 @@ class AuthControllerTest {
         verify(authService).logout(eq("ana"), isNull(), any(), any());
         verify(revocados, never()).existsById(any());
     }
+
+    /** Un token firmado sin el claim roles autentica al usuario pero sin ninguna autoridad. */
+    @Test
+    void unTokenSinRolesAutenticaSinAutoridades() throws Exception {
+        String sinRoles = io.jsonwebtoken.Jwts.builder().subject("ana").id("jti-sin-roles")
+                .expiration(new java.util.Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8)))
+                .compact();
+        when(authService.me("ana")).thenReturn(new UserDto(1L, "ana", "Ana Pérez", List.of()));
+
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + sinRoles))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").isEmpty());
+    }
 }
