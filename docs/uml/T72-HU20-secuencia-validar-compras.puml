@@ -1,0 +1,83 @@
+@startuml
+title T72 · HU-20 · Secuencia: validar la condición de los proveedores de las compras del mes (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(pantalla de compras del mes)" as FE
+participant "ProveedorController" as PC
+participant "ProveedorService" as PS
+participant "CompraClienteController" as CC
+participant "CompraClienteService" as CS
+participant "ClienteService" as CL
+participant "ProveedorRepository" as PR
+participant "CompraClienteRepository" as CR
+database "tributario_schema" as DB
+
+== Registrar a mano la condición de un proveedor ==
+U -> FE : consulta la condición del proveedor por su cuenta y la ingresa (RUC, Habido o No Habido, fecha de consulta)
+FE -> PC : PUT /api/tributario/proveedores/{ruc}/condicion\n{razonSocial, condicionHabido, fechaConsulta}\nAuthorization: Bearer <JWT>
+PC -> PS : registrarCondicion(ruc, dto)
+PS -> PS : valida y reúne los errores
+note right
+  RUC: 11 dígitos válidos (RucValidator).
+  Condición: obligatoria, HABIDO o NO_HABIDO.
+  Fecha de consulta: obligatoria y no futura.
+  Supuesto: la condición se ingresa a mano; no hay integración con SUNAT.
+end note
+alt faltan o son inválidos
+  PS --> FE : 400 "Faltan o son inválidos: ..."
+else datos válidos
+  PS -> PR : save(proveedor con fuente MANUAL)
+  PR -> DB : INSERT o UPDATE proveedores
+  PS --> FE : 200 ProveedorDto
+end
+
+== Registrar una compra del cliente ==
+U -> FE : ingresa la compra (RUC del proveedor, comprobante, fecha, IGV, periodo)
+FE -> CC : POST /api/tributario/clientes/{clienteId}/compras
+CC -> CS : registrar(clienteId, dto)
+CS -> CL : buscar(clienteId)
+alt el cliente no existe
+  CS --> FE : 404 "Cliente no encontrado"
+end
+CS -> PR : findByRuc(rucProveedor)
+alt el proveedor no existe todavía
+  CS -> PR : save(proveedor sin condición registrada)
+  note right
+    Supuesto: queda sin condición (SIN_VERIFICAR) hasta que el contador la registre.
+  end note
+end
+CS -> CR : save(compra)
+CR -> DB : INSERT compras_cliente
+CS --> FE : 201 CompraClienteDto
+
+== Validar las compras del mes ==
+U -> FE : elige el cliente y el mes y pulsa "Validar compras"
+FE -> CC : GET /api/tributario/clientes/{clienteId}/compras/validacion?periodo=2026-11
+CC -> CS : validarMes(clienteId, periodo)
+CS -> CL : buscar(clienteId)
+CS -> CR : findByClienteIdAndPeriodo(clienteId, periodo)
+CR -> DB : SELECT compras_cliente JOIN proveedores
+loop cada compra del mes
+  alt proveedor HABIDO
+    CS -> CS : resultado = APTA_CREDITO_FISCAL
+  else proveedor NO_HABIDO
+    CS -> CS : resultado = EN_RIESGO de perder el crédito fiscal
+  else sin condición registrada
+    CS -> CS : resultado = SIN_VERIFICAR
+  end
+end
+CS --> FE : 200 ValidacionMesDto {compras con su condición, aptas, en riesgo, sin verificar, IGV en riesgo}
+FE --> U : lista las compras con la condición de cada proveedor, las Habidas como aptas y las No Habidas en riesgo
+
+note over CS
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas; el cliente MYPE no las ve.
+  Para automatizar la condición haría falta: fuente oficial o tercero aceptado, un puerto CondicionProveedorPort,
+  reverificación periódica antes de declarar, y guardar fuente y fecha; con «no disponible» el proveedor queda SIN_VERIFICAR.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-20 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, RucValidator, GlobalExceptionHandler (errores {"mensaje"}), SecurityConfig
+@enduml

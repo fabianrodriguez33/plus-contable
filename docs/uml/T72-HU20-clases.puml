@@ -1,0 +1,155 @@
+@startuml
+!pragma layout smetana
+title T72 · HU-20 · Clases de la validación Habido/No Habido de los proveedores (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class ProveedorController <<nuevo>> {
+  +registrarCondicion(ruc, dto): ProveedorDto
+}
+
+class CompraClienteController <<nuevo>> {
+  +registrar(clienteId, dto): CompraClienteDto
+  +validarMes(clienteId, periodo): ValidacionMesDto
+}
+
+class ProveedorService <<nuevo>> {
+  +registrarCondicion(ruc, dto): ProveedorDto
+  -validar(ruc, dto): void
+}
+
+class CompraClienteService <<nuevo>> {
+  +registrar(clienteId, dto): CompraClienteDto
+  +validarMes(clienteId, periodo): ValidacionMesDto
+  -clasificar(condicion): ResultadoCredito
+}
+
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+
+class RucValidator <<existe>> {
+  +motivoInvalido(ruc): Optional<String>
+}
+
+class Proveedor <<nuevo>> {
+  id: Long
+  ruc: String
+  razonSocial: String
+  condicionHabido: CondicionHabido
+  condicionRegistradaEn: LocalDate
+  fuente: FuenteCondicion
+}
+
+class CompraCliente <<nuevo>> {
+  id: Long
+  clienteId: Long
+  proveedorId: Long
+  periodo: LocalDate
+  comprobante: String
+  fechaComprobante: LocalDate
+  igv: BigDecimal
+}
+
+enum "Cliente.CondicionHabido" as CondicionHabido <<existe>> {
+  HABIDO
+  NO_HABIDO
+}
+
+enum FuenteCondicion <<nuevo>> {
+  MANUAL
+}
+
+enum ResultadoCredito <<nuevo>> {
+  APTA_CREDITO_FISCAL
+  EN_RIESGO
+  SIN_VERIFICAR
+}
+
+class ProveedorCondicionDto <<record, nuevo>> {
+  razonSocial: String
+  condicionHabido: CondicionHabido
+  fechaConsulta: LocalDate
+}
+
+class CompraClienteEntradaDto <<record, nuevo>> {
+  rucProveedor: String
+  razonSocialProveedor: String
+  periodo: YearMonth
+  comprobante: String
+  fechaComprobante: LocalDate
+  igv: BigDecimal
+}
+
+class CompraValidadaDto <<record, nuevo>> {
+  compraId: Long
+  rucProveedor: String
+  razonSocialProveedor: String
+  comprobante: String
+  igv: BigDecimal
+  condicionHabido: CondicionHabido
+  resultado: ResultadoCredito
+}
+
+class ValidacionMesDto <<record, nuevo>> {
+  periodo: YearMonth
+  compras: List<CompraValidadaDto>
+  aptas: int
+  enRiesgo: int
+  sinVerificar: int
+  igvEnRiesgo: BigDecimal
+}
+
+interface ProveedorRepository <<nuevo>> {
+  findByRuc(ruc)
+}
+
+interface CompraClienteRepository <<nuevo>> {
+  findByClienteIdAndPeriodoOrderByFechaComprobanteAsc(clienteId, periodo)
+}
+
+ProveedorController --> ProveedorService
+CompraClienteController --> CompraClienteService
+ProveedorController ..> ProveedorCondicionDto
+CompraClienteController ..> CompraClienteEntradaDto
+CompraClienteController ..> ValidacionMesDto
+ProveedorService --> ProveedorRepository
+ProveedorService --> RucValidator
+CompraClienteService --> ClienteService : buscar(clienteId)
+CompraClienteService --> ProveedorRepository
+CompraClienteService --> CompraClienteRepository
+CompraClienteService ..> CompraValidadaDto
+ValidacionMesDto o-- CompraValidadaDto
+ProveedorRepository ..> Proveedor
+CompraClienteRepository ..> CompraCliente
+Proveedor --> CondicionHabido
+Proveedor --> FuenteCondicion
+CompraValidadaDto --> ResultadoCredito
+CompraCliente "0..*" --> "1" Proveedor : proveedor_id
+CompraCliente "0..*" --> "1" Cliente : cliente_id
+
+note bottom of CompraClienteService
+  validarMes(): para cada compra del mes muestra la condición de su proveedor (criterio 1).
+  HABIDO -> APTA_CREDITO_FISCAL (criterio 2). NO_HABIDO -> EN_RIESGO de perder el crédito fiscal (criterio 3).
+end note
+
+note right of Proveedor
+  Supuesto: la condición Habido/No Habido se ingresa a mano; no hay integración con SUNAT. OpenRUC
+  (OpenRucConsulta, ya usado para sugerir datos de la ficha) es de terceros y estuvo caído: no se usa aquí.
+  Supuesto: un proveedor sin condición registrada se muestra SIN_VERIFICAR (no se da por apto).
+  Supuesto: las compras del mes las carga el contador a mano; de dónde salen las compras al sistema lo define HU-25.
+  Supuesto: el IGV de cada compra se ingresa a mano; el riesgo es la suma del IGV de las compras de proveedores NO_HABIDO.
+end note
+
+note bottom of ProveedorService
+  Para automatizar harían falta: una fuente oficial confirmada o un tercero aceptado por el equipo;
+  un puerto CondicionProveedorPort con un adaptador (hoy la interfaz ConsultaRuc solo sugiere datos de la ficha);
+  una tarea que reverifique los proveedores del mes antes de declarar; guardar la fuente y la fecha de cada
+  consulta (FuenteCondicion); y tratar «no disponible» sin bloquear el flujo (queda SIN_VERIFICAR),
+  como ya hace ResultadoConsulta.NoDisponible.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-20 y el código y la base de develop (de04c4f). Código existente: model.Cliente.CondicionHabido, ClienteService.buscar, RucValidator, ruc.ConsultaRuc y OpenRucConsulta
+@enduml
