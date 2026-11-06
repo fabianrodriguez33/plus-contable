@@ -21,6 +21,17 @@ export function logout(): void {
   localStorage.removeItem(USER_KEY)
 }
 
+/** HU-36: cierra la sesión en el servidor (revoca el token) y limpia la local; si el servidor no responde igual se limpia. */
+export async function cerrarSesion(): Promise<void> {
+  try {
+    await authApi.post('/api/auth/logout')
+  } catch {
+    // el token vence solo; en este navegador la sesión se cierra igual
+  } finally {
+    logout()
+  }
+}
+
 export function isAuthenticated(): boolean {
   const token = localStorage.getItem(TOKEN_KEY)
   if (token && isJwtActive(token)) return true
