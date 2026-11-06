@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS auth_schema.bitacora_seguridad (
     fecha      TIMESTAMP   NOT NULL DEFAULT NOW()
 );
 
+-- HU-36 (tarea 2): jti de los tokens cuya sesion se cerro; el filtro de ms-auth los rechaza con 401.
+-- expira_en = exp del token: pasado ese momento el token ya no sirve y la fila se puede borrar.
+CREATE TABLE IF NOT EXISTS auth_schema.tokens_revocados (
+    jti         VARCHAR(64) PRIMARY KEY,
+    username    VARCHAR(60) NOT NULL,
+    expira_en   TIMESTAMP   NOT NULL,
+    revocado_en TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tokens_revocados_expira ON auth_schema.tokens_revocados(expira_en);
+
 CREATE INDEX IF NOT EXISTS idx_bitacora_username ON auth_schema.bitacora_seguridad(username);
 CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON auth_schema.bitacora_seguridad(fecha);
 

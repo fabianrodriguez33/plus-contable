@@ -77,4 +77,15 @@ class JwtProviderTest {
         assertThat(proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"), null)).containsKey("clienteId")).isFalse();
         assertThat(proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"))).containsKey("clienteId")).isFalse();
     }
+
+    /** HU-36 (tarea 2): el jti identifica al token para poder revocarlo al cerrar sesion. */
+    @Test
+    void cadaTokenLlevaUnJtiUnicoYNoVacio() {
+        String a = proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"))).getId();
+        String b = proveedor.parse(proveedor.generate("contador1", List.of("CONTADOR"))).getId();
+        String c = proveedor.parse(proveedor.generate("cliente1", List.of("CLIENTE_MYPE"), 7L)).getId();
+
+        assertThat(a).isNotBlank().hasSize(36);
+        assertThat(java.util.Set.of(a, b, c)).hasSize(3);
+    }
 }

@@ -7,10 +7,14 @@ import com.pluscontable.auth.dto.UserDto;
 import com.pluscontable.auth.model.BitacoraSeguridad;
 import com.pluscontable.auth.model.Rol;
 import com.pluscontable.auth.model.Usuario;
+import com.pluscontable.auth.model.TokenRevocado;
 import com.pluscontable.auth.repository.BitacoraRepository;
+import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,17 +31,19 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final BitacoraRepository bitacoraRepository;
+    private final TokenRevocadoRepository revocados;
     private final PasswordEncoder passwordEncoder;
     private final JwtProvider jwtProvider;
     private final int maxFailedAttempts;
     private final int lockMinutes;
 
     public AuthService(UsuarioRepository usuarioRepository, BitacoraRepository bitacoraRepository,
-                       PasswordEncoder passwordEncoder, JwtProvider jwtProvider,
+                       TokenRevocadoRepository revocados, PasswordEncoder passwordEncoder, JwtProvider jwtProvider,
                        @Value("${app.security.max-failed-attempts}") int maxFailedAttempts,
                        @Value("${app.security.lock-minutes}") int lockMinutes) {
         this.usuarioRepository = usuarioRepository;
         this.bitacoraRepository = bitacoraRepository;
+        this.revocados = revocados;
         this.passwordEncoder = passwordEncoder;
         this.jwtProvider = jwtProvider;
         this.maxFailedAttempts = maxFailedAttempts;
@@ -99,6 +105,26 @@ public class AuthService {
         String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId());
         return new LoginResponse(token, "Bearer", jwtProvider.getExpiration().toSeconds(),
                 new UserDto(u.getId(), u.getUsername(), u.getNombreCompleto(), roles));
+    }
+
+    /**
+     * HU-36 (tarea 2): cierra la sesion revocando el jti del token. Repetirlo no falla ni duplica la fila.
+     * Un token anterior al cambio (sin jti) no se puede revocar: se anota en la bitacora y vence solo.
+     */
+    @Transactional
+    public void logout(String username, String jti, Instant expira, String ip) {
+        // Los vencidos ya se rechazan por su exp; aqui solo se limpia la tabla
+        revocados.deleteByExpiraEnBefore(LocalDateTime.now());
+        Long usuarioId = usuarioRepository.findByUsername(username).map(Usuario::getId).orElse(null);
+        if (jti == null || jti.isBlank()) {
+            log(usuarioId, username, "LOGOUT", "Token sin jti: no se puede revocar, vence solo", ip);
+            return;
+        }
+        if (!revocados.existsById(jti)) {
+            LocalDateTime expiraEn = LocalDateTime.ofInstant(expira == null ? Instant.now() : expira, ZoneId.systemDefault());
+            revocados.save(new TokenRevocado(jti, username, expiraEn));
+        }
+        log(usuarioId, username, "LOGOUT", null, ip);
     }
 
     @Transactional(readOnly = true)

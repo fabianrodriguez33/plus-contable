@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -32,10 +33,14 @@ public class JwtProvider {
         return generate(username, roles, null);
     }
 
-    /** HU-38: el claim clienteId solo va en el token de una cuenta de cliente; el del estudio no lo lleva. */
+    /**
+     * HU-38: el claim clienteId solo va en el token de una cuenta de cliente; el del estudio no lo lleva.
+     * HU-36 (tarea 2): todo token lleva un jti unico para poder revocarlo al cerrar sesion.
+     */
     public String generate(String username, List<String> roles, Long clienteId) {
         Date now = new Date();
         var builder = Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(username)
                 .claim("roles", roles);
         if (clienteId != null) builder.claim("clienteId", clienteId);
