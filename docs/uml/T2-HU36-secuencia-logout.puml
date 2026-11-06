@@ -1,0 +1,66 @@
+@startuml
+title T2 · HU-36 · Secuencia: cierre de sesión con revocación del token por jti (DISEÑO PREVIO, 06/11/2026; no existe en develop)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Usuario del estudio\no cliente MYPE" as U
+participant "frontend-web\n(Navbar, authService,\napiClient)" as FE
+participant "JwtFilter\n(ms-auth)" as JF
+participant "AuthController" as AC
+participant "AuthService" as AS
+participant "TokenRevocadoRepository" as TR
+participant "BitacoraRepository" as BR
+database "auth_schema" as DBA
+participant "JwtFilter\n(ms-tributario)" as TF
+
+== Inicio de sesión (cambio: el token lleva jti) ==
+U -> FE : usuario y contraseña
+FE -> AC : POST /api/auth/login
+AC -> AS : login(request, ip)
+AS -> AS : JwtProvider.generate(...) agrega el claim jti = UUID aleatorio\n(sub, roles, clienteId si es cliente, jti, iat, exp = +8 h)
+AS --> FE : 200 {token, ...}
+
+== Cierre de sesión ==
+U -> FE : pulsa "Salir"
+FE -> JF : POST /api/auth/logout\nAuthorization: Bearer <JWT>
+JF -> JF : verifica firma y exp
+alt token ausente, vencido o alterado (sin sesión)
+  JF --> FE : 401 (no llega al controlador)
+else token válido
+  JF -> TR : ¿existe el jti en tokens_revocados?
+  TR -> DBA : SELECT por jti
+  alt el jti ya está revocado
+    JF --> FE : 401 (la sesión ya estaba cerrada)
+  else jti vigente (o token anterior sin jti)
+    JF -> AC : autentica con usuario, roles y datos del token (jti, exp)
+    AC -> AS : logout(usuario, jti, exp, ip)
+    AS -> TR : borra los registros ya vencidos (expira_en < ahora)
+    alt el token trae jti
+      AS -> TR : guarda el jti con usuario y expira_en = exp del token
+      TR -> DBA : INSERT tokens_revocados
+      AS -> BR : evento LOGOUT
+    else token anterior al cambio (sin jti)
+      AS -> BR : evento LOGOUT con detalle "token sin jti: no revocable"
+    end
+    BR -> DBA : INSERT bitacora_seguridad
+    AC --> FE : 204
+  end
+  FE -> FE : borra token y usuario de localStorage\n(también si la llamada falló) y vuelve al login
+end
+
+== Uso posterior del token revocado ==
+FE -> JF : GET /api/auth/me con el token revocado
+JF -> TR : ¿existe el jti en tokens_revocados?
+JF --> FE : 401
+
+note over TF
+  RIESGO RESIDUAL (decisión de Julio, opción B): ms-tributario NO consulta la lista
+  porque no puede leer auth_schema (HT-01). Un token revocado en ms-auth sigue
+  aceptándose en ms-tributario hasta su exp (máx. 8 h). El token con jti no rompe
+  su JwtFilter: ignora los claims que no usa.
+end note
+FE -> TF : GET /api/tributario/... con el token revocado
+TF --> FE : 200 (solo hasta que venza el token)
+@enduml
