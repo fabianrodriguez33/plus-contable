@@ -1,0 +1,123 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T48 · HU-12 · Clases del recordatorio mensual de revisión del SIRE (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class RecordatorioSireJob <<nuevo>> {
+  +ejecutarDiario(): void
+}
+class RecordatorioSireService <<nuevo>> {
+  +generar(hoy): List<Aviso>
+  +fechaRevision(periodo): LocalDate
+  -clientesConSire(periodo): List<Cliente>
+}
+class AvisoService <<nuevo, compartido>> {
+  +crear(tipo, periodo, diasAntes, clientes, mensaje): List<Aviso>
+  +bandeja(soloNoLeidos): List<AvisoDto>
+  +marcarLeido(id): AvisoDto
+}
+interface EnvioCorreo <<nuevo, puerto>> {
+  +enviar(destino, asunto, texto): ResultadoEnvio
+}
+class ParametroSistemaService <<nuevo, compartido>> {
+  +entero(clave, porDefecto): int
+  +lista(clave): List<Integer>
+  +texto(clave): String
+  +guardar(clave, valor, usuario): void
+}
+class ParametroSistemaController <<nuevo, compartido>> {
+  +listar(): List<ParametroDto>
+  +actualizar(clave, dto): ParametroDto
+}
+class AvisoController <<nuevo, compartido>> {
+  +bandeja(soloNoLeidos): List<AvisoDto>
+  +marcarLeido(id): AvisoDto
+}
+class Aviso <<nuevo, compartido>> {
+  id: Long
+  tipo: TipoAviso
+  periodo: LocalDate
+  diasAntes: int
+  canal: CanalAviso
+  mensaje: String
+  estado: EstadoAviso
+  creadoEn: LocalDateTime
+  leidoEn: LocalDateTime
+}
+class AvisoCliente <<nuevo, compartido>> {
+  avisoId: Long
+  clienteId: Long
+}
+class ParametroSistema <<nuevo, compartido>> {
+  clave: String
+  valor: String
+  descripcion: String
+  actualizadoEn: LocalDateTime
+  actualizadoPor: String
+}
+enum TipoAviso <<nuevo>> {
+  RECORDATORIO_SIRE
+  CAMBIO_CONDICION_RUC
+}
+enum CanalAviso <<nuevo>> {
+  SISTEMA
+  CORREO
+}
+enum EstadoAviso <<nuevo>> {
+  PENDIENTE_ENVIO
+  ENVIADO
+  FALLIDO
+  NO_LEIDO
+  LEIDO
+}
+class ClienteRepository <<existe>> {
+  findByActivoTrue()
+}
+interface ObligacionRepository <<existe>> {
+  findByClienteIdOrderByPeriodoDesc(clienteId)
+}
+
+interface AvisoRepository <<nuevo>> {
+  existsByTipoAndPeriodoAndDiasAntesAndCanal(...)
+}
+interface ParametroSistemaRepository <<nuevo>> {
+  findById(clave)
+}
+
+RecordatorioSireJob --> RecordatorioSireService
+RecordatorioSireService --> ParametroSistemaService : sire.dia_revision, avisos.dias_antes
+RecordatorioSireService --> ClienteRepository
+RecordatorioSireService --> ObligacionRepository
+RecordatorioSireService --> AvisoService
+AvisoService --> EnvioCorreo
+AvisoService --> AvisoRepository
+AvisoController --> AvisoService
+ParametroSistemaController --> ParametroSistemaService
+ParametroSistemaService --> ParametroSistemaRepository
+Aviso --> TipoAviso
+Aviso --> CanalAviso
+Aviso --> EstadoAviso
+AvisoCliente "0..*" --> "1" Aviso : aviso_id
+AvisoCliente "0..*" --> "1" Cliente : cliente_id
+AvisoRepository ..> Aviso
+ParametroSistemaRepository ..> ParametroSistema
+
+note bottom of RecordatorioSireService
+  Cada mes genera el recordatorio de revisar los registros de compras y ventas (SIRE) (criterio 1); lista solo los clientes que
+  corresponden (criterio 2); un cliente sin obligación SIRE no aparece (criterio 3); el contador lo recibe antes de la fecha
+  de revisión, a los 3 días, 1 día y el mismo día (criterio 4). Volver a ejecutar no duplica avisos (consulta existsBy...).
+end note
+note right of ParametroSistema
+  Supuesto: la fecha de revisión del SIRE es configurable, pendiente de Beto (parámetro sire.dia_revision, un día del mes).
+  Supuesto (decisión de Beto, 06/11): los avisos van por correo y en el sistema, a los 3 días, 1 día y el mismo día. Los días son el parámetro avisos.dias_antes = 3,1,0.
+  Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema.
+  Supuesto: corresponde SIRE a los clientes activos con obligación de IGV en el periodo (no hay un tipo SIRE en TipoObligacion).
+  Supuesto: el aviso del sistema es una bandeja compartida del estudio; el correo va a la dirección del parámetro avisos.correo_estudio.
+  Supuesto: si el correo falla, el aviso queda FALLIDO y el del sistema se muestra igual.
+  Supuesto (decisión de Beto, 06/11): el régimen RER se agrega a los regímenes del cliente (cambio de HU-01, fuera de esta historia).
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-12, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteRepository, ObligacionRepository, TipoObligacion, model.Cliente.activo, GlobalExceptionHandler
+@enduml
