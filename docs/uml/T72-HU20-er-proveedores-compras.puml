@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-title T72 · HU-20 · Modelo de datos de los proveedores y las compras del cliente (diseño previo)
+title T72 · HU-20 · Modelo de datos de los proveedores y las compras del cliente (diseño previo, corregido)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -13,7 +13,6 @@ entity "tributario_schema.clientes" as clientes <<existe>> {
   * razon_social : VARCHAR(200)
   * condicion_habido : HABIDO | NO_HABIDO
 }
-
 entity "tributario_schema.proveedores" as prov <<nuevo>> {
   * id : BIGSERIAL <<PK>>
   --
@@ -21,9 +20,9 @@ entity "tributario_schema.proveedores" as prov <<nuevo>> {
     razon_social : VARCHAR(200)
     condicion_habido : HABIDO | NO_HABIDO
     condicion_registrada_en : DATE
-  * fuente : MANUAL = MANUAL
+  * fuente : AUTOMATICA | MANUAL = MANUAL
+    ultimo_intento_en : TIMESTAMP
 }
-
 entity "tributario_schema.compras_cliente" as compras <<nuevo>> {
   * id : BIGSERIAL <<PK>>
   --
@@ -36,6 +35,11 @@ entity "tributario_schema.compras_cliente" as compras <<nuevo>> {
   UNIQUE (cliente_id, proveedor_id, comprobante)
   INDEX (cliente_id, periodo)
 }
+entity "tributario_schema.parametros_sistema" as param <<definido en HU-12>> {
+  * clave : VARCHAR(80) <<PK>>
+  --
+  * valor : VARCHAR(200)
+}
 
 clientes ||--o{ compras : cliente_id, ON DELETE CASCADE
 prov ||--o{ compras : proveedor_id
@@ -43,14 +47,13 @@ prov ||--o{ compras : proveedor_id
 note bottom of prov
   La condición es del proveedor y la comparten todos los clientes. Nula = SIN_VERIFICAR (criterio 1).
   Habido -> compra apta para crédito fiscal (criterio 2); No Habido -> en riesgo (criterio 3).
+  fuente dice si la condición vino de la consulta automática o del respaldo manual; ultimo_intento_en guarda el último intento de consulta.
 end note
-
 note right of compras
-  Supuesto: la condición Habido/No Habido se ingresa a mano; la columna fuente solo admite MANUAL.
-  Supuesto: las compras se cargan a mano mientras HU-25 no defina de dónde salen al sistema.
-  Supuesto: el mismo comprobante de un proveedor no se repite en un cliente.
-  Para automatizar: ampliar fuente (por ejemplo, SUNAT_PADRON) y guardar la fecha de cada consulta.
+  Supuesto (decisión de Beto, 06/11): consulta automática con respaldo manual; fuente admite AUTOMATICA y MANUAL.
+  Supuesto: la consulta automática usa ConsultaRuc (OpenRUC, de terceros, estuvo caído); sin respuesta se usa la última condición guardada.
+  Supuesto: la vigencia de la condición es el parámetro proveedores.vigencia_dias (30 por defecto), editable desde el sistema.
+  Supuesto: las compras se cargan a mano mientras HU-25 no defina de dónde salen al sistema; el mismo comprobante de un proveedor no se repite en un cliente.
 end note
-
-footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-20 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y condicion_habido)
+footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-20, el código y la base de develop. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y condicion_habido), ruc.ConsultaRuc
 @enduml
