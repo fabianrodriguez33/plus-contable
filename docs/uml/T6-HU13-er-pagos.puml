@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-title T6 · HU-13 · Modelo de datos de los pagos de una obligación (diseño previo)
+title T6 · HU-13 · Modelo de datos de los pagos con comprobante, saldo y acumulado (diseño previo, corregido)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -12,7 +12,6 @@ entity "tributario_schema.clientes" as clientes <<existe>> {
   * ruc : VARCHAR(11) <<UNIQUE>>
   * razon_social : VARCHAR(200)
 }
-
 entity "tributario_schema.obligaciones" as obligaciones <<cambia>> {
   * id : BIGSERIAL <<PK>>
   --
@@ -26,7 +25,6 @@ entity "tributario_schema.obligaciones" as obligaciones <<cambia>> {
     monto_determinado : NUMERIC(14,2)
   UNIQUE (cliente_id, tipo_obligacion, periodo)
 }
-
 entity "tributario_schema.pagos_obligacion" as pagos <<nuevo>> {
   * id : BIGSERIAL <<PK>>
   --
@@ -34,24 +32,32 @@ entity "tributario_schema.pagos_obligacion" as pagos <<nuevo>> {
   * fecha_pago : DATE
   * monto_pagado : NUMERIC(14,2)  CHECK (monto_pagado > 0)
   * numero_constancia : VARCHAR(30)
+  * nombre_archivo : VARCHAR(255)
+  * content_type : VARCHAR(100) = application/pdf
+  * tamano_bytes : BIGINT
+  * ruta_almacenamiento : VARCHAR(400)
+  * acumulado_despues : NUMERIC(14,2)
+  * saldo_despues : NUMERIC(14,2)  CHECK (saldo_despues >= 0)
   * registrado_en : TIMESTAMP = ahora
   UNIQUE (obligacion_id, numero_constancia)
+  INDEX (obligacion_id, fecha_pago)
 }
 
 clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
 obligaciones ||--o{ pagos : obligacion_id, ON DELETE CASCADE
 
 note bottom of obligaciones
-  Cambio: el CHECK de estado admite PAGO_PARCIAL y PAGADO.
-  Supuesto: se recrea con nombre estable (ck_obligaciones_estado), igual que ck_obligaciones_tipo en HU-07.
-  El estado depende de la suma de pagos frente a monto_determinado.
+  Cambio: el CHECK de estado admite PAGO_PARCIAL y PAGADO. Supuesto: el CHECK actual es en línea y sin nombre; para recrearlo como
+  ck_obligaciones_estado hay que borrar antes el que PostgreSQL le puso. El estado depende del acumulado de pagos frente a monto_determinado.
 end note
-
 note bottom of pagos
-  Supuesto: la constancia es un número de constancia (texto); sin archivo adjunto.
-  Supuesto: una obligación admite varios pagos; el mismo número de constancia no se repite en una obligación.
-  Supuesto: ON DELETE CASCADE como el resto de tablas hijas del esquema.
+  Varios pagos parciales por obligación (decisión de Beto, 06/11). Cada fila guarda el acumulado y el saldo que quedaron después de ese pago;
+  el acumulado de la obligación es la suma de monto_pagado y no se duplica en obligaciones.
 end note
-
-footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-13 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (obligaciones y clientes)
+note right of pagos
+  Supuesto (decisión de Beto, 06/11): el comprobante lleva archivo adjunto; se guarda como en HU-04 (nombre, tipo, tamaño y ruta del archivo en disco).
+  Supuesto: archivo PDF, de hasta pagos.archivo_max_mb (parámetro editable, 10 por defecto).
+  Supuesto: el mismo número de constancia no se repite dentro de una obligación; ON DELETE CASCADE como el resto de las tablas hijas.
+end note
+footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-13, el código y la base de develop. Código existente: backend/ms-tributario/src/main/resources/schema.sql (obligaciones, clientes y documentos_legales)
 @enduml
