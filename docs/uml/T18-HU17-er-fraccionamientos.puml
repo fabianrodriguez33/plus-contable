@@ -1,0 +1,58 @@
+@startuml
+!pragma layout smetana
+title T18 · HU-17 · Modelo de datos del fraccionamiento y sus cuotas (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+entity "tributario_schema.fraccionamientos" as frac <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tributo : IGV | RENTA | PLAME | ESSALUD | RETENCION_QUINTA | AFP
+  * monto_total : NUMERIC(14,2)  CHECK (> 0)
+  * numero_cuotas : INTEGER  CHECK (>= 2)
+  * fecha_primera_cuota : DATE
+  * registrado_en : TIMESTAMP = ahora
+}
+entity "tributario_schema.cuotas_fraccionamiento" as cuotas <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * fraccionamiento_id : BIGINT <<FK>>
+  * numero : INTEGER
+  * fecha_vencimiento : DATE
+  * monto : NUMERIC(14,2)  CHECK (> 0)
+  * estado : PENDIENTE | PAGADA = PENDIENTE
+    fecha_pago : DATE
+  UNIQUE (fraccionamiento_id, numero)
+  INDEX (fecha_vencimiento, estado)
+}
+entity "tributario_schema.parametros_sistema" as param <<definido en HU-12>> {
+  * clave : VARCHAR(80) <<PK>>
+  --
+  * valor : VARCHAR(200)
+}
+
+clientes ||--o{ frac : cliente_id, ON DELETE CASCADE
+frac ||--|{ cuotas : fraccionamiento_id, ON DELETE CASCADE
+
+note bottom of cuotas
+  Cada cuota es una fila con su fecha: el calendario las lee por (fecha_vencimiento) junto con las obligaciones (criterio 3).
+  Una cuota PENDIENTE con fecha anterior a hoy es la que se resalta como riesgo (criterio 4); no se guarda un estado «vencida».
+  El monto, el número de cuotas y la fecha son obligatorios (NOT NULL): sin ellos no se guarda (criterios 1 y 2).
+end note
+note right of frac
+  Supuesto: tributo usa los mismos valores de TipoObligacion, incluidos ESSALUD, quinta y AFP (decisión de Beto, 06/11).
+  Supuesto: sin columna de resolución ni de número de acogimiento en esta historia.
+  Supuesto: el máximo de cuotas (fraccionamiento.max_cuotas) se lee de parametros_sistema; no se guarda en esta tabla.
+  Supuesto: ON DELETE CASCADE como el resto de las tablas hijas del cliente.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-17, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y obligaciones), TipoObligacion
+@enduml
