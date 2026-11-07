@@ -1,0 +1,57 @@
+@startuml
+title T165 · HU-24 · Actividad: seguimiento de un documento faltante (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+|Contador|
+start
+:Registra el documento que falta con su fecha límite;
+
+|Sistema|
+if (¿Datos válidos y el cliente existe?) then (no)
+  :Rechaza: faltan o son inválidos / cliente no encontrado;
+  stop
+endif
+:Guarda el documento en estado PENDIENTE\ncon la fecha en que se solicitó;
+
+|Cliente|
+:Recibe la solicitud del documento;
+
+|Contador|
+repeat
+  :Consulta qué documentos faltan del cliente;
+  |Sistema|
+  if (¿Llegó la fecha límite sin entrega?) then (sí)
+    :Muestra el documento como SIN_RESPUESTA;
+    note right
+      Supuesto: SIN_RESPUESTA se calcula al consultar,
+      no se guarda.
+    end note
+  else (no)
+    :Lo muestra PENDIENTE;
+  endif
+  |Contador|
+repeat while (¿Sigue sin entregarse y sin decidir?) is (sí)
+
+if (¿El cliente entregó el documento?) then (sí)
+  :Registra la entrega;
+  |Sistema|
+  :Guarda la fecha de entrega y pasa a ENTREGADO;
+else (no)
+  |Contador|
+  if (¿Está SIN_RESPUESTA?) then (sí)
+    :Elige registrarlo como incidencia;
+    |Sistema|
+    :Crea la incidencia (tipo CLIENTE_NO_ENVIA_DOCUMENTOS, HU-23)\ny la enlaza al documento;
+  else (no)
+    :Sigue esperando la fecha límite;
+  endif
+endif
+
+|Contador|
+:Ve el resultado en la lista de documentos del cliente;
+stop
+
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-24, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService.buscar; la incidencia usa el servicio de HU-23 (diseño previo)
+@enduml
