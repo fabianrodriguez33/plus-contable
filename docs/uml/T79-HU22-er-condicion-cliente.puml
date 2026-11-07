@@ -1,0 +1,52 @@
+@startuml
+!pragma layout smetana
+title T79 · HU-22 · Modelo de datos de la condición del RUC y sus avisos (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe, cambia>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
+  * estado_sunat : ACTIVO | SUSPENDIDO | BAJA | DESCONOCIDO = DESCONOCIDO  <<nuevo>>
+    condicion_verificada_en : TIMESTAMP  <<nuevo>>
+  * activo : BOOLEAN = true
+}
+entity "tributario_schema.avisos" as avisos <<definido en HU-12>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * tipo : RECORDATORIO_SIRE | CAMBIO_CONDICION_RUC
+  * canal : SISTEMA | CORREO
+  * mensaje : VARCHAR(500)
+  * estado : NO_LEIDO | LEIDO | ENVIADO | FALLIDO
+  * creado_en : TIMESTAMP
+}
+entity "tributario_schema.avisos_clientes" as ac <<definido en HU-12>> {
+  * aviso_id : BIGINT <<PK>> <<FK>>
+  * cliente_id : BIGINT <<PK>> <<FK>>
+}
+entity "tributario_schema.parametros_sistema" as param <<definido en HU-12>> {
+  * clave : VARCHAR(80) <<PK>>
+  --
+  * valor : VARCHAR(200)
+}
+
+avisos ||--|{ ac : aviso_id
+clientes ||--o{ ac : cliente_id, ON DELETE CASCADE
+
+note bottom of clientes
+  Cambio: se agregan estado_sunat y condicion_verificada_en (ALTER TABLE ... ADD COLUMN IF NOT EXISTS, como el resto del esquema).
+  El aviso se crea cuando condicion_habido pasa a NO_HABIDO o estado_sunat pasa a SUSPENDIDO; si no hay cambio, no hay aviso.
+end note
+note right of param
+  Supuesto: la frecuencia de verificación es el parámetro ruc.verificacion_cada_dias (7 por defecto), editable desde el sistema (decisión de Beto, 06/11).
+  Supuesto: estado_sunat sale de la consulta automática; si no hay consulta, se llena a mano en la ficha.
+  Supuesto: ConsultaRuc usa OpenRUC (de terceros, estuvo caído); sin respuesta no se cambia nada y se reintenta.
+  Supuesto: no se guarda un historial de condiciones en esta historia; el cambio queda en el aviso.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-22, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y condicion_habido), model.Cliente, ruc.ConsultaRucDto
+@enduml
