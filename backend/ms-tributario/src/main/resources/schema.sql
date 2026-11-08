@@ -1,6 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS tributario_schema;
 
--- ==============================================================================
+-- =====================================================================================
 -- Este script es idempotente y se ejecuta en cada arranque. Cubre dos casos:
 --   1) Base nueva: los CREATE TABLE crean todo.
 --   2) Base existente (anterior a la integracion): los ALTER ... IF NOT EXISTS de la
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.notificaciones_sol (
 
 CREATE INDEX IF NOT EXISTS idx_notificaciones_cliente_estado_plazo
     ON tributario_schema.notificaciones_sol(cliente_id, estado, plazo_respuesta);
-=======
+
 -- HU-13 (Julio): pagos de una obligación ya declarada. Varios pagos parciales hasta saldar; cada pago guarda su
 -- comprobante (PDF en disco, como los documentos de HU-04) y el acumulado y el saldo que quedaron después de él.
 CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
