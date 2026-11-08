@@ -1,43 +1,158 @@
 # PLUS CONTABLE
 
-Sistema Web y Móvil para la Centralización y Control de Obligaciones Tributarias en Estudios Contables.
+Sistema web de gestión tributaria para estudios contables que atienden a clientes MYPE. Centraliza el expediente de cada cliente, sus obligaciones tributarias y el calendario de vencimientos.
+
+- **Cliente:** V&F Asesores Empresarial.
+- **Curso:** Ingeniería de Software I, Universidad Peruana Unión.
+- **Estado:** Sprint 1 cerrado (tag `sprint-1`) · Sprint 2 en curso.
+
+## Contenido
+
+[El problema](#el-problema-que-resuelve) · [Qué hace](#qué-hace-el-sistema) · [Sprints](#sprints) · [Arquitectura](#arquitectura) · [Tecnologías](#tecnologías) · [Ejecutar en local](#cómo-ejecutarlo-en-local) · [Seguridad](#seguridad) · [Documentación](#documentación) · [Metodología](#metodología) · [Equipo](#equipo)
+
+## El problema que resuelve
+
+Un estudio contable lleva decenas de clientes, cada uno con su régimen, su RUC y sus fechas límite de SUNAT. Cuando el expediente, los documentos y los vencimientos viven en archivos sueltos, se pierden plazos y cuesta saber qué falta por declarar o pagar.
+
+- **Al contador** le da un solo lugar para el expediente del cliente, la programación mensual de obligaciones, el calendario de vencimientos y el registro de lo declarado.
+- **Al cliente MYPE** le prepara el camino para ver su propia información y sus constancias (acceso del cliente: planificado para el Sprint 2, ver abajo). Hoy el sistema ya separa los datos de cada cliente por permisos.
+
+## Qué hace el sistema
+
+### Ya implementado y fusionado en `develop`/`main` (Sprint 1)
+
+Comprobado contra el código de `develop`:
+
+- **Expediente del cliente:** ficha maestra con consulta de RUC (OpenRUC) al registrar, socios y capital, nómina de trabajadores con su sistema pensionario, documentos del expediente y acuerdo de honorarios.
+- **Obligaciones:** programación mensual de las obligaciones del cliente según el cronograma SUNAT 2026 ([`docs/cronograma_sunat_2026.md`](docs/cronograma_sunat_2026.md)).
+- **Calendario de vencimientos:** vista de los vencimientos con días restantes y vencidos, con su pantalla.
+- **Declaración y vencimiento:** registro de la declaración de una obligación y variación de la fecha de vencimiento con historial.
+- **Acceso y permisos:** inicio y cierre de sesión con JWT, permisos por perfil (`ADMIN`, `CONTADOR`, `CLIENTE_MYPE`) y aislamiento entre clientes.
+- **Cifrado de Claves SOL en reposo** (AES-256, formato AES/GCM; migración de lo antiguo). Aún no hay pantalla ni API para cargarlas.
+
+Apagado o incompleto a propósito:
+
+| Tema | Estado |
+|---|---|
+| ESSALUD | No se genera (`app.tributario.essalud-activo = false`): falta confirmar la regla del estudio. |
+| Quinta categoría | No se genera (`app.tributario.quinta-activa = false`): falta la regla de proyección. |
+| AFP | No se genera: tiene su propio cronograma y aún no está disponible. |
+| Cuentas de cliente | El rol `CLIENTE_MYPE` existe, pero todavía no hay forma de crear cuentas de cliente. |
+
+### Planificado para el Sprint 2 (en desarrollo, no terminado)
+
+- Constancias de pago.
+- Alertas de vencimientos y notificaciones SUNAT.
+- Custodia segura de Claves SOL.
+- Cobranza de honorarios.
+- Acceso del cliente.
+- Fraccionamientos.
+
+Los diseños previos de varias de estas historias ya están en [`docs/uml`](docs/uml/TRAZABILIDAD.md); parte del backend está en Pull Requests abiertos y no cuenta como terminada hasta que se fusione en `develop`.
+
+## Sprints
+
+| Sprint | Objetivo |
+|---|---|
+| 1 | Base técnica y núcleo del estudio: expediente del cliente, obligaciones, calendario de vencimientos, declaración, inicio de sesión y permisos. |
+| 2 | Pagos y constancias, alertas de vencimientos y notificaciones SUNAT, custodia de Claves SOL, cobranza de honorarios, acceso del cliente y fraccionamientos. |
+
+## Arquitectura
+
+Dos microservicios Spring Boot sobre una misma base PostgreSQL (un esquema por servicio) y una web en React. `ms-tributario` valida los tokens que emite `ms-auth` con el mismo secreto.
+
+```mermaid
+flowchart LR
+    W["frontend-web<br/>React + TypeScript + Vite + Tailwind<br/>:5173"]
+    A["ms-auth<br/>:8081"]
+    T["ms-tributario<br/>:8082"]
+    subgraph DB["PostgreSQL :5432"]
+        AS[("auth_schema")]
+        TS[("tributario_schema")]
+    end
+    W -->|"/api/auth"| A
+    W -->|"/api/tributario"| T
+    A --> AS
+    T --> TS
+    T -. "valida el JWT (mismo secreto)" .-> A
+    T -->|"consulta de RUC"| R["OpenRUC"]
+```
+
+| Carpeta | Contenido |
+|---|---|
+| `backend/ms-auth` | Usuarios, inicio y cierre de sesión, emisión del JWT. |
+| `backend/ms-tributario` | Clientes, socios, trabajadores, documentos, acuerdos, obligaciones, calendario y cifrado de Claves SOL. |
+| `frontend-web` | Aplicación web. |
+| `db/`, `docker-compose.yml` | PostgreSQL local y scripts de usuarios por servicio. |
+| `docs/` | Diagramas UML, trazabilidad y documentos de cada historia. |
+
+Las carpetas `frontend-mobile` y `bot-rpa` no tienen código de producto todavía.
+
+## Tecnologías
+
+| Capa | Tecnología | Versión |
+|---|---|---|
+| Backend | Java | 21 |
+| Backend | Spring Boot | 3.3.5 |
+| Backend | JJWT | 0.12.6 |
+| Backend | JaCoCo (cobertura) | configurado en `pom.xml` |
+| Base de datos | PostgreSQL (imagen de Docker) | 16 |
+| Frontend | React / React DOM | ^18.3.1 |
+| Frontend | TypeScript | ^5.6.3 |
+| Frontend | Vite | ^5.4.10 |
+| Frontend | Tailwind CSS | ^3.4.19 |
+| Frontend | React Router, Axios | ^6.27.0, ^1.7.7 |
+| Pruebas | JUnit/Spring Boot Test (backend); Vitest y Testing Library (web) | Vitest ^2.1.9 |
+
+Las versiones del frontend son los rangos de `frontend-web/package.json`.
+
+## Seguridad
+
+Solo lo que ya está implementado en `develop`:
+
+- **JWT** firmado con un secreto compartido (`JWT_SECRET`, mínimo 32 caracteres); vence a las 8 horas. `ms-tributario` lo valida en cada petición.
+- **Cierre de sesión con revocación:** `POST /api/auth/logout` revoca el token por su identificador (`jti`) en `ms-auth`. Limitación conocida: `ms-tributario` todavía no consulta esa lista, así que un token revocado puede seguir valiendo allí hasta vencer.
+- **Permisos por perfil y por ruta:** las rutas no listadas son solo del estudio (`ADMIN`, `CONTADOR`); un `CLIENTE_MYPE` solo accede a lo suyo (matriz en [`docs/HU-38-matriz-de-permisos.md`](docs/HU-38-matriz-de-permisos.md)).
+- **Claves SOL cifradas en reposo** con AES-256 (`AES_SECRET_KEY` de 32 caracteres), AES/GCM para lo nuevo.
+- **Un usuario de base de datos por servicio** (opcional): la propia base impide que `ms-tributario` lea `auth_schema` y al revés.
+- Los secretos viven en el `.env` local, que Git ignora. No se suben.
+
+## Documentación
+
+- [`docs/uml/`](docs/uml): diagramas PlantUML (`.puml`) y sus imágenes en [`docs/uml/img/`](docs/uml/img).
+- [`docs/uml/TRAZABILIDAD.md`](docs/uml/TRAZABILIDAD.md): qué diagrama corresponde a qué tarea y a qué código o prueba; incluye los diseños previos del Sprint 2.
+- [`docs/HU-38-matriz-de-permisos.md`](docs/HU-38-matriz-de-permisos.md): permisos por rol y por ruta.
+- [`docs/cronograma_sunat_2026.md`](docs/cronograma_sunat_2026.md): cronograma SUNAT 2026 usado por la programación mensual.
+- [`docs/HU-01-consulta-ruc.md`](docs/HU-01-consulta-ruc.md) y [`docs/verificacion-responsiva-ficha.md`](docs/verificacion-responsiva-ficha.md).
+- [`docs/sprint1-jeanpierre/`](docs/sprint1-jeanpierre/README.md): detalle de HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38.
+
+## Metodología
+
+- **Scrum** en sprints de dos semanas, con Sprint Backlog por historia y tarea.
+- **Ramas:** `main` guarda las entregas de cada sprint (con tag, por ejemplo `sprint-1`); `develop` integra el trabajo; cada historia o tarea sale de `develop` en una rama corta (`feature/HU-xx-...`, `docs/...`) y vuelve por Pull Request.
+- **Revisión cruzada:** cada PR se abre en borrador y lo revisa otra persona del equipo antes de fusionarse.
+- **Definición de Hecho:** una tarea o historia cuenta como hecha solo con su PR fusionado en `develop`, con pruebas que pasan y al menos 70 % de cobertura.
+- **Definición de Listo:** una historia entra al sprint cuando está lista para implementarse (su DoR marcada en el Sprint Backlog).
 
 ## Equipo
-- Alva Pardave Pedro Ricardo
-- Miranda Gamarra Jeanpierre Samuel
-- Rodríguez Bazán Julio Fabián
 
-## Stack Tecnológico
-- **Backend:** Spring Boot (ms-auth, ms-tributario)
-- **Frontend Web:** React + TypeScript + Vite
-- **Frontend Móvil:** Kotlin Multiplatform + Compose (planificado, sin código aún)
-- **Base de Datos:** PostgreSQL
-- **RPA:** Python + Selenium/Puppeteer (planificado, sin código aún)
+| Persona | Usuario de GitHub |
+|---|---|
+| Julio Fabián Rodríguez Bazán | [fabianrodriguez33](https://github.com/fabianrodriguez33) |
+| Pedro Ricardo Alva Pardave | [kakatsumi](https://github.com/kakatsumi) |
+| Jeanpierre Samuel Miranda Gamarra | [JeanpierreSam](https://github.com/JeanpierreSam) |
 
-## Cliente
-V&F Asesores Empresarial - Sr. Villegas Calizaya Juvencio Ausberto
+**Profesor:** Mg. Omar Loaiza Jara.
 
-## Estado del Sprint 1
+## Estado del proyecto
 
-Cierre del Sprint 1 al 05/11/2026. Una tarea o historia cuenta como hecha solo si está **fusionada en `develop`**. La aceptación del cliente (Beto) sigue pendiente de revisión en todas las historias.
+- **Sprint 1:** cerrado el 05/11/2026 y entregado a `main` (tag `sprint-1`). La aceptación del cliente sigue pendiente de revisión.
+- **Sprint 2:** en curso. Las historias se marcan como hechas solo al fusionarse en `develop`.
+- Más detalle del cierre y de lo pendiente: PR de cada cambio y [`docs/sprint1-jeanpierre/README.md`](docs/sprint1-jeanpierre/README.md).
 
-**Qué hay hecho:** 11 de 15 historias (62 de 85 puntos) y 79 de 94 tareas: ficha maestra del cliente, socios y capital, nómina de trabajadores, expediente de documentos, acuerdo de honorarios, programación mensual de obligaciones, calendario de vencimientos, registro de la declaración, variación del vencimiento, y los permisos por perfil con el aislamiento entre clientes. Funciona en `ms-auth`, `ms-tributario` y `frontend-web`. No existe código de la app móvil ni del RPA.
+---
 
-**Pendiente, apagado o incompleto:**
-
-- **ESSALUD:** no se genera (`app.tributario.essalud-activo = false`); la pantalla de programación dice «Pendiente de confirmar la regla del estudio».
-- **Quinta categoría:** no se genera (`app.tributario.quinta-activa = false`); dice «Pendiente de regla de proyección». La UIT de cada año se carga desde el entorno: el repositorio no trae ningún monto.
-- **AFP:** nunca se genera, porque tiene su propio cronograma y aún no lo tenemos.
-- **HU-07:** falta el criterio «con régimen y RUC registrados, se generan los vencimientos del mes» y la tarea 58.
-- **HU-36:** no hay endpoint de cierre de sesión (`POST /api/auth/logout` responde 404): el token sigue válido hasta vencer (8 horas) y solo se descarta en el navegador. Faltan las tareas 24 y 25.
-- **HU-13 (constancia de pago) y HU-37 (acceso del cliente):** sin empezar.
-- **Cuentas de cliente:** el rol `CLIENTE_MYPE` y el claim `clienteId` existen en `ms-auth`, pero todavía no hay forma de crear cuentas de cliente (HU-37).
-- **HU-38:** la matriz de permisos ([docs/HU-38-matriz-de-permisos.md](docs/HU-38-matriz-de-permisos.md)) está pendiente de validar con Beto, y también si a un cliente que pide datos de otra empresa se le responde 403 (hoy) o 404.
-- **No incluido en esta entrega:** las correcciones de UML de Ricardo (PR #17), el rediseño visual (PR #21, en borrador) y la rama `feature/HU-13-pago`.
-
-Las cifras exactas de pruebas de cada cambio están en la descripción de su PR; los incidentes del sprint, en la bitácora de Incidencias del equipo (fuera del repositorio). El trabajo de Jeanpierre está detallado en [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).
-
-## Cómo levantar el entorno de desarrollo
+## Cómo ejecutarlo en local
 
 Pasos para dejar funcionando la base de datos, `ms-auth`, `ms-tributario` y la web en tu equipo, sin ayuda de nadie. Los comandos funcionan en Git Bash o en PowerShell; donde cambian, se indican los dos.
 
@@ -142,6 +257,8 @@ npm ci
 npm run dev
 ```
 
+Si tus servicios no están en los puertos 8081 y 8082, la web acepta `VITE_AUTH_URL` y `VITE_TRIBUTARIO_URL` (opcionales).
+
 Abre http://localhost:5173 e inicia sesión con `ADMIN_USERNAME` y `ADMIN_PASSWORD` de tu `.env`. Si entras a la pantalla principal, los tres servicios y la base están funcionando.
 
 ### 7. Apagar todo
@@ -155,6 +272,8 @@ docker compose stop
 `docker compose stop` apaga la base **sin borrar tus datos**. No uses `docker compose down -v`: borra el volumen con todos los datos.
 
 ### Correr las pruebas
+
+Web: `cd frontend-web && npm test` (Vitest). Backend: las pruebas usan una base desechable propia.
 
 Las pruebas usan una base de datos propia y desechable. **Nunca** las corras contra `plus_contable_db`. Ejemplo con una base temporal en otro puerto:
 
@@ -187,7 +306,10 @@ Si no usas esas opciones, Maven busca una base llamada `plus_contable_test` en e
 | El servicio no conecta con la base | Docker Desktop apagado, la base no está `healthy`, o `DB_PASSWORD` distinta de `POSTGRES_PASSWORD`. Si cambiaste `POSTGRES_PASSWORD` después de crear la base, la base conserva la anterior. |
 | La web dice "No se pudo conectar con el servidor" | `ms-auth` o `ms-tributario` no están en marcha: revisa sus terminales y las direcciones de salud de los pasos 4 y 5. |
 
-## Usuarios de base de datos por servicio
+### Usuarios de base de datos por servicio (opcional)
+
+<details>
+<summary>Ver la guía</summary>
 
 Por defecto `ms-auth` y `ms-tributario` se conectan con el mismo usuario (`DB_USER`, normalmente `postgres`, que lo puede todo). Con los usuarios por servicio, cada uno se conecta con el suyo y la propia base de datos rechaza que `ms-tributario` consulte `auth_schema` (y al revés). Es **opcional**: si no defines las variables siguientes, nada cambia.
 
@@ -226,7 +348,4 @@ Si algo falla, quita las cuatro variables del `.env` y reinicia los servicios: v
 
 `AislamientoPorUsuarioPostgresTest` (en `ms-tributario`) crea una base temporal, le aplica los `schema.sql` reales de ambos servicios, ejecuta el script de usuarios y comprueba que `ms-tributario` recibe «permiso denegado» al consultar `auth_schema` y `ms-auth` al consultar `tributario_schema`, y que cada servicio puede ejecutar su propio `schema.sql` con su usuario nuevo. Elimina todo al terminar.
 
-## Sprint 1 · Jeanpierre Miranda
-HU-03, HU-04, HU-05, HU-09, HU-10 y HU-38 en `ms-tributario` y `frontend-web`, con sus pruebas. Ya están en `develop` (PR #2). La tarea 94 de HU-38 (un cliente nunca ve datos de otro) está **hecha** con el claim `clienteId` del token, pero **pendiente de revisión de Beto**: hoy responde 403 al cliente ajeno y se propone 404 (ver `docs/sprint1-jeanpierre/README.md`). Falta HU-37 (alta de cuentas de cliente).
-
-Detalle, tecnologías y estado: [docs/sprint1-jeanpierre/README.md](docs/sprint1-jeanpierre/README.md).
+</details>
