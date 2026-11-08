@@ -41,14 +41,19 @@ Apagado o incompleto a propósito:
 
 ### Planificado para el Sprint 2 (en desarrollo, no terminado)
 
-- Constancias de pago.
-- Alertas de vencimientos y notificaciones SUNAT.
-- Custodia segura de Claves SOL.
-- Cobranza de honorarios.
-- Acceso del cliente.
-- Fraccionamientos.
+Ninguna de estas historias está terminada: lo que ya está en `develop` es solo backend y todavía no tiene pantalla.
 
-Los diseños previos de varias de estas historias ya están en [`docs/uml`](docs/uml/TRAZABILIDAD.md); parte del backend está en Pull Requests abiertos y no cuenta como terminada hasta que se fusione en `develop`.
+| Historia | Estado |
+|---|---|
+| Constancias de pago | Backend implementado, pantalla pendiente: `POST /api/tributario/obligaciones/{id}/pagos` registra un pago (parcial o total) con su comprobante en PDF. |
+| Notificaciones SUNAT | Backend implementado, pantalla pendiente: `POST /api/tributario/clientes/{id}/notificaciones` registra una notificación del Buzón SOL y `PATCH /api/tributario/notificaciones/{id}/atencion` la marca atendida. Falta listarlas, y las alertas de vencimientos no están hechas. |
+| Fraccionamientos | Backend implementado, pantalla pendiente: registro de un fraccionamiento con sus cuotas, listado, calendario de cuotas (con filtros y marca de riesgo) y pago de una cuota, bajo `/api/tributario`. |
+| Custodia segura de Claves SOL | Parcial: el guardado cifrado (`PUT`/`GET /clientes/{id}/sol`) y su prueba de punta a punta ya están; falta el resto de la custodia. |
+| Cobranza de honorarios | En desarrollo; sin código en `develop`. |
+| Acceso del cliente | En desarrollo; sin código en `develop`. |
+| Alertas de vencimientos | En desarrollo; sin código en `develop`. |
+
+Los diseños previos de estas historias están en [`docs/uml`](docs/uml/TRAZABILIDAD.md).
 
 ## Sprints
 
