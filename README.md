@@ -28,7 +28,7 @@ Comprobado contra el código de `develop`:
 - **Calendario de vencimientos:** vista de los vencimientos con días restantes y vencidos, con su pantalla.
 - **Declaración y vencimiento:** registro de la declaración de una obligación y variación de la fecha de vencimiento con historial.
 - **Acceso y permisos:** inicio y cierre de sesión con JWT, permisos por perfil (`ADMIN`, `CONTADOR`, `CLIENTE_MYPE`) y aislamiento entre clientes.
-- **Cifrado de Claves SOL en reposo** (AES-256, formato AES/GCM; migración de lo antiguo). Aún no hay pantalla ni API para cargarlas.
+- **Usuario y Clave SOL del cliente:** se guardan cifradas en reposo (AES-256, formato AES/GCM; con migración de lo antiguo) mediante `PUT /api/tributario/clientes/{id}/sol` y se leen con `GET` en la misma ruta (solo `ADMIN` y `CONTADOR`). La ficha del cliente tiene los campos «Usuario SOL» y «Clave SOL» y el listado indica si la clave está registrada.
 
 Apagado o incompleto a propósito:
 
@@ -130,7 +130,7 @@ Solo lo que ya está implementado en `develop`:
 
 - **Scrum** en sprints de dos semanas, con Sprint Backlog por historia y tarea.
 - **Ramas:** `main` guarda las entregas de cada sprint (con tag, por ejemplo `sprint-1`); `develop` integra el trabajo; cada historia o tarea sale de `develop` en una rama corta (`feature/HU-xx-...`, `docs/...`) y vuelve por Pull Request.
-- **Regla del equipo:** cada cambio entra por Pull Request a `develop`; nadie fusiona su propio PR y lo revisa otro integrante.
+- **Regla del equipo:** cada cambio entra por PR a `develop`; nadie aprueba su propio PR, lo aprueba otro integrante antes de fusionar.
 - **Definición de Hecho:** una tarea o historia cuenta como hecha solo con su PR fusionado en `develop`, con pruebas que pasan y al menos 70 % de cobertura.
 - **Definición de Listo:** una historia entra al sprint cuando está lista para implementarse (su DoR marcada en el Sprint Backlog).
 
