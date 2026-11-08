@@ -86,7 +86,11 @@ public class ObligacionService {
 
         List<String> rechazos = new ArrayList<>();
         for (Obligacion o : lista) {
-            if (o.getEstado() == Obligacion.Estado.DECLARADO) {
+            if (o.getEstado() == Obligacion.Estado.PAGADO) {
+                rechazos.add("obligación " + o.getId() + " ya pagada");
+            } else if (o.getEstado() == Obligacion.Estado.PAGO_PARCIAL) {
+                rechazos.add("obligación " + o.getId() + " con pago parcial");
+            } else if (o.getEstado() == Obligacion.Estado.DECLARADO) {
                 rechazos.add("obligación " + o.getId() + " ya declarada");
             } else if (dto.nuevaFecha().isBefore(o.getPeriodo())) {
                 rechazos.add("obligación " + o.getId() + ": la fecha es anterior al periodo " + o.getPeriodo().toString().substring(0, 7));
