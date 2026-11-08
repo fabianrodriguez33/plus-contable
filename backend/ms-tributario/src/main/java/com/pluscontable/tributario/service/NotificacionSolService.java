@@ -5,6 +5,7 @@ import com.pluscontable.tributario.dto.NotificacionSolEntradaDto;
 import com.pluscontable.tributario.model.EstadoNotificacion;
 import com.pluscontable.tributario.model.NotificacionSol;
 import com.pluscontable.tributario.repository.NotificacionSolRepository;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -44,6 +45,19 @@ public class NotificacionSolService {
         n.setFechaRecepcion(dto.fechaRecepcion());
         n.setPlazoRespuesta(dto.plazoRespuesta());
         n.setEstado(EstadoNotificacion.PENDIENTE);
+        return NotificacionSolDto.from(notificaciones.save(n));
+    }
+
+    /** Pasa una notificación pendiente a ATENDIDA con la fecha de hoy; 404 si no existe y 400 si ya estaba atendida. */
+    @Transactional
+    public NotificacionSolDto marcarAtendida(Long notificacionId) {
+        NotificacionSol n = notificaciones.findById(notificacionId)
+                .orElseThrow(() -> new EntityNotFoundException("Notificación no encontrada"));
+        if (n.getEstado() == EstadoNotificacion.ATENDIDA) {
+            throw new ValidationException("La notificación ya fue atendida");
+        }
+        n.setEstado(EstadoNotificacion.ATENDIDA);
+        n.setFechaAtencion(LocalDate.now(clock));
         return NotificacionSolDto.from(notificaciones.save(n));
     }
 
