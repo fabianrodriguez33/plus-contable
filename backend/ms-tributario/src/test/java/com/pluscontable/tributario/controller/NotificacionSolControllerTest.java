@@ -119,4 +119,47 @@ class NotificacionSolControllerTest {
 
         verify(service, never()).registrar(any(), any());
     }
+
+    // ---- tarea 68: PATCH /notificaciones/{id}/atencion
+
+    private static final String RUTA_ATENCION = "/api/tributario/notificaciones/55/atencion";
+
+    private MockHttpServletRequestBuilder atender(String autorizacion) {
+        var r = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(RUTA_ATENCION);
+        if (autorizacion != null) r.header(HttpHeaders.AUTHORIZATION, autorizacion);
+        return r;
+    }
+
+    @Test
+    void elContadorMarcaAtendidaYRecibe200ConLaFechaDeAtencion() throws Exception {
+        when(service.marcarAtendida(55L)).thenReturn(new NotificacionSolDto(55L, 7L, TipoNotificacion.ESQUELA,
+                LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 20), EstadoNotificacion.ATENDIDA, LocalDate.of(2026, 11, 9)));
+
+        mvc.perform(atender(bearer("CONTADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("ATENDIDA"))
+                .andExpect(jsonPath("$.fechaAtencion").value("2026-11-09"));
+    }
+
+    @Test
+    void atenderSinSesionDa401YConUnClienteMypeDa403SinLlamarAlServicio() throws Exception {
+        mvc.perform(atender(null)).andExpect(status().isUnauthorized());
+        mvc.perform(atender(bearer("CLIENTE_MYPE"))).andExpect(status().isForbidden());
+
+        verify(service, never()).marcarAtendida(any());
+    }
+
+    @Test
+    void siNoExisteResponde404YSiYaEstabaAtendidaResponde400ConSuMensaje() throws Exception {
+        when(service.marcarAtendida(55L))
+                .thenThrow(new EntityNotFoundException("Notificación no encontrada"))
+                .thenThrow(new ValidationException("La notificación ya fue atendida"));
+
+        mvc.perform(atender(bearer("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value("Notificación no encontrada"));
+        mvc.perform(atender(bearer("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("La notificación ya fue atendida"));
+    }
 }

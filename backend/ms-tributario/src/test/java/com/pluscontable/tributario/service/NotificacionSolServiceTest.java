@@ -146,4 +146,52 @@ class NotificacionSolServiceTest {
         assertThatThrownBy(() -> service.registrar(CLIENTE, entrada(null, null, null)))
                 .isInstanceOf(EntityNotFoundException.class);
     }
+
+    // ---- tarea 68: marcar como atendida
+
+    private NotificacionSol existente(EstadoNotificacion estado) {
+        NotificacionSol n = new NotificacionSol();
+        n.setId(55L);
+        n.setClienteId(CLIENTE);
+        n.setTipo(TipoNotificacion.ESQUELA);
+        n.setFechaRecepcion(HOY.minusDays(5));
+        n.setPlazoRespuesta(HOY.plusDays(10));
+        n.setEstado(estado);
+        when(repositorio.findById(55L)).thenReturn(java.util.Optional.of(n));
+        return n;
+    }
+
+    @Test
+    void marcarAtendidaPasaAAtendidaConLaFechaDeHoyYDevuelveElDto() {
+        existente(EstadoNotificacion.PENDIENTE);
+
+        NotificacionSolDto r = service.marcarAtendida(55L);
+
+        NotificacionSol n = guardada();
+        assertThat(n.getEstado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(n.getFechaAtencion()).isEqualTo(HOY);
+        assertThat(r.estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(r.fechaAtencion()).isEqualTo(HOY);
+        assertThat(r.plazoRespuesta()).isEqualTo(HOY.plusDays(10)); // el resto no cambia
+    }
+
+    @Test
+    void siLaNotificacionNoExisteResponde404YNoGuarda() {
+        when(repositorio.findById(99L)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.marcarAtendida(99L))
+                .isInstanceOf(EntityNotFoundException.class).hasMessage("Notificación no encontrada");
+        verify(repositorio, never()).save(any());
+    }
+
+    @Test
+    void siYaEstabaAtendidaResponde400NoGuardaYConservaLaFechaOriginal() {
+        NotificacionSol n = existente(EstadoNotificacion.ATENDIDA);
+        n.setFechaAtencion(HOY.minusDays(2));
+
+        assertThatThrownBy(() -> service.marcarAtendida(55L))
+                .isInstanceOf(ValidationException.class).hasMessage("La notificación ya fue atendida");
+        verify(repositorio, never()).save(any());
+        assertThat(n.getFechaAtencion()).isEqualTo(HOY.minusDays(2));
+    }
 }
