@@ -139,6 +139,27 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
     cambiado_en     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- HU-13 (Julio): pagos de una obligación ya declarada. Varios pagos parciales hasta saldar; cada pago guarda su
+-- comprobante (PDF en disco, como los documentos de HU-04) y el acumulado y el saldo que quedaron después de él.
+CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
+    id                  BIGSERIAL PRIMARY KEY,
+    obligacion_id       BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    fecha_pago          DATE NOT NULL,
+    monto_pagado        NUMERIC(14,2) NOT NULL CHECK (monto_pagado > 0),
+    numero_constancia   VARCHAR(30) NOT NULL,
+    nombre_archivo      VARCHAR(255) NOT NULL,
+    content_type        VARCHAR(100) NOT NULL DEFAULT 'application/pdf',
+    tamano_bytes        BIGINT NOT NULL,
+    ruta_almacenamiento VARCHAR(400) NOT NULL,
+    acumulado_despues   NUMERIC(14,2) NOT NULL,
+    saldo_despues       NUMERIC(14,2) NOT NULL CHECK (saldo_despues >= 0),
+    registrado_en       TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_pagos_obligacion_constancia UNIQUE (obligacion_id, numero_constancia)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_obligacion_fecha
+    ON tributario_schema.pagos_obligacion(obligacion_id, fecha_pago);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
@@ -149,6 +170,12 @@ ALTER TABLE tributario_schema.obligaciones ADD COLUMN IF NOT EXISTS tipo_obligac
 ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_tipo;
 ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_tipo
     CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP'));
+-- HU-13: el estado admite PAGO_PARCIAL y PAGADO. Se borra primero la restricción en línea sin nombre (la que PostgreSQL
+-- llamó obligaciones_estado_check) y se recrea con nombre estable, como ck_obligaciones_tipo.
+ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS obligaciones_estado_check;
+ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_estado;
+ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_estado
+    CHECK (estado IN ('PENDIENTE', 'DECLARADO', 'PAGO_PARCIAL', 'PAGADO'));
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 -- HU-07: marca manual de buen contribuyente (BUEN_CONTRIB_UESP); los clientes existentes quedan en FALSE.
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS buen_contribuyente BOOLEAN NOT NULL DEFAULT FALSE;

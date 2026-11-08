@@ -203,4 +203,56 @@ class ObligacionServiceTest {
                 .isInstanceOf(EntityNotFoundException.class);
         verify(historial, never()).save(any());
     }
+
+    // ---- HU-13: HU-10 no cambia el vencimiento de una obligación pagada o con pago parcial ----
+
+    @Test
+    void obligacionPagadaNoCambiaDeVencimientoNiGuardaHistorial() {
+        pendiente.setEstado(Estado.PAGADO);
+        when(obligaciones.findAllById(List.of(3L))).thenReturn(List.of(pendiente));
+
+        assertThatThrownBy(() -> service.cambiarVencimiento(new CambioVencimientoDto(List.of(3L), LocalDate.of(2026, 10, 27))))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("No se cambió ninguna fecha")
+                .hasMessageContaining("obligación 3 ya pagada");
+        assertThat(pendiente.getFechaVencimiento()).isEqualTo(LocalDate.of(2026, 10, 20));
+        verify(historial, never()).save(any());
+        verify(obligaciones, never()).saveAll(any());
+    }
+
+    @Test
+    void obligacionConPagoParcialNoCambiaDeVencimientoNiGuardaHistorial() {
+        pendiente.setEstado(Estado.PAGO_PARCIAL);
+        when(obligaciones.findAllById(List.of(3L))).thenReturn(List.of(pendiente));
+
+        assertThatThrownBy(() -> service.cambiarVencimiento(new CambioVencimientoDto(List.of(3L), LocalDate.of(2026, 10, 27))))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("obligación 3 con pago parcial");
+        assertThat(pendiente.getFechaVencimiento()).isEqualTo(LocalDate.of(2026, 10, 20));
+        verify(historial, never()).save(any());
+        verify(obligaciones, never()).saveAll(any());
+    }
+
+    @Test
+    void siUnaDelLoteYaTienePagosNoSeCambiaNingunaTodasONinguna() {
+        Obligacion octubre = otra(4L, LocalDate.of(2026, 10, 1));
+        octubre.setEstado(Estado.PAGO_PARCIAL);
+        when(obligaciones.findAllById(List.of(3L, 4L))).thenReturn(List.of(pendiente, octubre));
+
+        assertThatThrownBy(() -> service.cambiarVencimiento(new CambioVencimientoDto(List.of(3L, 4L), LocalDate.of(2026, 10, 27))))
+                .hasMessageContaining("obligación 4 con pago parcial");
+        assertThat(pendiente.getFechaVencimiento()).isEqualTo(LocalDate.of(2026, 10, 20));
+        verify(historial, never()).save(any());
+        verify(obligaciones, never()).saveAll(any());
+    }
+
+    @Test
+    void unaObligacionPendienteSigueCambiandoDeVencimiento() {
+        when(obligaciones.findAllById(List.of(3L))).thenReturn(List.of(pendiente));
+
+        List<ObligacionDto> r = service.cambiarVencimiento(new CambioVencimientoDto(List.of(3L), LocalDate.of(2026, 10, 27)));
+
+        assertThat(r.get(0).fechaVencimiento()).isEqualTo(LocalDate.of(2026, 10, 27));
+        verify(historial).save(any());
+    }
 }
