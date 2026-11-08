@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.pluscontable.tributario.config.GlobalExceptionHandler;
 import com.pluscontable.tributario.config.SecurityConfig;
+import com.pluscontable.tributario.calendario.CalendarioService;
 import com.pluscontable.tributario.dto.CalendarioCuotaDto;
 import com.pluscontable.tributario.dto.CuotaDto;
 import com.pluscontable.tributario.dto.FraccionamientoDto;
@@ -95,7 +96,7 @@ class FraccionamientoControllerTest {
 
         verify(service, never()).registrar(any(), any());
         verify(service, never()).listar(any());
-        verify(service, never()).calendario(any(), any(), any());
+        verify(service, never()).calendario(any(), any(), any(), any(), any());
         verify(service, never()).pagarCuota(any());
     }
 
@@ -142,7 +143,7 @@ class FraccionamientoControllerTest {
 
     @Test
     void elCalendarioRecibeLasFechasYDevuelveLasCuotasConSuRiesgo() throws Exception {
-        when(service.calendario(7L, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 31)))
+        when(service.calendario(7L, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 12, 31), null, null))
                 .thenReturn(List.of(new CalendarioCuotaDto(cuota(true), 21L, -4, true)));
 
         mvc.perform(con(get(BASE + "/calendario?desde=2026-11-01&hasta=2026-12-31"), bearer("ADMIN")))
@@ -153,10 +154,28 @@ class FraccionamientoControllerTest {
     }
 
     @Test
+    void elCalendarioPasaElEstadoYLaSituacionAlServicio() throws Exception {
+        when(service.calendario(7L, null, null, EstadoCuota.PENDIENTE, CalendarioService.Situacion.VENCIDO))
+                .thenReturn(List.of(new CalendarioCuotaDto(cuota(true), 21L, -4, true)));
+
+        mvc.perform(con(get(BASE + "/calendario?estado=PENDIENTE&situacion=VENCIDO"), bearer("CONTADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void unEstadoOUnaSituacionDesconocidosDan400() throws Exception {
+        mvc.perform(con(get(BASE + "/calendario?estado=ANULADA"), bearer("CONTADOR"))).andExpect(status().isBadRequest());
+        mvc.perform(con(get(BASE + "/calendario?situacion=LEJANO"), bearer("CONTADOR"))).andExpect(status().isBadRequest());
+
+        verify(service, never()).calendario(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void unaFechaDelCalendarioMalFormadaDa400() throws Exception {
         mvc.perform(con(get(BASE + "/calendario?desde=ayer"), bearer("CONTADOR"))).andExpect(status().isBadRequest());
 
-        verify(service, never()).calendario(any(), any(), any());
+        verify(service, never()).calendario(any(), any(), any(), any(), any());
     }
 
     @Test

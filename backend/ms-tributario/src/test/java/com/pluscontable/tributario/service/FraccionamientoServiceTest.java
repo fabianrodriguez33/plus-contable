@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.pluscontable.tributario.calendario.CalendarioService;
 import com.pluscontable.tributario.dto.CalendarioCuotaDto;
 import com.pluscontable.tributario.dto.CuotaDto;
 import com.pluscontable.tributario.dto.FraccionamientoDto;
@@ -266,6 +267,33 @@ class FraccionamientoServiceTest {
         service.calendario(CLIENTE, null, null);
 
         verify(cuotas).delClienteEntre(CLIENTE, LocalDate.of(1900, 1, 1), LocalDate.of(2999, 12, 31));
+    }
+
+    @Test
+    void elCalendarioFiltraPorEstadoDeLaCuota() {
+        when(cuotas.delClienteEntre(any(), any(), any())).thenReturn(List.of(
+                cuota(1, 21, 1, LocalDate.of(2026, 11, 5), EstadoCuota.PAGADA),
+                cuota(2, 21, 2, LocalDate.of(2026, 11, 20), EstadoCuota.PENDIENTE)));
+
+        assertThat(service.calendario(CLIENTE, null, null, EstadoCuota.PAGADA, null))
+                .extracting(c -> c.cuota().numero()).containsExactly(1);
+        assertThat(service.calendario(CLIENTE, null, null, EstadoCuota.PENDIENTE, null))
+                .extracting(c -> c.cuota().numero()).containsExactly(2);
+    }
+
+    @Test
+    void elCalendarioSeparaLasCuotasProximasDeLasVencidas() {
+        when(cuotas.delClienteEntre(any(), any(), any())).thenReturn(List.of(
+                cuota(1, 21, 1, LocalDate.of(2026, 11, 8), EstadoCuota.PENDIENTE),
+                cuota(2, 21, 2, LocalDate.of(2026, 11, 9), EstadoCuota.PENDIENTE),
+                cuota(3, 21, 3, LocalDate.of(2026, 12, 9), EstadoCuota.PENDIENTE)));
+
+        assertThat(service.calendario(CLIENTE, null, null, null, CalendarioService.Situacion.VENCIDO))
+                .extracting(c -> c.cuota().numero()).containsExactly(1);
+        assertThat(service.calendario(CLIENTE, null, null, null, CalendarioService.Situacion.PROXIMO))
+                .extracting(c -> c.cuota().numero()).containsExactly(2, 3);
+        assertThat(service.calendario(CLIENTE, null, null, EstadoCuota.PENDIENTE, CalendarioService.Situacion.VENCIDO))
+                .extracting(c -> c.cuota().enRiesgo()).containsExactly(true);
     }
 
     @Test

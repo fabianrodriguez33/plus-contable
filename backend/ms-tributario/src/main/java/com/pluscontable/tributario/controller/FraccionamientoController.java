@@ -1,5 +1,7 @@
 package com.pluscontable.tributario.controller;
 
+import com.pluscontable.tributario.calendario.CalendarioService;
+import com.pluscontable.tributario.model.EstadoCuota;
 import com.pluscontable.tributario.dto.CalendarioCuotaDto;
 import com.pluscontable.tributario.dto.CuotaDto;
 import com.pluscontable.tributario.dto.FraccionamientoDto;
@@ -45,8 +47,10 @@ public class FraccionamientoController {
     @GetMapping("/clientes/{clienteId}/fraccionamientos/calendario")
     public List<CalendarioCuotaDto> calendario(@PathVariable Long clienteId,
                                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
-                                               @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
-        return service.calendario(clienteId, desde, hasta);
+                                               @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+                                               @RequestParam(required = false) EstadoCuota estado,
+                                               @RequestParam(required = false) CalendarioService.Situacion situacion) {
+        return service.calendario(clienteId, desde, hasta, estado, situacion);
     }
 
     @PatchMapping("/cuotas/{cuotaId}/pago")

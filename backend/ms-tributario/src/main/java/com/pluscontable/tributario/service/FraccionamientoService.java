@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.service;
 
+import com.pluscontable.tributario.calendario.CalendarioService;
 import com.pluscontable.tributario.dto.CalendarioCuotaDto;
 import com.pluscontable.tributario.dto.CuotaDto;
 import com.pluscontable.tributario.dto.FraccionamientoDto;
@@ -98,6 +99,16 @@ public class FraccionamientoService {
     /** Las cuotas del cliente con vencimiento entre las fechas (todas si no se indican), más próximas primero, para el calendario. */
     @Transactional(readOnly = true)
     public List<CalendarioCuotaDto> calendario(Long clienteId, LocalDate desde, LocalDate hasta) {
+        return calendario(clienteId, desde, hasta, null, null);
+    }
+
+    /**
+     * Igual que el anterior, con los filtros del calendario de obligaciones: por estado de la cuota y por situación
+     * (PROXIMO: vence hoy o después; VENCIDO: la fecha ya pasó, esté pagada o no).
+     */
+    @Transactional(readOnly = true)
+    public List<CalendarioCuotaDto> calendario(Long clienteId, LocalDate desde, LocalDate hasta,
+                                               EstadoCuota estado, CalendarioService.Situacion situacion) {
         clientes.buscar(clienteId);
         if (desde != null && hasta != null && desde.isAfter(hasta)) {
             throw new ValidationException("desde no puede superar hasta");
@@ -105,6 +116,9 @@ public class FraccionamientoService {
         LocalDate hoy = LocalDate.now(clock);
         return cuotas.delClienteEntre(clienteId, desde == null ? DESDE_POR_DEFECTO : desde, hasta == null ? HASTA_POR_DEFECTO : hasta)
                 .stream()
+                .filter(c -> estado == null || c.getEstado() == estado)
+                .filter(c -> situacion != CalendarioService.Situacion.PROXIMO || !c.getFechaVencimiento().isBefore(hoy))
+                .filter(c -> situacion != CalendarioService.Situacion.VENCIDO || c.getFechaVencimiento().isBefore(hoy))
                 .map(c -> new CalendarioCuotaDto(CuotaDto.from(c, hoy), c.getFraccionamientoId(),
                         ChronoUnit.DAYS.between(hoy, c.getFechaVencimiento()), c.getFechaVencimiento().isBefore(hoy)))
                 .toList();
