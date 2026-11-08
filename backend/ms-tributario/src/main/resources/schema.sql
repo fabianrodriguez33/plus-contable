@@ -139,6 +139,23 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
     cambiado_en     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- HU-18 (Julio): notificaciones del Buzón SOL (esquela, carta inductiva o comunicado) de un cliente.
+-- El plazo es obligatorio: sin plazo de respuesta no se guarda.
+CREATE TABLE IF NOT EXISTS tributario_schema.notificaciones_sol (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo             VARCHAR(20) NOT NULL CHECK (tipo IN ('ESQUELA', 'CARTA_INDUCTIVA', 'COMUNICADO')),
+    fecha_recepcion  DATE NOT NULL,
+    plazo_respuesta  DATE NOT NULL,
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA')),
+    fecha_atencion   DATE,
+    registrado_en    TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_notificaciones_plazo CHECK (plazo_respuesta >= fecha_recepcion)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificaciones_cliente_estado_plazo
+    ON tributario_schema.notificaciones_sol(cliente_id, estado, plazo_respuesta);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
