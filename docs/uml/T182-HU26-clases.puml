@@ -1,0 +1,85 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T182 · HU-26 · Clases de las solicitudes especiales del cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class SolicitudEspecialController <<nuevo>> {
+  +registrar(clienteId, dto): SolicitudEspecialDto
+  +pendientes(clienteId): List<SolicitudEspecialDto>
+  +marcarAtendida(id): SolicitudEspecialDto
+}
+class SolicitudEspecialService <<nuevo>> {
+  +registrar(clienteId, dto, usuario): SolicitudEspecialDto
+  +pendientes(clienteId): List<SolicitudEspecialDto>
+  +marcarAtendida(id): SolicitudEspecialDto
+  -validar(dto): void
+}
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+class SolicitudEspecial <<nuevo>> {
+  id: Long
+  clienteId: Long
+  tipo: TipoSolicitud
+  descripcion: String
+  fechaEntrega: LocalDate
+  estado: EstadoSolicitud
+  fechaAtencion: LocalDate
+  registradaPor: String
+  registradaEn: LocalDateTime
+}
+enum TipoSolicitud <<nuevo>> {
+  CONSTANCIA
+  CERTIFICACION
+  TRAMITE
+}
+enum EstadoSolicitud <<nuevo>> {
+  PENDIENTE
+  ATENDIDA
+}
+class SolicitudEspecialEntradaDto <<record, nuevo>> {
+  tipo: TipoSolicitud
+  descripcion: String
+  fechaEntrega: LocalDate
+}
+class SolicitudEspecialDto <<record, nuevo>> {
+  id: Long
+  clienteId: Long
+  tipo: TipoSolicitud
+  descripcion: String
+  fechaEntrega: LocalDate
+  estado: EstadoSolicitud
+  fechaAtencion: LocalDate
+  +{static} from(s): SolicitudEspecialDto
+}
+interface SolicitudEspecialRepository <<nuevo>> {
+  findByClienteIdAndEstadoOrderByFechaEntregaAsc(clienteId, estado)
+}
+
+SolicitudEspecialController --> SolicitudEspecialService
+SolicitudEspecialController ..> SolicitudEspecialEntradaDto
+SolicitudEspecialController ..> SolicitudEspecialDto
+SolicitudEspecialService --> ClienteService : buscar(clienteId)
+SolicitudEspecialService --> SolicitudEspecialRepository
+SolicitudEspecialRepository ..> SolicitudEspecial
+SolicitudEspecial --> TipoSolicitud
+SolicitudEspecial --> EstadoSolicitud
+SolicitudEspecial "0..*" --> "1" Cliente : cliente_id
+
+note bottom of SolicitudEspecialService
+  registrar(): guarda el pedido del cliente (constancia, certificación o trámite) con su fecha de entrega (criterio 1); si falta la
+  fecha de entrega no se guarda (criterio 2); queda en la lista de pendientes en seguimiento (criterio 3). marcarAtendida() lo saca de esa lista.
+end note
+note right of TipoSolicitud
+  Supuesto: tipos CONSTANCIA, CERTIFICACION y TRAMITE (los de la historia); estados PENDIENTE y ATENDIDA;
+  la lista «validada con el cliente» no está en el repositorio.
+  Supuesto: la descripción es opcional (hasta 500 caracteres); la fecha de entrega no es anterior a hoy.
+  Supuesto: los pendientes se ordenan por fecha de entrega ascendente.
+  Supuesto: HU-27 usa estas solicitudes junto con las incidencias de HU-23 para el historial del cliente.
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-26, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService.buscar, GlobalExceptionHandler, SecurityConfig (rutas no listadas son del estudio)
+@enduml

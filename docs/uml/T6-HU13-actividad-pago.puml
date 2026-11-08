@@ -1,5 +1,5 @@
 @startuml
-title T6 · HU-13 · Actividad: flujo del pago total, parcial y de obligación no declarada (diseño previo)
+title T6 · HU-13 · Actividad: varios pagos parciales con comprobante hasta saldar la obligación (diseño previo, corregido)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -23,42 +23,43 @@ if (¿Estado PAGADO?) then (sí)
 endif
 
 |Contador|
-:Indica fecha de pago, monto y número de constancia;
+repeat
+  :Indica fecha de pago, monto y número de constancia\ny adjunta el comprobante (PDF);
 
-|Servicio de pagos|
-if (¿Fecha, monto y número válidos?) then (no)
-  :400 Faltan o son inválidos;
-  stop
-endif
-if (¿Monto mayor que el saldo?) then (sí)
-  :400 El monto supera el saldo pendiente;
-  note right
-    Supuesto: no se admite pagar más
-    que el saldo de la obligación.
-  end note
-  stop
-endif
-:Guarda el pago asociado a la obligación;
-:Suma los pagos de la obligación;
-if (¿Suma igual al monto determinado?) then (sí)
-  :Estado = PAGADO;
-else (no)
-  :Estado = PAGO_PARCIAL;
-  :Calcula saldo = monto determinado - suma de pagos;
-  note right
-    Supuesto: una obligación admite varios pagos;
-    cada nuevo pago reduce el saldo.
-  end note
-endif
+  |Servicio de pagos|
+  if (¿Datos y archivo válidos?) then (no)
+    :400 Faltan o son inválidos;
+    stop
+  endif
+  if (¿Monto mayor que el saldo?) then (sí)
+    :400 El monto supera el saldo pendiente;
+    note right
+      Supuesto: no se admite pagar más que el saldo.
+    end note
+    stop
+  endif
+  :Guarda el archivo y el pago con su acumulado y su saldo;
+  :Calcula acumulado = suma de pagos\ny saldo = monto determinado - acumulado;
+  if (¿Saldo igual a cero?) then (sí)
+    :Estado = PAGADO;
+  else (no)
+    :Estado = PAGO_PARCIAL;
+    note right
+      Supuesto (decisión de Beto, 06/11): una obligación admite
+      varios pagos parciales; cada pago reduce el saldo.
+    end note
+  endif
 
-|Contador|
-:Ve el estado y, si es parcial, el saldo;
-note right
-  Estados: PENDIENTE -> DECLARADO (HU-09) -> PAGO_PARCIAL -> PAGADO.
-  DECLARADO no cambia de nombre.
-  El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
-end note
+  |Contador|
+  :Ve el estado, el acumulado y el saldo;
+repeat while (¿Queda saldo y llega otro pago parcial?) is (sí)
+
+:Consulta las constancias y sus archivos de la obligación;
 stop
 
-footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-13 y el código y la base de develop (de04c4f). Código existente: model.Obligacion.Estado (PENDIENTE y DECLARADO), ObligacionService.declarar
+note right
+  Estados: PENDIENTE -> DECLARADO (HU-09) -> PAGO_PARCIAL (uno o varios pagos) -> PAGADO. DECLARADO no cambia de nombre.
+  El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
+end note
+footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-13, el código y la base de develop. Código existente: model.Obligacion.Estado (PENDIENTE y DECLARADO), ObligacionService.declarar
 @enduml

@@ -1,0 +1,91 @@
+@startuml
+title T165 · HU-24 · Secuencia: registrar, entregar y dar seguimiento a un documento faltante (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(documentos faltantes)" as FE
+participant "DocumentoFaltanteController" as DC
+participant "DocumentoFaltanteService" as DS
+participant "ClienteService" as CS
+participant "DocumentoFaltanteRepository" as DR
+participant "IncidenciaService\n(HU-23)" as IS
+database "tributario_schema" as DB
+
+== Registrar el documento que falta ==
+U -> FE : indica cliente, documento y fecha límite
+FE -> DC : POST /api/tributario/clientes/{clienteId}/documentos-faltantes\nAuthorization: Bearer <JWT>
+DC -> DS : registrar(clienteId, dto)
+DS -> CS : buscar(clienteId)
+alt el cliente no existe
+  DS --> FE : 404 "Cliente no encontrado"
+end
+DS -> DS : valida y reúne los errores
+note right
+  Documento: obligatorio, hasta 150 caracteres. Fecha límite: obligatoria, no anterior a la de solicitud.
+  Fecha de solicitud: hoy si no se indica; no futura.
+end note
+alt faltan o son inválidos
+  DS --> FE : 400 "Faltan o son inválidos: ..."
+else datos válidos
+  DS -> DR : save(documento PENDIENTE con fecha de solicitud)
+  DR -> DB : INSERT documentos_faltantes
+  DS --> FE : 201 DocumentoFaltanteDto
+end
+
+== Ver qué documentos faltan ==
+U -> FE : abre los documentos faltantes del cliente
+FE -> DC : GET /api/tributario/clientes/{clienteId}/documentos-faltantes?estado=PENDIENTE
+DC -> DS : listar(clienteId, estado)
+DS -> DR : findByClienteIdOrderByFechaLimiteAsc(clienteId)
+DR -> DB : SELECT documentos_faltantes
+loop cada documento
+  alt PENDIENTE con fecha límite anterior a hoy
+    DS -> DS : estado visible = SIN_RESPUESTA
+  else
+    DS -> DS : estado visible = el guardado
+  end
+end
+DS --> FE : 200 lista con su estado
+FE --> U : muestra los documentos que faltan, los sin respuesta destacados
+
+== Registrar la entrega ==
+U -> FE : indica que el cliente entregó el documento
+FE -> DC : PATCH /api/tributario/documentos-faltantes/{id}/entrega
+DC -> DS : registrarEntrega(id)
+DS -> DR : findById(id)
+alt no existe
+  DS --> FE : 404 "Documento no encontrado"
+else ya estaba entregado
+  DS --> FE : 400 "El documento ya fue entregado"
+else faltaba
+  DS -> DR : save(estado ENTREGADO, fecha de entrega de hoy)
+  DR -> DB : UPDATE documentos_faltantes
+  DS --> FE : 200 (ENTREGADO)
+end
+
+== Registrar como incidencia un documento sin respuesta ==
+U -> FE : elige "Registrar como incidencia"
+FE -> DC : POST /api/tributario/documentos-faltantes/{id}/incidencia
+DC -> DS : registrarComoIncidencia(id, usuario del token)
+DS -> DR : findById(id)
+alt el documento no está SIN_RESPUESTA
+  DS --> FE : 400 "Solo se registra como incidencia un documento sin respuesta"
+else ya tiene incidencia
+  DS --> FE : 400 "Ya se registró como incidencia"
+else sin respuesta
+  DS -> IS : registrar(tipo CLIENTE_NO_ENVIA_DOCUMENTOS, cliente, fecha de hoy, descripción con el documento)
+  IS --> DS : IncidenciaDto
+  DS -> DR : save(incidenciaId)
+  DR -> DB : UPDATE documentos_faltantes
+  DS --> FE : 200
+end
+
+note over DS
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas.
+  Supuesto: la incidencia usa el servicio y el tipo de HU-23 (diseño previo); sin HU-23 en el código, esta acción no existe.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-24, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService.buscar, GlobalExceptionHandler, SecurityConfig
+@enduml

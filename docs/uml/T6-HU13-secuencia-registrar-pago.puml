@@ -1,5 +1,5 @@
 @startuml
-title T6 · HU-13 · Secuencia: registrar la constancia de pago de una obligación (diseño previo)
+title T6 · HU-13 · Secuencia: registrar un pago con su comprobante y consultar saldo y acumulado (diseño previo, corregido)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -9,14 +9,17 @@ actor "Contador" as U
 participant "frontend-web\n(formulario de constancia,\nobligacionService)" as FE
 participant "ObligacionController" as OC
 participant "PagoObligacionService" as PS
+participant "ParametroSistemaService" as PM
+participant "AlmacenComprobantes" as AL
 participant "ObligacionRepository" as OR
 participant "PagoObligacionRepository" as PR
 database "tributario_schema" as DB
 
+== Registrar un pago ==
 U -> FE : abre una obligación declarada y elige "Registrar pago"
-U -> FE : indica fecha de pago, monto pagado y número de constancia
-FE -> OC : POST /api/tributario/obligaciones/{id}/pagos\n{fechaPago, montoPagado, numeroConstancia}\nAuthorization: Bearer <JWT>
-OC -> PS : registrar(obligacionId, dto)
+U -> FE : indica fecha, monto y número de constancia y adjunta el comprobante (PDF)
+FE -> OC : POST /api/tributario/obligaciones/{id}/pagos (multipart: datos y archivo)\nAuthorization: Bearer <JWT>
+OC -> PS : registrar(obligacionId, dto, archivo)
 PS -> OR : findById(obligacionId)
 alt la obligación no existe
   PS --> FE : 404 "Obligación no encontrada"
@@ -27,45 +30,57 @@ end
 alt el estado es PAGADO
   PS --> FE : 400 "La obligación ya está pagada"
 end
+PS -> PR : sumaPagada(obligacionId)
+PS -> PM : entero("pagos.archivo_max_mb", 10)
 PS -> PS : valida y reúne los errores
 note right
-  Fecha de pago: obligatoria y no futura.
-  Monto: obligatorio y mayor que cero.
+  Fecha de pago: obligatoria y no futura. Monto: obligatorio y mayor que cero.
   Número de constancia: obligatorio, hasta 30 caracteres.
-  Supuesto: el monto no puede superar el saldo.
+  Archivo: obligatorio, PDF (por su firma) y no mayor al máximo del parámetro.
+  Supuesto: el monto no puede superar el saldo (monto determinado menos lo ya pagado).
 end note
 alt faltan o son inválidos
   PS --> FE : 400 "Faltan o son inválidos: ..."
 else datos válidos
-  PS -> PR : save(pago asociado a la obligación)
+  PS -> AL : guardar(clienteId, archivo)
+  AL --> PS : ruta del archivo
+  PS -> PS : acumulado = suma anterior + monto; saldo = monto determinado - acumulado
+  PS -> PR : save(pago con archivo, acumulado y saldo después de este pago)
   PR -> DB : INSERT pagos_obligacion
-  PS -> PR : sumaPagada(obligacionId)
-  PR -> DB : SELECT SUM(monto_pagado)
-  alt suma pagada igual al monto determinado
+  alt el guardado falla
+    PS -> AL : borrar(ruta)  (sin registro el archivo quedaría huérfano)
+    PS --> FE : 500
+  end
+  alt acumulado igual al monto determinado
     PS -> PS : estado = PAGADO
-  else suma pagada menor al monto determinado
-    PS -> PS : estado = PAGO_PARCIAL; saldo = montoDeterminado - suma
+  else acumulado menor al monto determinado
+    PS -> PS : estado = PAGO_PARCIAL (se pueden registrar más pagos parciales)
   end
   PS -> OR : save(obligacion)
   OR -> DB : UPDATE obligaciones
-  PS --> OC : ObligacionDto {estado, montoPagado, saldo}
+  PS --> OC : ObligacionDto {estado, montoAcumuladoPagado, saldo, numeroPagos}
   OC --> FE : 201
-  FE --> U : muestra el estado (PAGADO o PAGO PARCIAL con su saldo)
+  FE --> U : muestra el estado, el acumulado y el saldo
 end
 
-== Consultar las constancias de la obligación ==
+== Consultar los pagos y el comprobante ==
 U -> FE : abre el detalle de pagos
 FE -> OC : GET /api/tributario/obligaciones/{id}/pagos
 OC -> PS : listar(obligacionId)
 PS -> PR : findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
 PR -> DB : SELECT pagos_obligacion
-PS --> FE : 200 lista de PagoDto (fecha, monto, número de constancia)
-FE --> U : muestra las constancias asociadas a la obligación
+PS --> FE : 200 PagosObligacionDto (monto determinado, acumulado, saldo y cada pago con su acumulado y saldo)
+U -> FE : abre el comprobante de un pago
+FE -> OC : GET /api/tributario/obligaciones/{id}/pagos/{pagoId}/comprobante
+OC -> PS : comprobante(obligacionId, pagoId)
+PS -> AL : leer(ruta)
+PS --> FE : 200 PDF (o 404 "Comprobante no encontrado")
+FE --> U : muestra las constancias y sus archivos
 
 note over PS
-  Supuesto: solo el estudio (CONTADOR, ADMIN) registra y consulta los pagos; el acceso del cliente MYPE a esta
-  información se define en HU-14 y HU-32. No se verifica el pago en SUNAT ni en el banco (acordado con Beto).
+  Supuesto (decisión de Beto, 06/11): comprobante con archivo adjunto y varios pagos parciales.
+  Supuesto: solo el estudio (CONTADOR, ADMIN) registra y consulta; el acceso del cliente MYPE lo definen HU-14 y HU-32.
+  No se verifica el pago en SUNAT ni en el banco (acordado con Beto).
 end note
-
-footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-13 y el código y la base de develop (de04c4f). Código existente: ObligacionController, ObligacionRepository, SecurityConfig (rutas no listadas son del estudio)
+footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-13, el código y la base de develop. Código existente: ObligacionController, ObligacionRepository, SecurityConfig; el almacenamiento sigue ExpedienteService.archivar (HU-04)
 @enduml

@@ -1,0 +1,72 @@
+@startuml
+title T174 · HU-06 · Secuencia: cerrar el expediente de un cliente que se retira (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha del cliente)" as FE
+participant "CierreExpedienteController" as CC
+participant "CierreExpedienteService" as CS
+participant "ClienteService" as CL
+participant "Repositorios de pendientes\n(obligaciones, Buzón SOL, documentos)" as PR
+participant "CobroHonorarioRepository\n(HU-28)" as HR
+participant "CierreExpedienteRepository" as ER
+database "tributario_schema" as DB
+
+U -> FE : en la ficha elige "Cerrar expediente"
+FE -> CC : GET /api/tributario/clientes/{clienteId}/cierre/revision\nAuthorization: Bearer <JWT>
+CC -> CS : revisar(clienteId)
+CS -> CL : buscar(clienteId)
+alt el cliente no existe
+  CS --> FE : 404 "Cliente no encontrado"
+end
+alt el cliente ya está cerrado
+  CS --> FE : 400 "El expediente ya está cerrado"
+end
+CS -> PR : pendientes del cliente
+PR -> DB : SELECT obligaciones PENDIENTE, notificaciones PENDIENTE, documentos PENDIENTE
+CS -> HR : cobros de honorarios pendientes
+HR -> DB : SELECT cobros_honorarios
+CS --> FE : 200 RevisionCierreDto {puedeCerrar, pendientes, requiereConfirmacion, monto}
+alt tiene pendientes que impiden el cierre
+  FE --> U : lista los pendientes; no permite cerrar
+else sin pendientes pero con honorarios por cobrar
+  FE --> U : advierte "Tiene honorarios por cobrar" y pide confirmación
+else sin pendientes ni honorarios por cobrar
+  FE --> U : pide confirmar el cierre (con motivo opcional)
+end
+
+U -> FE : confirma el cierre
+FE -> CC : POST /api/tributario/clientes/{clienteId}/cierre {motivo, confirmarHonorarios}
+CC -> CS : cerrar(clienteId, dto, usuario del token)
+CS -> CS : vuelve a revisar los pendientes
+alt tiene pendientes que impiden el cierre
+  CS --> FE : 409 "No se puede cerrar: tiene ..."
+else tiene honorarios por cobrar y no se confirmó
+  CS --> FE : 409 "Tiene honorarios por cobrar: confirme para cerrar"
+else se puede cerrar
+  CS -> ER : save(cierre con fecha, motivo, usuario y honorarios confirmados)
+  ER -> DB : INSERT cierres_expediente
+  CS -> CL : marcarInactivo(clienteId)
+  CL -> DB : UPDATE clientes SET activo = false
+  CS --> FE : 200 CierreExpedienteDto
+  FE --> U : el cliente sale de la cartera activa
+end
+
+== El historial sigue disponible ==
+U -> FE : abre un cliente cerrado
+FE -> CC : GET /api/tributario/clientes/{clienteId}/historial
+CC -> CS : historial(clienteId)
+CS -> DB : SELECT datos, obligaciones, pagos, incidencias y cierre del cliente (solo lectura)
+CS --> FE : 200 historial completo
+FE --> U : muestra todo el historial del cliente cerrado
+
+note over CS
+  Supuesto: pendientes que impiden el cierre = obligaciones sin declarar, notificaciones del Buzón SOL y documentos faltantes pendientes.
+  Supuesto: los honorarios por cobrar advierten y piden confirmación, pero no impiden el cierre.
+  Criterio 4: solo el contador autenticado cierra expedientes (CONTADOR o ADMIN; el cliente MYPE recibe 403 y sin token, 401).
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-06, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService, ObligacionRepository, GlobalExceptionHandler, SecurityConfig
+@enduml

@@ -1,0 +1,72 @@
+@startuml
+title T48 · HU-12 · Secuencia: generar y recibir el recordatorio del SIRE (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+participant "Tarea diaria\n(RecordatorioSireJob)" as J
+participant "RecordatorioSireService" as RS
+participant "ParametroSistemaService" as PS
+participant "ClienteRepository /\nObligacionRepository" as CR
+participant "AvisoService" as AS
+participant "EnvioCorreo" as EC
+database "tributario_schema" as DB
+actor "Contador" as U
+participant "frontend-web\n(bandeja de avisos)" as FE
+
+== Cada día ==
+J -> RS : generar(hoy)
+RS -> PS : entero("sire.dia_revision", ...) y lista("avisos.dias_antes")
+PS -> DB : SELECT parametros_sistema
+RS -> RS : fecha de revisión = día configurado del mes en curso
+note right
+  Supuesto: la fecha de revisión del SIRE es configurable, pendiente de Beto.
+  Supuesto: los avisos van a los 3 días, 1 día y el mismo día antes de esa fecha (decisión de Beto, 06/11).
+end note
+alt hoy no es 3 días, 1 día ni el mismo día antes de la fecha de revisión
+  RS --> J : no hay nada que avisar
+else hoy es uno de los días de aviso
+  RS -> CR : clientes activos con obligación de IGV en el periodo
+  CR -> DB : SELECT clientes y obligaciones
+  alt ningún cliente corresponde
+    RS --> J : no se genera aviso
+  else hay clientes
+    RS -> AS : crear(RECORDATORIO_SIRE, periodo, diasAntes, clientes, mensaje)
+    AS -> DB : ¿existe ya el aviso (tipo, periodo, diasAntes, canal)?
+    alt ya existe
+      AS --> RS : no se duplica
+    else no existe
+      AS -> DB : INSERT avisos (canal SISTEMA, NO_LEIDO) y avisos_clientes
+      AS -> EC : enviar(correo del estudio, asunto, lista de clientes)
+      alt el correo se envía
+        AS -> DB : INSERT avisos (canal CORREO, ENVIADO)
+      else el correo falla
+        AS -> DB : INSERT avisos (canal CORREO, FALLIDO)
+      end
+    end
+  end
+end
+
+== El contador lo recibe ==
+U -> FE : abre la bandeja de avisos
+FE -> AS : GET /api/tributario/avisos?soloNoLeidos=true\nAuthorization: Bearer <JWT>
+AS -> DB : SELECT avisos y avisos_clientes
+AS --> FE : 200 avisos con el mes y la lista de clientes que corresponden
+FE --> U : muestra «Revisar el SIRE de <mes>» con los clientes
+U -> FE : marca el aviso como leído
+FE -> AS : PATCH /api/tributario/avisos/{id}/lectura
+AS --> FE : 200
+
+== El estudio ajusta los valores ==
+U -> FE : cambia el día de revisión o los días de aviso en Parámetros
+FE -> PS : PUT /api/tributario/parametros/sire.dia_revision {valor}
+PS -> DB : UPDATE parametros_sistema (con usuario y fecha)
+PS --> FE : 200
+
+note over AS
+  Supuesto: la bandeja es compartida por el estudio; solo CONTADOR y ADMIN la usan (el cliente MYPE no).
+  Supuesto: si el correo falla queda FALLIDO y el aviso del sistema se muestra igual.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-12, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteRepository, ObligacionRepository, GlobalExceptionHandler, SecurityConfig
+@enduml

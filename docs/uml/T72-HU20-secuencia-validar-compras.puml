@@ -1,83 +1,83 @@
 @startuml
-title T72 · HU-20 · Secuencia: validar la condición de los proveedores de las compras del mes (diseño previo)
+title T72 · HU-20 · Secuencia: validar las compras del mes con consulta automática y respaldo manual (diseño previo, corregido)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\n(pantalla de compras del mes)" as FE
-participant "ProveedorController" as PC
-participant "ProveedorService" as PS
+participant "frontend-web\n(compras del mes)" as FE
 participant "CompraClienteController" as CC
 participant "CompraClienteService" as CS
-participant "ClienteService" as CL
-participant "ProveedorRepository" as PR
-participant "CompraClienteRepository" as CR
+participant "ProveedorService" as PS
+participant "CondicionProveedorPort\n(adaptador OpenRUC)" as PT
+participant "ParametroSistemaService" as PM
+participant "ProveedorRepository /\nCompraClienteRepository" as RP
 database "tributario_schema" as DB
-
-== Registrar a mano la condición de un proveedor ==
-U -> FE : consulta la condición del proveedor por su cuenta y la ingresa (RUC, Habido o No Habido, fecha de consulta)
-FE -> PC : PUT /api/tributario/proveedores/{ruc}/condicion\n{razonSocial, condicionHabido, fechaConsulta}\nAuthorization: Bearer <JWT>
-PC -> PS : registrarCondicion(ruc, dto)
-PS -> PS : valida y reúne los errores
-note right
-  RUC: 11 dígitos válidos (RucValidator).
-  Condición: obligatoria, HABIDO o NO_HABIDO.
-  Fecha de consulta: obligatoria y no futura.
-  Supuesto: la condición se ingresa a mano; no hay integración con SUNAT.
-end note
-alt faltan o son inválidos
-  PS --> FE : 400 "Faltan o son inválidos: ..."
-else datos válidos
-  PS -> PR : save(proveedor con fuente MANUAL)
-  PR -> DB : INSERT o UPDATE proveedores
-  PS --> FE : 200 ProveedorDto
-end
 
 == Registrar una compra del cliente ==
 U -> FE : ingresa la compra (RUC del proveedor, comprobante, fecha, IGV, periodo)
-FE -> CC : POST /api/tributario/clientes/{clienteId}/compras
+FE -> CC : POST /api/tributario/clientes/{clienteId}/compras\nAuthorization: Bearer <JWT>
 CC -> CS : registrar(clienteId, dto)
-CS -> CL : buscar(clienteId)
-alt el cliente no existe
-  CS --> FE : 404 "Cliente no encontrado"
+CS -> CS : buscar(clienteId) y valida el RUC del proveedor
+alt el cliente no existe o los datos son inválidos
+  CS --> FE : 404 "Cliente no encontrado" / 400 "Faltan o son inválidos: ..."
 end
-CS -> PR : findByRuc(rucProveedor)
-alt el proveedor no existe todavía
-  CS -> PR : save(proveedor sin condición registrada)
-  note right
-    Supuesto: queda sin condición (SIN_VERIFICAR) hasta que el contador la registre.
-  end note
-end
-CS -> CR : save(compra)
-CR -> DB : INSERT compras_cliente
-CS --> FE : 201 CompraClienteDto
+CS -> RP : findByRuc(rucProveedor); si no existe, lo crea sin condición
+CS -> RP : save(compra)
+RP -> DB : INSERT compras_cliente
+CS --> FE : 201
 
 == Validar las compras del mes ==
 U -> FE : elige el cliente y el mes y pulsa "Validar compras"
 FE -> CC : GET /api/tributario/clientes/{clienteId}/compras/validacion?periodo=2026-11
 CC -> CS : validarMes(clienteId, periodo)
-CS -> CL : buscar(clienteId)
-CS -> CR : findByClienteIdAndPeriodo(clienteId, periodo)
-CR -> DB : SELECT compras_cliente JOIN proveedores
+CS -> RP : compras del mes con su proveedor
+loop cada proveedor del mes sin condición vigente
+  CS -> PS : verificar(ruc)
+  PS -> PM : entero("proveedores.vigencia_dias", 30)
+  PS -> PT : consultar(ruc)
+  alt la consulta responde
+    PT --> PS : condición HABIDO o NO_HABIDO
+    PS -> RP : save(condición, fuente AUTOMATICA, fecha)
+    RP -> DB : UPDATE proveedores
+  else no disponible (servicio caído, con límite o sin respuesta usable)
+    PT --> PS : no disponible
+    PS -> RP : save(ultimoIntentoEn)
+    note right
+      Supuesto: sin respuesta se usa la última condición guardada; si no hay ninguna,
+      queda SIN_VERIFICAR y se pide el respaldo manual. OpenRUC es de terceros y estuvo caído.
+    end note
+  end
+end
 loop cada compra del mes
   alt proveedor HABIDO
     CS -> CS : resultado = APTA_CREDITO_FISCAL
   else proveedor NO_HABIDO
     CS -> CS : resultado = EN_RIESGO de perder el crédito fiscal
-  else sin condición registrada
-    CS -> CS : resultado = SIN_VERIFICAR
+  else sin condición
+    CS -> CS : resultado = SIN_VERIFICAR, requiereRespaldoManual
   end
 end
-CS --> FE : 200 ValidacionMesDto {compras con su condición, aptas, en riesgo, sin verificar, IGV en riesgo}
-FE --> U : lista las compras con la condición de cada proveedor, las Habidas como aptas y las No Habidas en riesgo
+CS --> FE : 200 ValidacionMesDto {compras con su condición y su fuente, aptas, en riesgo, sin verificar, IGV en riesgo}
+FE --> U : lista las compras; las Habidas aptas, las No Habidas en riesgo, y avisa las que piden respaldo manual
+
+== Respaldo manual ==
+U -> FE : ingresa la condición de un proveedor sin verificar (Habido o No Habido y fecha de consulta)
+FE -> PS : PUT /api/tributario/proveedores/{ruc}/condicion
+PS -> PS : valida RUC, condición y fecha (no futura)
+alt datos inválidos
+  PS --> FE : 400 "Faltan o son inválidos: ..."
+else válidos
+  PS -> RP : save(condición, fuente MANUAL, fecha)
+  RP -> DB : UPDATE proveedores
+  PS --> FE : 200
+end
 
 note over CS
+  Supuesto (decisión de Beto, 06/11): consulta automática de la condición, con respaldo manual.
   Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas; el cliente MYPE no las ve.
-  Para automatizar la condición haría falta: fuente oficial o tercero aceptado, un puerto CondicionProveedorPort,
-  reverificación periódica antes de declarar, y guardar fuente y fecha; con «no disponible» el proveedor queda SIN_VERIFICAR.
+  Una fuente oficial se agrega con otro adaptador de CondicionProveedorPort, sin cambiar este flujo.
 end note
-
-footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-20 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, RucValidator, GlobalExceptionHandler (errores {"mensaje"}), SecurityConfig
+footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-20, el código y la base de develop. Código existente: ClienteService.buscar, RucValidator, ruc.ConsultaRuc, GlobalExceptionHandler, SecurityConfig
 @enduml

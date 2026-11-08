@@ -1,0 +1,42 @@
+@startuml
+!pragma layout smetana
+title T182 · HU-26 · Modelo de datos de las solicitudes especiales del cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+entity "tributario_schema.solicitudes_especiales" as sol <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : CONSTANCIA | CERTIFICACION | TRAMITE
+    descripcion : VARCHAR(500)
+  * fecha_entrega : DATE
+  * estado : PENDIENTE | ATENDIDA = PENDIENTE
+    fecha_atencion : DATE
+  * registrada_por : VARCHAR(60)
+  * registrada_en : TIMESTAMP = ahora
+  INDEX (cliente_id, estado, fecha_entrega)
+}
+
+clientes ||--o{ sol : cliente_id, ON DELETE CASCADE
+
+note bottom of sol
+  fecha_entrega es obligatoria (NOT NULL): sin fecha no se guarda (criterio 2). El tipo se limita a constancia, certificación o trámite
+  con un CHECK (criterio 1). Los pendientes en seguimiento se leen por (cliente_id, estado = PENDIENTE) (criterio 3).
+end note
+note right of sol
+  Supuesto: estados PENDIENTE y ATENDIDA; fecha_atencion se llena al marcar como atendida.
+  Supuesto: descripción opcional; la fecha de entrega no es anterior a hoy al registrar.
+  Supuesto: registrada_por guarda el usuario del token.
+  Supuesto: ON DELETE CASCADE como el resto de las tablas hijas del cliente.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-26, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y el estilo de las tablas hijas)
+@enduml

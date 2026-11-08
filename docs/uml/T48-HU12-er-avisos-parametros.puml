@@ -1,0 +1,59 @@
+@startuml
+!pragma layout smetana
+title T48 · HU-12 · Modelo de datos de los avisos y los parámetros del sistema (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * regimen_tributario : MYPE | REMIPE | GENERAL | RER
+  * activo : BOOLEAN = true
+}
+entity "tributario_schema.parametros_sistema" as param <<nuevo>> {
+  * clave : VARCHAR(80) <<PK>>
+  --
+  * valor : VARCHAR(200)
+    descripcion : VARCHAR(300)
+  * actualizado_en : TIMESTAMP = ahora
+    actualizado_por : VARCHAR(60)
+}
+entity "tributario_schema.avisos" as avisos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * tipo : RECORDATORIO_SIRE | CAMBIO_CONDICION_RUC
+    periodo : DATE
+  * dias_antes : INTEGER = 0
+  * canal : SISTEMA | CORREO
+  * mensaje : VARCHAR(500)
+  * estado : NO_LEIDO | LEIDO | ENVIADO | FALLIDO
+  * creado_en : TIMESTAMP = ahora
+    leido_en : TIMESTAMP
+  UNIQUE (tipo, periodo, dias_antes, canal)  -- solo para RECORDATORIO_SIRE
+}
+entity "tributario_schema.avisos_clientes" as ac <<nuevo>> {
+  * aviso_id : BIGINT <<PK>> <<FK>>
+  * cliente_id : BIGINT <<PK>> <<FK>>
+}
+
+avisos ||--|{ ac : aviso_id, ON DELETE CASCADE
+clientes ||--o{ ac : cliente_id, ON DELETE CASCADE
+
+note bottom of avisos
+  Un aviso por día de aviso (3 días, 1 día y el mismo día antes) y por canal (sistema y correo). La lista de clientes que
+  corresponden va en avisos_clientes: un cliente sin obligación SIRE no aparece (criterios 1 a 4).
+end note
+note right of param
+  Supuesto: la fecha de revisión del SIRE es configurable, pendiente de Beto (clave sire.dia_revision, un día del mes).
+  Supuesto (decisión de Beto, 06/11): los avisos van por correo y en el sistema, a los 3 días, 1 día y el mismo día. Claves: avisos.dias_antes (3,1,0) y avisos.correo_estudio.
+  Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema.
+  Supuesto: parametros_sistema y avisos son compartidos con HU-22 (cambio de condición del RUC) y con las demás alertas.
+  Supuesto (decisión de Beto, 06/11): RER se agrega a los valores de regimen_tributario; es un cambio de HU-01.
+  Supuesto: la UNIQUE del recordatorio solo aplica a RECORDATORIO_SIRE (índice parcial), para no duplicar el aviso del mismo día.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-12, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y obligaciones), model.Cliente.Regimen
+@enduml
