@@ -54,8 +54,8 @@ Los diseños previos de varias de estas historias ya están en [`docs/uml`](docs
 
 | Sprint | Objetivo |
 |---|---|
-| 1 | Base técnica y núcleo del estudio: expediente del cliente, obligaciones, calendario de vencimientos, declaración, inicio de sesión y permisos. |
-| 2 | Pagos y constancias, alertas de vencimientos y notificaciones SUNAT, custodia de Claves SOL, cobranza de honorarios, acceso del cliente y fraccionamientos. |
+| 1 | Controlar el ciclo tributario de cada cliente MYPE: expediente, obligaciones, calendario de vencimientos, declaración y pago de cada periodo. |
+| 2 | Dar seguimiento al cumplimiento y al cobro de cada cliente MYPE: constancias de pago, alertas de vencimientos y notificaciones SUNAT, custodia segura de Claves SOL, cobranza de honorarios y acceso del cliente a su información. |
 
 ## Arquitectura
 
@@ -130,7 +130,7 @@ Solo lo que ya está implementado en `develop`:
 
 - **Scrum** en sprints de dos semanas, con Sprint Backlog por historia y tarea.
 - **Ramas:** `main` guarda las entregas de cada sprint (con tag, por ejemplo `sprint-1`); `develop` integra el trabajo; cada historia o tarea sale de `develop` en una rama corta (`feature/HU-xx-...`, `docs/...`) y vuelve por Pull Request.
-- **Revisión cruzada:** cada PR se abre en borrador y lo revisa otra persona del equipo antes de fusionarse.
+- **Regla del equipo:** cada cambio entra por Pull Request a `develop`; nadie fusiona su propio PR y lo revisa otro integrante.
 - **Definición de Hecho:** una tarea o historia cuenta como hecha solo con su PR fusionado en `develop`, con pruebas que pasan y al menos 70 % de cobertura.
 - **Definición de Listo:** una historia entra al sprint cuando está lista para implementarse (su DoR marcada en el Sprint Backlog).
 
