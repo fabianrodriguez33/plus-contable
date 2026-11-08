@@ -139,6 +139,33 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
     cambiado_en     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- HU-17 (Ricardo): fraccionamiento tributario vigente de un cliente y sus cuotas. El calendario lee las cuotas por fecha;
+-- una cuota PENDIENTE con fecha anterior a hoy es la que se resalta como riesgo (no se guarda un estado «vencida»).
+CREATE TABLE IF NOT EXISTS tributario_schema.fraccionamientos (
+    id                  BIGSERIAL PRIMARY KEY,
+    cliente_id          BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tributo             VARCHAR(30) NOT NULL
+                        CHECK (tributo IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP')),
+    monto_total         NUMERIC(14,2) NOT NULL CHECK (monto_total > 0),
+    numero_cuotas       INTEGER NOT NULL CHECK (numero_cuotas >= 2),
+    fecha_primera_cuota DATE NOT NULL,
+    registrado_en       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.cuotas_fraccionamiento (
+    id                 BIGSERIAL PRIMARY KEY,
+    fraccionamiento_id BIGINT NOT NULL REFERENCES tributario_schema.fraccionamientos(id) ON DELETE CASCADE,
+    numero             INTEGER NOT NULL CHECK (numero >= 1),
+    fecha_vencimiento  DATE NOT NULL,
+    monto              NUMERIC(14,2) NOT NULL CHECK (monto > 0),
+    estado             VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'PAGADA')),
+    fecha_pago         DATE,
+    CONSTRAINT uq_cuotas_fraccionamiento_numero UNIQUE (fraccionamiento_id, numero)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fraccionamientos_cliente ON tributario_schema.fraccionamientos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_cuotas_fraccionamiento_fecha ON tributario_schema.cuotas_fraccionamiento(fecha_vencimiento, estado);
+
 -- HU-18 (Julio): notificaciones del Buzón SOL (esquela, carta inductiva o comunicado) de un cliente.
 -- El plazo es obligatorio: sin plazo de respuesta no se guarda.
 CREATE TABLE IF NOT EXISTS tributario_schema.notificaciones_sol (
