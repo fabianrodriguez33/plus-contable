@@ -224,6 +224,28 @@ CREATE TABLE IF NOT EXISTS tributario_schema.incidencias_clientes (
 
 CREATE INDEX IF NOT EXISTS idx_incidencias_clientes_cliente ON tributario_schema.incidencias_clientes(cliente_id);
 
+-- HU-28 (Jeanpierre): programación del cobro periódico de honorarios (una por cliente) y los cobros que genera.
+-- HU-28 solo crea cobros PENDIENTE; HU-29 ampliará el CHECK de estado con el pago.
+CREATE TABLE IF NOT EXISTS tributario_schema.programaciones_cobro (
+    id              BIGSERIAL PRIMARY KEY,
+    cliente_id      BIGINT NOT NULL UNIQUE REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    periodicidad    VARCHAR(10) NOT NULL CHECK (periodicidad IN ('MENSUAL', 'QUINCENAL')),
+    creada_en       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.cobros_honorarios (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    programacion_id  BIGINT NOT NULL REFERENCES tributario_schema.programaciones_cobro(id) ON DELETE CASCADE,
+    fecha_cobro      DATE NOT NULL,
+    monto            NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE')),
+    CONSTRAINT uq_cobros_honorarios_cliente_fecha UNIQUE (cliente_id, fecha_cobro)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cobros_honorarios_pendientes
+    ON tributario_schema.cobros_honorarios(cliente_id, estado, fecha_cobro);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
