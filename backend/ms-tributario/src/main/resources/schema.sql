@@ -204,6 +204,26 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
 CREATE INDEX IF NOT EXISTS idx_pagos_obligacion_fecha
     ON tributario_schema.pagos_obligacion(obligacion_id, fecha_pago);
 
+-- HU-23: incidencias del servicio contable. Una incidencia se asocia a los clientes que afecta (una fila por cliente en
+-- incidencias_clientes): la de un cliente tiene una fila y una general (caida del portal SOL) una por cada cliente activo.
+CREATE TABLE IF NOT EXISTS tributario_schema.incidencias (
+    id              BIGSERIAL PRIMARY KEY,
+    tipo            VARCHAR(40) NOT NULL
+                    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'OTRO')),
+    fecha           DATE NOT NULL,
+    descripcion     VARCHAR(1000) NOT NULL CHECK (length(btrim(descripcion)) > 0),
+    registrada_por  VARCHAR(60) NOT NULL,
+    registrada_en   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.incidencias_clientes (
+    incidencia_id   BIGINT NOT NULL REFERENCES tributario_schema.incidencias(id) ON DELETE CASCADE,
+    cliente_id      BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    PRIMARY KEY (incidencia_id, cliente_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidencias_clientes_cliente ON tributario_schema.incidencias_clientes(cliente_id);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
