@@ -30,6 +30,8 @@ import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 
@@ -74,6 +76,94 @@ class IncidenciaServiceTest {
         List<IncidenciaCliente> lista = new ArrayList<>();
         c.getValue().forEach(lista::add);
         return lista;
+    }
+
+    // ---- HU-23: tipos de la lista de Beto y observaciones
+
+    private static final List<String> TIPOS_DE_BETO_NUEVOS = List.of("PROBLEMA_SIRE", "PROBLEMA_SERVICIOS_EXTERNOS",
+            "FALLA_SISTEMA_INTERNO", "PROBLEMA_CONEXION_INTERNET", "ERROR_PROCESO_CONTABLE");
+
+    @Test
+    void laListaDeTiposTieneLosQueYaExistianYLosDeBetoSinQuitarNiRenombrarNinguno() {
+        assertThat(java.util.Arrays.stream(TipoIncidencia.values()).map(Enum::name))
+                .containsExactlyInAnyOrder("CAIDA_PORTAL_SOL", "CLIENTE_NO_ENVIA_DOCUMENTOS", "RECHAZO_FRACCIONAMIENTO", "OTRO",
+                        "PROBLEMA_SIRE", "PROBLEMA_SERVICIOS_EXTERNOS", "FALLA_SISTEMA_INTERNO", "PROBLEMA_CONEXION_INTERNET",
+                        "ERROR_PROCESO_CONTABLE");
+    }
+
+    @Test
+    void ningunTipoNuevoEsGeneral() {
+        for (TipoIncidencia t : TipoIncidencia.values()) {
+            assertThat(t.esGeneral()).as(t.name()).isEqualTo(t == TipoIncidencia.CAIDA_PORTAL_SOL);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PROBLEMA_SIRE", "PROBLEMA_SERVICIOS_EXTERNOS", "FALLA_SISTEMA_INTERNO", "PROBLEMA_CONEXION_INTERNET", "ERROR_PROCESO_CONTABLE"})
+    void cadaTipoNuevoSeRegistraConSuClienteComoUnaIncidenciaPropia(String nombre) {
+        TipoIncidencia tipo = TipoIncidencia.valueOf(nombre);
+
+        IncidenciaDto r = service.registrar(propia(tipo, CLIENTE, HOY, "Descripción"), "contador1");
+
+        assertThat(r.tipo()).isEqualTo(tipo);
+        assertThat(r.clientesAsociados()).isEqualTo(1);
+        assertThat(asociacionesGuardadas()).extracting(IncidenciaCliente::getClienteId).containsExactly(CLIENTE);
+        verify(clientesRepo, never()).findByActivoTrue();
+    }
+
+    @Test
+    void losTiposNuevosSinClienteSeRechazanComoCualquierIncidenciaPropia() {
+        for (String nombre : TIPOS_DE_BETO_NUEVOS) {
+            assertThatThrownBy(() -> service.registrar(propia(TipoIncidencia.valueOf(nombre), null, HOY, "x"), "contador1"))
+                    .isInstanceOf(ValidationException.class).hasMessage("Faltan o son inválidos: clienteId");
+        }
+        verify(incidencias, never()).save(any());
+    }
+
+    @Test
+    void lasObservacionesSeGuardanSinEspaciosSobrantesYVuelvenEnLaRespuesta() {
+        IncidenciaDto r = service.registrar(new IncidenciaEntradaDto(TipoIncidencia.PROBLEMA_SIRE, CLIENTE, HOY, "SIRE no cargó",
+                "  Se reintentó a las 4 pm y siguió igual  "), "contador1");
+
+        ArgumentCaptor<Incidencia> c = ArgumentCaptor.forClass(Incidencia.class);
+        verify(incidencias).save(c.capture());
+        assertThat(c.getValue().getObservaciones()).isEqualTo("Se reintentó a las 4 pm y siguió igual");
+        assertThat(r.observaciones()).isEqualTo("Se reintentó a las 4 pm y siguió igual");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   "})
+    void sinObservacionesOEnBlancoSeGuardanComoNulas(String observaciones) {
+        IncidenciaDto r = service.registrar(new IncidenciaEntradaDto(TipoIncidencia.OTRO, CLIENTE, HOY, "x", observaciones), "contador1");
+
+        ArgumentCaptor<Incidencia> c = ArgumentCaptor.forClass(Incidencia.class);
+        verify(incidencias).save(c.capture());
+        assertThat(c.getValue().getObservaciones()).isNull();
+        assertThat(r.observaciones()).isNull();
+    }
+
+    @Test
+    void lasObservacionesAdmitenMilCaracteresYConMilYUnoSeRechazan() {
+        service.registrar(new IncidenciaEntradaDto(TipoIncidencia.OTRO, CLIENTE, HOY, "x", "o".repeat(1000)), "contador1");
+
+        assertThatThrownBy(() -> service.registrar(new IncidenciaEntradaDto(TipoIncidencia.OTRO, CLIENTE, HOY, "x", "o".repeat(1001)), "contador1"))
+                .isInstanceOf(ValidationException.class).hasMessage("Faltan o son inválidos: observaciones (máximo 1000 caracteres)");
+    }
+
+    @Test
+    void elLargoDeLasObservacionesSeMideSinLosEspaciosDeLosExtremos() {
+        service.registrar(new IncidenciaEntradaDto(TipoIncidencia.OTRO, CLIENTE, HOY, "x", "  " + "o".repeat(1000) + "  "), "contador1");
+
+        verify(incidencias).save(any(Incidencia.class));
+    }
+
+    @Test
+    void lasObservacionesLargasSeListanJuntoConLosDemasErrores() {
+        assertThatThrownBy(() -> service.registrar(new IncidenciaEntradaDto(TipoIncidencia.OTRO, CLIENTE, HOY.plusDays(2), " ", "o".repeat(1001)), "contador1"))
+                .isInstanceOf(ValidationException.class)
+                .hasMessage("Faltan o son inválidos: fecha (no puede ser futura), descripcion, observaciones (máximo 1000 caracteres)");
+        verify(incidencias, never()).save(any());
     }
 
     // ---- criterio 1: se registra con tipo, cliente, fecha y descripción

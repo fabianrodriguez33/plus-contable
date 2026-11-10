@@ -78,6 +78,38 @@ class IncidenciaControllerTest {
     }
 
     @Test
+    void lasObservacionesDelCuerpoLleganAlServicioYVuelvenEnLaRespuesta() throws Exception {
+        when(service.registrar(any(), eq("contador1"))).thenReturn(new IncidenciaDto(50L, TipoIncidencia.PROBLEMA_SIRE, LocalDate.of(2026, 11, 9),
+                "SIRE no cargó", "contador1", LocalDateTime.of(2026, 11, 9, 10, 0), 1, "Se reintentó y siguió igual"));
+
+        mvc.perform(con(post(REGISTRAR).contentType(MediaType.APPLICATION_JSON).content(
+                        "{\"tipo\":\"PROBLEMA_SIRE\",\"clienteId\":7,\"fecha\":\"2026-11-09\",\"descripcion\":\"SIRE no cargó\",\"observaciones\":\"Se reintentó y siguió igual\"}"),
+                        bearer("contador1", "CONTADOR")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tipo").value("PROBLEMA_SIRE"))
+                .andExpect(jsonPath("$.observaciones").value("Se reintentó y siguió igual"));
+
+        org.mockito.ArgumentCaptor<com.pluscontable.tributario.dto.IncidenciaEntradaDto> c =
+                org.mockito.ArgumentCaptor.forClass(com.pluscontable.tributario.dto.IncidenciaEntradaDto.class);
+        verify(service).registrar(c.capture(), eq("contador1"));
+        org.assertj.core.api.Assertions.assertThat(c.getValue().observaciones()).isEqualTo("Se reintentó y siguió igual");
+        org.assertj.core.api.Assertions.assertThat(c.getValue().tipo()).isEqualTo(TipoIncidencia.PROBLEMA_SIRE);
+    }
+
+    @Test
+    void sinObservacionesLaRespuestaLasTraNulasYLosTiposNuevosSeAceptanEnElCuerpo() throws Exception {
+        when(service.registrar(any(), eq("contador1"))).thenReturn(incidencia());
+
+        for (String tipo : new String[] {"PROBLEMA_SERVICIOS_EXTERNOS", "FALLA_SISTEMA_INTERNO", "PROBLEMA_CONEXION_INTERNET", "ERROR_PROCESO_CONTABLE"}) {
+            mvc.perform(con(post(REGISTRAR).contentType(MediaType.APPLICATION_JSON).content(
+                            "{\"tipo\":\"" + tipo + "\",\"clienteId\":7,\"fecha\":\"2026-11-09\",\"descripcion\":\"x\"}"),
+                            bearer("contador1", "CONTADOR")))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.observaciones").doesNotExist());
+        }
+    }
+
+    @Test
     void elUsuarioDelCuerpoNoSeUsa() throws Exception {
         when(service.registrar(any(), eq("contador1"))).thenReturn(incidencia());
 

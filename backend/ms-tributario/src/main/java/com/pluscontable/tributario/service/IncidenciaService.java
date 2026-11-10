@@ -28,6 +28,7 @@ public class IncidenciaService {
 
     static final int MAX_DESCRIPCION = 1000;
     static final int MAX_USUARIO = 60;
+    static final int MAX_OBSERVACIONES = 1000;
 
     private final IncidenciaRepository incidencias;
     private final IncidenciaClienteRepository asociaciones;
@@ -68,6 +69,7 @@ public class IncidenciaService {
         i.setTipo(dto.tipo());
         i.setFecha(dto.fecha());
         i.setDescripcion(dto.descripcion().trim());
+        i.setObservaciones(dto.observaciones() == null || dto.observaciones().isBlank() ? null : dto.observaciones().trim());
         i.setRegistradaPor(usuario.trim());
         Incidencia guardada = incidencias.save(i);
 
@@ -116,6 +118,9 @@ public class IncidenciaService {
             errores.add("descripcion");
         } else if (dto.descripcion().trim().length() > MAX_DESCRIPCION) {
             errores.add("descripcion (máximo " + MAX_DESCRIPCION + " caracteres)");
+        }
+        if (dto.observaciones() != null && dto.observaciones().trim().length() > MAX_OBSERVACIONES) {
+            errores.add("observaciones (máximo " + MAX_OBSERVACIONES + " caracteres)");
         }
         if (!errores.isEmpty()) {
             throw new ValidationException("Faltan o son inválidos: " + String.join(", ", errores));

@@ -77,6 +77,54 @@ class IncidenciaEsquemaPostgresTest {
     }
 
     @Test
+    void lasObservacionesSonOpcionalesYAdmitenHastaMilCaracteres() {
+        long sin = insertarIncidencia("OTRO", "sin observaciones", LocalDate.of(2026, 11, 9));
+        assertThat(jdbc.queryForObject("SELECT observaciones FROM tributario_schema.incidencias WHERE id = ?", String.class, sin)).isNull();
+
+        jdbc.update("INSERT INTO tributario_schema.incidencias (tipo, fecha, descripcion, observaciones, registrada_por) VALUES ('PROBLEMA_SIRE', ?, 'x', ?, 'contador1')",
+                LocalDate.of(2026, 11, 9), "o".repeat(1000));
+        incidenciasCreadas.add(jdbc.queryForObject("SELECT max(id) FROM tributario_schema.incidencias", Long.class));
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO tributario_schema.incidencias (tipo, fecha, descripcion, observaciones, registrada_por) VALUES ('OTRO', ?, 'x', ?, 'contador1')",
+                LocalDate.of(2026, 11, 9), "o".repeat(1001))).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * Una base creada antes de este cambio tiene la restricción de tipos con la lista vieja y no tiene la columna de
+     * observaciones: al arrancar, schema.sql debe actualizarla sin perder las incidencias que ya tenía.
+     */
+    @Test
+    void unaBaseAnteriorSeActualizaAlVolverACorrerElEsquemaYConservaSusIncidencias() throws Exception {
+        long vieja = insertarIncidencia("RECHAZO_FRACCIONAMIENTO", "anterior", LocalDate.of(2026, 11, 1));
+        try {
+            jdbc.execute("ALTER TABLE tributario_schema.incidencias DROP CONSTRAINT IF EXISTS ck_incidencias_tipo");
+            jdbc.execute("ALTER TABLE tributario_schema.incidencias DROP COLUMN IF EXISTS observaciones");
+            jdbc.execute("ALTER TABLE tributario_schema.incidencias ADD CONSTRAINT incidencias_tipo_check "
+                    + "CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'OTRO'))");
+            assertThatThrownBy(() -> insertarIncidencia("PROBLEMA_SIRE", "x", LocalDate.of(2026, 11, 9)))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            assertThat(contar("incidencias", "id = ?", vieja)).isEqualTo(1);
+
+            volverACorrerElEsquema();
+
+            long nueva = insertarIncidencia("PROBLEMA_SIRE", "ya admite el tipo nuevo", LocalDate.of(2026, 11, 9));
+            jdbc.update("UPDATE tributario_schema.incidencias SET observaciones = 'nota' WHERE id = ?", nueva);
+            assertThat(jdbc.queryForObject("SELECT observaciones FROM tributario_schema.incidencias WHERE id = ?", String.class, nueva)).isEqualTo("nota");
+            assertThat(jdbc.queryForObject("SELECT tipo || '|' || descripcion FROM tributario_schema.incidencias WHERE id = ?", String.class, vieja))
+                    .isEqualTo("RECHAZO_FRACCIONAMIENTO|anterior");
+            assertThatThrownBy(() -> insertarIncidencia("INVENTADO", "x", LocalDate.of(2026, 11, 9)))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        } finally {
+            volverACorrerElEsquema(); // deja la base como la dejó el arranque, pase lo que pase
+        }
+    }
+
+    private void volverACorrerElEsquema() throws Exception {
+        try (java.sql.Connection c = jdbc.getDataSource().getConnection()) {
+            org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(c, new org.springframework.core.io.ClassPathResource("schema.sql"));
+        }
+    }
+
+    @Test
     void laDescripcionNoPuedeEstarVaciaNiPasarDeMilCaracteres() {
         assertThatThrownBy(() -> insertarIncidencia("OTRO", "   ", LocalDate.of(2026, 11, 9)))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -158,6 +206,22 @@ class IncidenciaEsquemaPostgresTest {
         assertThat(contar("incidencias_clientes", "incidencia_id = ? AND cliente_id = ?", r.id(), inactivo)).isZero();
         assertThat(service.delCliente(activo)).extracting(IncidenciaDto::id).containsExactly(r.id());
         assertThat(service.delCliente(inactivo)).isEmpty();
+    }
+
+    @Test
+    void registrarConObservacionesLasGuardaYElHistorialLasDevuelve() {
+        long cliente = crearCliente(true);
+
+        IncidenciaDto r = service.registrar(new IncidenciaEntradaDto(TipoIncidencia.FALLA_SISTEMA_INTERNO, cliente,
+                LocalDate.now(), "El sistema se cerró", "  Se reinició el servidor  "), "contador1");
+        incidenciasCreadas.add(r.id());
+
+        assertThat(jdbc.queryForObject("SELECT observaciones FROM tributario_schema.incidencias WHERE id = ?", String.class, r.id()))
+                .isEqualTo("Se reinició el servidor");
+        assertThat(service.delCliente(cliente)).singleElement().satisfies(i -> {
+            assertThat(i.observaciones()).isEqualTo("Se reinició el servidor");
+            assertThat(i.tipo()).isEqualTo(TipoIncidencia.FALLA_SISTEMA_INTERNO);
+        });
     }
 
     @Test
