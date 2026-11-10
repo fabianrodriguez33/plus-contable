@@ -202,6 +202,55 @@ class CobroHonorarioServiceTest {
     }
 
     @Test
+    void noSePuedeCambiarLaPeriodicidadConUnCobroVencidoDelMesSinPagar() {
+        when(programaciones.findByClienteId(CLIENTE)).thenReturn(Optional.of(programacion(Periodicidad.MENSUAL)));
+        when(cobros.existsByClienteIdAndEstadoAndFechaCobroBetween(
+                CLIENTE, EstadoCobro.PENDIENTE, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 8))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.programar(CLIENTE, con(Periodicidad.QUINCENAL)))
+                .isInstanceOf(ValidationException.class).hasMessageContaining("cobro vencido de este mes");
+        verify(cobros, never()).deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(any(), any(), any());
+        verify(cobros, never()).save(any());
+        verify(programaciones, never()).save(any());
+    }
+
+    @Test
+    void unHonorarioDeUnCentimoNoSePuedeCobrarPorQuincenasPeroSiPorMes() {
+        when(acuerdos.findByClienteId(CLIENTE)).thenReturn(Optional.of(acuerdo("0.01", LocalDate.of(2026, 1, 31))));
+
+        assertThatThrownBy(() -> service.programar(CLIENTE, con(Periodicidad.QUINCENAL)))
+                .isInstanceOf(ValidationException.class).hasMessage("El honorario mensual debe ser al menos 0.02 para cobrarlo por quincenas");
+        verify(cobros, never()).save(any());
+
+        assertThat(service.programar(CLIENTE, con(Periodicidad.MENSUAL)).cobrosGenerados()).isEqualTo(12);
+    }
+
+    @Test
+    void conCentimoImparCadaMesQuincenalSumaExactoElHonorario() {
+        when(acuerdos.findByClienteId(CLIENTE)).thenReturn(Optional.of(acuerdo("100.01", LocalDate.of(2026, 1, 31))));
+
+        service.programar(CLIENTE, con(Periodicidad.QUINCENAL));
+
+        assertThat(guardados).hasSize(24).allSatisfy(c -> assertThat(c.getMonto()).isGreaterThanOrEqualTo(new BigDecimal("0.01")));
+        assertThat(guardados.stream().filter(c -> c.getFechaCobro().getMonthValue() == 11 && c.getFechaCobro().getYear() == 2026)
+                .map(CobroHonorario::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo("100.01");
+        for (int i = 0; i < guardados.size(); i += 2) { // cada par es un mes: día 15 y fin de mes
+            assertThat(guardados.get(i).getMonto().add(guardados.get(i + 1).getMonto())).isEqualByComparingTo("100.01");
+        }
+    }
+
+    @Test
+    void alReemplazarSoloSeBorranLosPendientesParaNoPerderCobrosConPagoHU29() {
+        when(programaciones.findByClienteId(CLIENTE)).thenReturn(Optional.of(programacion(Periodicidad.MENSUAL)));
+
+        service.programar(CLIENTE, con(Periodicidad.QUINCENAL));
+
+        verify(cobros).deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(eq(CLIENTE), eq(EstadoCobro.PENDIENTE), any());
+        verify(cobros, never()).deleteAll();
+        verify(cobros, never()).deleteById(any());
+    }
+
+    @Test
     void unAcuerdoQueEmpiezaEnElFuturoCobraDesdeSuInicio() {
         when(acuerdos.findByClienteId(CLIENTE)).thenReturn(Optional.of(acuerdo("800.00", LocalDate.of(2027, 1, 10))));
 

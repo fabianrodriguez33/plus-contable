@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CobroHonorarioService {
 
     static final int MESES = 12;
+    private static final BigDecimal MINIMO_QUINCENAL = new BigDecimal("0.02");
 
     private final ClienteRepository clientes;
     private final AcuerdoRepository acuerdos;
@@ -69,12 +70,22 @@ public class CobroHonorarioService {
         AcuerdoServicio acuerdo = acuerdos.findByClienteId(clienteId)
                 .orElseThrow(() -> new ValidationException("Registre primero el acuerdo de honorarios del cliente"));
 
+        if (dto.periodicidad() == Periodicidad.QUINCENAL && acuerdo.getHonorarioMensual().compareTo(MINIMO_QUINCENAL) < 0) {
+            throw new ValidationException("El honorario mensual debe ser al menos 0.02 para cobrarlo por quincenas");
+        }
+
         LocalDate hoy = LocalDate.now(clock);
         ProgramacionCobro programacion = programaciones.findByClienteId(clienteId).orElse(null);
         if (programacion == null) {
             programacion = new ProgramacionCobro();
             programacion.setClienteId(clienteId);
         } else if (programacion.getPeriodicidad() != dto.periodicidad()) {
+            // Un pendiente vencido de este mes seguiría vivo y el mes se cobraría dos veces con el nuevo esquema.
+            if (cobros.existsByClienteIdAndEstadoAndFechaCobroBetween(clienteId, EstadoCobro.PENDIENTE, hoy.withDayOfMonth(1), hoy.minusDays(1))) {
+                throw new ValidationException("No se puede cambiar la periodicidad: hay un cobro vencido de este mes sin pagar. "
+                        + "Regístrelo como pagado o cambie la periodicidad desde el mes siguiente");
+            }
+            // HU-29: solo se reemplazan los PENDIENTE; los cobros con pago (total o parcial) no se deben borrar, o se pierde el pago.
             cobros.deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(clienteId, EstadoCobro.PENDIENTE, hoy);
             cobros.flush(); // los borrados van antes que los nuevos: pueden caer en la misma fecha
         }
