@@ -21,7 +21,7 @@ export default function LoginPage() {
     setCargando(true)
     try {
       await login(username.trim(), password)
-      navigate('/', { replace: true })
+      navigate('/', { replace: true }) // con la contraseña temporal, PrivateRoute lleva a cambiarla (HU-37)
     } catch (err) {
       setError(mensajeError(err))
     } finally {

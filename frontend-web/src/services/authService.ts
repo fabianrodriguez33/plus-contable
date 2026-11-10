@@ -1,16 +1,32 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
 import type { Usuario } from '../types'
-import { isJwtActive } from './jwtSession'
+import { isJwtActive, jwtRequiereCambioPassword } from './jwtSession'
 
 interface LoginResponse {
   token: string
   tipo: string
   expiraEnSegundos: number
   usuario: Usuario
+  /** HU-37: el token es el restringido del primer ingreso y solo sirve para cambiar la contraseña. */
+  debeCambiarPassword?: boolean
 }
 
 export async function login(username: string, password: string): Promise<Usuario> {
   const { data } = await authApi.post<LoginResponse>('/api/auth/login', { username, password })
+  localStorage.setItem(TOKEN_KEY, data.token)
+  localStorage.setItem(USER_KEY, JSON.stringify(data.usuario))
+  return data.usuario
+}
+
+/** HU-37: verdadero si la sesión guardada es la del primer ingreso con la contraseña temporal. */
+export function debeCambiarPassword(): boolean {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return !!token && isJwtActive(token) && jwtRequiereCambioPassword(token)
+}
+
+/** HU-37: cambio obligatorio de la contraseña temporal; el servidor responde con la sesión normal, que reemplaza a la restringida. */
+export async function cambiarPassword(passwordNueva: string): Promise<Usuario> {
+  const { data } = await authApi.post<LoginResponse>('/api/auth/cambiar-password', { passwordNueva })
   localStorage.setItem(TOKEN_KEY, data.token)
   localStorage.setItem(USER_KEY, JSON.stringify(data.usuario))
   return data.usuario
