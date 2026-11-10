@@ -30,6 +30,9 @@ app:
     lock-minutes: 15
   cors:
     allowed-origins: http://localhost:5173
+  tributario:
+    # HU-37: ms-tributario, para comprobar que la empresa existe antes de crearle la cuenta
+    url: ${TRIBUTARIO_URL:http://localhost:8082}
   seed:
     admin-username: ${ADMIN_USERNAME}
     admin-password: ${ADMIN_PASSWORD}

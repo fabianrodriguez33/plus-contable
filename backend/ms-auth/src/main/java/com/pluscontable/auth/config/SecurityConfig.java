@@ -34,6 +34,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/health").permitAll()
+                        // HU-37: solo el estudio crea la cuenta de un cliente
+                        .requestMatchers(HttpMethod.POST, "/api/auth/clientes/*/cuenta").hasAnyRole("CONTADOR", "ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

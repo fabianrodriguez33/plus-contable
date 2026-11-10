@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS auth_schema.usuarios (
 -- HU-38: cuenta de un cliente MYPE; sin FK porque clientes vive en tributario_schema (otro servicio). Bases existentes:
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS cliente_id BIGINT;
 
+-- HU-37: una sola cuenta por empresa; la contrasena temporal obliga a cambiarla en el primer ingreso y solo sirve una vez.
+-- cliente_id solo se llena en las cuentas CLIENTE_MYPE (el estudio lo deja en NULL), por eso el indice unico es parcial.
+ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_password BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_usada_en TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_cliente_id ON auth_schema.usuarios(cliente_id) WHERE cliente_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS auth_schema.usuario_roles (
     usuario_id BIGINT NOT NULL REFERENCES auth_schema.usuarios(id) ON DELETE CASCADE,
     rol_id     BIGINT NOT NULL REFERENCES auth_schema.roles(id) ON DELETE CASCADE,
