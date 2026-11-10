@@ -11,7 +11,7 @@ entity "tributario_schema.clientes" as clientes <<existe>> {
   --
   * ruc : VARCHAR(11) <<UNIQUE>>
   * razon_social : VARCHAR(200)
-  * regimen_tributario : MYPE | REMIPE | GENERAL | RER
+  * regimen_tributario : MYPE | RER | GENERAL
   * activo : BOOLEAN = true
 }
 entity "tributario_schema.parametros_sistema" as param <<nuevo>> {
@@ -52,7 +52,7 @@ note right of param
   Supuesto (decisión de Beto, 06/11): los avisos van por correo y en el sistema, a los 3 días, 1 día y el mismo día. Claves: avisos.dias_antes (3,1,0) y avisos.correo_estudio.
   Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema.
   Supuesto: parametros_sistema y avisos son compartidos con HU-22 (cambio de condición del RUC) y con las demás alertas.
-  Supuesto (decisión de Beto, 06/11): RER se agrega a los valores de regimen_tributario; es un cambio de HU-01.
+  Decisión de Beto (10/11): RER reemplaza a REMIPE en los valores de regimen_tributario; es un cambio de HU-01.
   Supuesto: la UNIQUE del recordatorio solo aplica a RECORDATORIO_SIRE (índice parcial), para no duplicar el aviso del mismo día.
 end note
 footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-12, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y obligaciones), model.Cliente.Regimen
