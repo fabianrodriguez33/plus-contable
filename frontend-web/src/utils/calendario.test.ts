@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarioItem } from '../services/calendarioService'
 import type { CuotaCalendario } from '../services/fraccionamientoService'
+import type { EstadoObligacion } from '../services/obligacionService'
 import {
   agruparEntradasPorDia, agruparPorDia, aIso, deIso, entradaDeCuota, entradaDeObligacion, etiquetaSituacion,
-  mapConLimite, rangoDeLaSemana, rangoDelMes, situacionVisual,
+  etiquetaCuota, mapConLimite, rangoDeLaSemana, rangoDelMes, situacionCuota, situacionVisual,
 } from './calendario'
 
 function item(id: number, clienteId: number, fecha: string, over: Partial<CalendarioItem> = {},
-              estado: 'PENDIENTE' | 'DECLARADO' = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
+              estado: 'PENDIENTE' | EstadoObligacion = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
   return {
     obligacion: { id, clienteId, tipoObligacion: tipo, periodo: '2026-10-01', fechaVencimiento: fecha, estado },
     diasRestantes: 3, vencimientoPasado: false, ...over,
@@ -90,6 +91,15 @@ describe('situación visual', () => {
     expect(situacionVisual(it)).toBe('DECLARADA')
     expect(etiquetaSituacion(it)).toBe('Declarada')
   })
+  it('una obligación pagada se muestra como pagada aunque su fecha haya pasado, y no como vencida', () => {
+    const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGADO')
+    expect(situacionVisual(it)).toBe('PAGADA')
+    expect(etiquetaSituacion(it)).toBe('Pagada')
+  })
+  it('con pago parcial todavía se debe saldo: pasada su fecha sigue vencida', () => {
+    const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGO_PARCIAL')
+    expect(situacionVisual(it)).toBe('VENCIDA')
+  })
   it('una pendiente con fecha pasada está vencida', () => {
     expect(etiquetaSituacion(item(1, 1, '2026-11-01', { diasRestantes: -1, vencimientoPasado: true })))
       .toBe('Vencida hace 1 día')
@@ -100,6 +110,31 @@ describe('situación visual', () => {
     expect(etiquetaSituacion(item(1, 1, '2026-11-04', { diasRestantes: 0 }))).toBe('Vence hoy')
     expect(etiquetaSituacion(item(1, 1, '2026-11-05', { diasRestantes: 1 }))).toBe('Vence mañana')
     expect(etiquetaSituacion(item(1, 1, '2026-11-09', { diasRestantes: 5 }))).toBe('Vence en 5 días')
+  })
+})
+
+describe('situación de una cuota de fraccionamiento (T22)', () => {
+  const cuota = (over: Partial<CuotaCalendario['cuota']>, dias: number): CuotaCalendario => ({
+    cuota: { id: 1, numero: 2, fechaVencimiento: '2026-10-20', monto: 100, estado: 'PENDIENTE', fechaPago: null, enRiesgo: false, ...over },
+    fraccionamientoId: 1, diasRestantes: dias, vencida: dias < 0,
+  })
+
+  it('una cuota pendiente con fecha pasada está en riesgo de perder el fraccionamiento', () => {
+    const c = cuota({ enRiesgo: true }, -3)
+    expect(situacionCuota(c)).toBe('RIESGO')
+    expect(etiquetaCuota(c)).toBe('En riesgo: vencida hace 3 días')
+    expect(etiquetaCuota(cuota({ enRiesgo: true }, -1))).toBe('En riesgo: vencida hace 1 día')
+  })
+  it('una cuota pagada con fecha pasada sale pagada: ni vencida ni en riesgo', () => {
+    const c = cuota({ estado: 'PAGADA', fechaPago: '2026-10-19' }, -3)
+    expect(situacionCuota(c)).toBe('PAGADA')
+    expect(etiquetaCuota(c)).toBe('Pagada')
+  })
+  it('una pendiente al día: hoy, mañana y días restantes', () => {
+    expect(etiquetaCuota(cuota({}, 0))).toBe('Vence hoy')
+    expect(etiquetaCuota(cuota({}, 1))).toBe('Vence mañana')
+    expect(etiquetaCuota(cuota({}, 9))).toBe('Vence en 9 días')
+    expect(situacionCuota(cuota({}, 9))).toBe('PROXIMA')
   })
 })
 

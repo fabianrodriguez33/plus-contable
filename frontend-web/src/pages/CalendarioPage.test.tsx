@@ -8,6 +8,7 @@ import CalendarioPage from './CalendarioPage'
 import { listarClientes } from '../services/clienteService'
 import { consultarCalendario, type CalendarioItem } from '../services/calendarioService'
 import { consultarCuotas, type CuotaCalendario } from '../services/fraccionamientoService'
+import type { EstadoObligacion } from '../services/obligacionService'
 
 vi.mock('../services/clienteService', () => ({ listarClientes: vi.fn() }))
 vi.mock('../services/calendarioService', () => ({ consultarCalendario: vi.fn() }))
@@ -21,7 +22,7 @@ const clientes = [
 ] as never
 
 function it_(id: number, clienteId: number, fecha: string, over: Partial<CalendarioItem> = {},
-             estado: 'PENDIENTE' | 'DECLARADO' = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
+             estado: EstadoObligacion = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
   return {
     obligacion: { id, clienteId, tipoObligacion: tipo, periodo: '2026-10-01', fechaVencimiento: fecha, estado },
     diasRestantes: 1, vencimientoPasado: false, ...over,
@@ -93,6 +94,45 @@ describe('CalendarioPage', () => {
     pantalla()
     const dia = await screen.findByRole('region', { name: '2026-11-02' })
     expect(within(dia).getAllByText('Declarada')).toHaveLength(1)
+    expect(within(dia).getAllByText('Vencida hace 2 días')).toHaveLength(1)
+  })
+
+  it('una cuota pendiente y vencida se resalta como riesgo de perder el fraccionamiento (T22, criterio 4)', async () => {
+    consulta.mockResolvedValue([])
+    cuotasDe.mockImplementation(async (clienteId) => clienteId !== 1 ? [] : [
+      cuota(200, 4, '2026-11-02', { enRiesgo: true }, -2),
+      cuota(201, 5, '2026-11-20', {}, 16),
+    ])
+    pantalla()
+    const riesgo = (await screen.findByRole('region', { name: '2026-11-02' })).querySelector('li') as HTMLElement
+    expect(riesgo.getAttribute('data-riesgo')).toBe('true')
+    expect(within(riesgo).getByText('En riesgo: vencida hace 2 días')).toBeTruthy()
+    expect(within(riesgo).getByText(/Riesgo de perder el fraccionamiento/)).toBeTruthy()
+    const alDia = screen.getByRole('region', { name: '2026-11-20' }).querySelector('li') as HTMLElement
+    expect(alDia.getAttribute('data-riesgo')).toBe('false')
+    expect(within(alDia).queryByText(/Riesgo de perder/)).toBeNull()
+    expect(within(alDia).getByText('Vence en 16 días')).toBeTruthy()
+  })
+
+  it('una cuota pagada con fecha pasada sale pagada, sin riesgo ni vencida', async () => {
+    consulta.mockResolvedValue([])
+    cuotasDe.mockImplementation(async (clienteId) => clienteId !== 1 ? [] :
+      [cuota(210, 1, '2026-10-15', { estado: 'PAGADA', fechaPago: '2026-10-14' }, -20)])
+    pantalla()
+    const fila = (await screen.findByRole('region', { name: '2026-10-15' })).querySelector('li') as HTMLElement
+    expect(within(fila).getByText('Pagada')).toBeTruthy()
+    expect(fila.getAttribute('data-riesgo')).toBe('false')
+    expect(within(fila).queryByText(/vencida|riesgo/i)).toBeNull()
+  })
+
+  it('una obligación pagada con fecha pasada sale pagada, no vencida', async () => {
+    consulta.mockImplementation(async (clienteId) => clienteId !== 1 ? [] : [
+      it_(40, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PAGADO'),
+      it_(41, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PENDIENTE', 'RENTA'),
+    ])
+    pantalla()
+    const dia = await screen.findByRole('region', { name: '2026-11-02' })
+    expect(within(dia).getAllByText('Pagada')).toHaveLength(1)
     expect(within(dia).getAllByText('Vencida hace 2 días')).toHaveLength(1)
   })
 

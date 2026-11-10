@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { TriangleAlert } from 'lucide-react'
 import axios from 'axios'
 import { listarClientes } from '../services/clienteService'
 import { consultarCalendario } from '../services/calendarioService'
@@ -12,8 +13,9 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import { Input, Select } from '../components/Input'
 import {
-  agruparEntradasPorDia, aIso, deIso, entradaDeCuota, entradaDeObligacion, etiquetaSituacion, mapConLimite,
-  rangoDeLaSemana, rangoDelMes, situacionVisual, type Entrada, type Rango, type SituacionVisual,
+  agruparEntradasPorDia, aIso, deIso, entradaDeCuota, entradaDeObligacion, etiquetaCuota, etiquetaSituacion,
+  mapConLimite, rangoDeLaSemana, rangoDelMes, situacionCuota, situacionVisual,
+  type Entrada, type Rango, type SituacionCuota, type SituacionVisual,
 } from '../utils/calendario'
 
 type Vista = 'HOY' | 'SEMANA' | 'MES'
@@ -29,7 +31,15 @@ const CONSULTAS_EN_PARALELO = 4
 
 const ESTILO: Record<SituacionVisual, string> = {
   DECLARADA: 'bg-emerald-50 text-emerald-700',
+  PAGADA: 'bg-emerald-50 text-emerald-700',
   VENCIDA: 'bg-red-50 text-red-700',
+  HOY: 'bg-amber-50 text-amber-700',
+  PROXIMA: 'bg-slate-100 text-slate-700',
+}
+
+const ESTILO_CUOTA: Record<SituacionCuota, string> = {
+  PAGADA: 'bg-emerald-50 text-emerald-700',
+  RIESGO: 'bg-red-100 text-red-800 font-semibold',
   HOY: 'bg-amber-50 text-amber-700',
   PROXIMA: 'bg-slate-100 text-slate-700',
 }
@@ -59,8 +69,8 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
   const [clienteId, setClienteId] = useState('')
   const [clientes, setClientes] = useState<Cliente[] | null>(null)
   const [mostrar, setMostrar] = useState<Mostrar>('TODO')
-  const [estadoCuota, setEstadoCuota] = useState<'' | EstadoCuota>('')
-  const [situacionCuota, setSituacionCuota] = useState<'' | SituacionCuotaFiltro>('')
+  const [estadoFiltro, setEstadoFiltro] = useState<'' | EstadoCuota>('')
+  const [situacionFiltro, setSituacionFiltro] = useState<'' | SituacionCuotaFiltro>('')
   const [entradas, setEntradas] = useState<Entrada[]>([])
   const [errores, setErrores] = useState<string[]>([])
   const [cargando, setCargando] = useState(true)
@@ -78,7 +88,7 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
     const rango = rangoDe(vista, fechaHoy, mes)
     // Los filtros de estado y situación son los de la API de cuotas; no se mandan los que están vacíos.
     const filtroCuotas: FiltroCuotas = {
-      ...rango, ...(estadoCuota && { estado: estadoCuota }), ...(situacionCuota && { situacion: situacionCuota }),
+      ...rango, ...(estadoFiltro && { estado: estadoFiltro }), ...(situacionFiltro && { situacion: situacionFiltro }),
     }
     const vacia: Parte = { entradas: [], error: null }
     setCargando(true)
@@ -102,7 +112,7 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
       setCargando(false)
     })
     return () => { vigente = false }
-  }, [clientes, clienteId, vista, mes, fechaHoy, mostrar, estadoCuota, situacionCuota])
+  }, [clientes, clienteId, vista, mes, fechaHoy, mostrar, estadoFiltro, situacionFiltro])
 
   const nombre = useMemo(() => {
     const porId = new Map((clientes ?? []).map((c) => [c.id, c.razonSocial]))
@@ -135,14 +145,14 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
         </Select>
         {mostrar !== 'OBLIGACIONES' && (
           <>
-            <Select label="Estado de la cuota" value={estadoCuota}
-              onChange={(e) => setEstadoCuota(e.target.value as '' | EstadoCuota)}>
+            <Select label="Estado de la cuota" value={estadoFiltro}
+              onChange={(e) => setEstadoFiltro(e.target.value as '' | EstadoCuota)}>
               <option value="">Todas</option>
               <option value="PENDIENTE">Pendiente</option>
               <option value="PAGADA">Pagada</option>
             </Select>
-            <Select label="Situación de la cuota" value={situacionCuota}
-              onChange={(e) => setSituacionCuota(e.target.value as '' | SituacionCuotaFiltro)}>
+            <Select label="Situación de la cuota" value={situacionFiltro}
+              onChange={(e) => setSituacionFiltro(e.target.value as '' | SituacionCuotaFiltro)}>
               <option value="">Todas</option>
               <option value="PROXIMO">Próxima</option>
               <option value="VENCIDO">Vencida</option>
@@ -178,16 +188,24 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
                     </span>
                   </li>
                 ) : (
-                  <li key={`c${e.item.cuota.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
+                  <li key={`c${e.item.cuota.id}`} data-riesgo={situacionCuota(e.item) === 'RIESGO'}
+                    className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm ${
+                      situacionCuota(e.item) === 'RIESGO' ? 'border-l-4 border-red-600 bg-red-50' : ''}`}>
                     <span>
                       <Link className="font-medium text-brand-600 hover:underline" to={`/clientes/${e.clienteId}`}>
                         {nombre(e.clienteId)}
                       </Link>
                       {' · '}Cuota {e.item.cuota.numero} del fraccionamiento · S/ {e.item.cuota.monto.toFixed(2)}
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                      {e.item.cuota.estado === 'PAGADA' ? 'Pagada' : 'Pendiente'}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${ESTILO_CUOTA[situacionCuota(e.item)]}`}>
+                      {situacionCuota(e.item) === 'RIESGO' && <TriangleAlert size={14} aria-hidden />}
+                      {etiquetaCuota(e.item)}
                     </span>
+                    {situacionCuota(e.item) === 'RIESGO' && (
+                      <span className="w-full text-xs text-red-700">
+                        Riesgo de perder el fraccionamiento: la cuota venció sin pago.
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>

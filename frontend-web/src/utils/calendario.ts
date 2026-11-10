@@ -94,10 +94,14 @@ export function agruparEntradasPorDia(entradas: Entrada[], nombreCliente: (clien
     }))
 }
 
-export type SituacionVisual = 'DECLARADA' | 'VENCIDA' | 'HOY' | 'PROXIMA'
+export type SituacionVisual = 'DECLARADA' | 'PAGADA' | 'VENCIDA' | 'HOY' | 'PROXIMA'
 
-/** Una obligación declarada nunca se muestra como vencida, aunque su fecha ya haya pasado. */
+/**
+ * Una obligación declarada o pagada nunca se muestra como vencida, aunque su fecha ya haya pasado.
+ * Con pago parcial todavía se debe saldo: sigue su fecha como una pendiente.
+ */
 export function situacionVisual(item: CalendarioItem): SituacionVisual {
+  if (item.obligacion.estado === 'PAGADO') return 'PAGADA'
   if (item.obligacion.estado === 'DECLARADO') return 'DECLARADA'
   if (item.vencimientoPasado) return 'VENCIDA'
   if (item.diasRestantes === 0) return 'HOY'
@@ -108,7 +112,31 @@ export function etiquetaSituacion(item: CalendarioItem): string {
   const dias = item.diasRestantes
   switch (situacionVisual(item)) {
     case 'DECLARADA': return 'Declarada'
+    case 'PAGADA': return 'Pagada'
     case 'VENCIDA': return `Vencida hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
+    case 'HOY': return 'Vence hoy'
+    default: return dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`
+  }
+}
+
+export type SituacionCuota = 'PAGADA' | 'RIESGO' | 'HOY' | 'PROXIMA'
+
+/**
+ * Una cuota pagada nunca sale vencida ni en riesgo, aunque su fecha ya haya pasado. Una pendiente con fecha
+ * anterior a hoy es riesgo de perder el fraccionamiento (HU-17, criterio 4).
+ */
+export function situacionCuota(c: CuotaCalendario): SituacionCuota {
+  if (c.cuota.estado === 'PAGADA') return 'PAGADA'
+  if (c.cuota.enRiesgo) return 'RIESGO'
+  if (c.diasRestantes === 0) return 'HOY'
+  return 'PROXIMA'
+}
+
+export function etiquetaCuota(c: CuotaCalendario): string {
+  const dias = c.diasRestantes
+  switch (situacionCuota(c)) {
+    case 'PAGADA': return 'Pagada'
+    case 'RIESGO': return `En riesgo: vencida hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
     case 'HOY': return 'Vence hoy'
     default: return dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`
   }
