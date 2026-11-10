@@ -64,8 +64,10 @@ AS -> UR : save(usuario: dato de acceso, hash, activo,\ncliente_id = clienteId, 
 UR -> DB : INSERT usuarios y usuario_roles
 note right
   Dato de acceso (username): pendiente de confirmar con Beto.
-  Si dos contadores crean el acceso a la vez, la restricción única evita el duplicado:
-  se respondería 409.
+  Hoy no hay restricción única sobre usuarios.cliente_id (solo username es único), así que dos
+  contadores que crean el acceso a la vez podrían crear dos cuentas.
+  El diseño propone un índice único parcial sobre cliente_id (donde no sea nulo) y responder 409
+  si choca: decisión pendiente del equipo.
 end note
 AS -> AS : registra el hecho en bitacora_seguridad
 AS --> FE : 201 {usuario, contraseña inicial}
@@ -83,5 +85,5 @@ note over U, DB
   ms-tributario solo le deja ver su empresa (HU-38). Recuperar la contraseña queda fuera: HU-41.
 end note
 
-footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, BCryptPasswordEncoder, bitacora_seguridad y GET /api/tributario/clientes/{id}. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, BCryptPasswordEncoder, bitacora_seguridad y GET /api/tributario/clientes/{id}. Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
 @enduml

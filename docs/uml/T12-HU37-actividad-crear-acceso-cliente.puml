@@ -76,5 +76,5 @@ end note
 |Contador|
 stop
 
-footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0): usuarios.cliente_id, rol CLIENTE_MYPE y claim clienteId (HU-38). Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0): usuarios.cliente_id, rol CLIENTE_MYPE y claim clienteId (HU-38). Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
 @enduml

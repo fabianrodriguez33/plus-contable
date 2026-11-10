@@ -1,0 +1,65 @@
+@startuml
+title T85 · HU-37 · Actividad: crear acceso de cliente (DISEÑO PREVIO, no existe en develop)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+|Contador|
+start
+:Abre la ficha de un cliente registrado
+y elige "Crear acceso";
+
+|frontend-web|
+:Envía la solicitud para crear el acceso
+del cliente (id del cliente);
+note right
+  DISEÑO PREVIO. Hoy la ficha no tiene esta acción
+  (tarea 86) ni existe la API (tarea 87).
+end note
+
+|API de creación de acceso|
+if (¿Token válido?) then (no)
+  :401;
+  stop
+endif
+if (¿El usuario tiene rol CONTADOR o ADMIN?) then (no)
+  :403 (solo el estudio crea accesos);
+  stop
+endif
+if (¿El cliente está registrado?) then (no)
+  :Rechaza: cliente no registrado;
+  stop
+endif
+if (¿El cliente ya tiene una cuenta de acceso?) then (sí)
+  :Rechaza: no se crea una segunda cuenta;
+  stop
+endif
+:Crea la cuenta con rol CLIENTE_MYPE
+ligada a la empresa del cliente;
+note right
+  PENDIENTE DE DECISIÓN DEL EQUIPO:
+  cómo se enlaza usuario y cliente
+  (claim en el token, tabla de enlace,
+  consulta entre servicios).
+  Hoy ms-auth no tiene el rol sembrado,
+  ni endpoint para crear usuarios, ni
+  columna que apunte a un cliente.
+end note
+:Genera la contraseña inicial;
+:Entrega la contraseña inicial al cliente
+de forma segura;
+note right
+  PENDIENTE DE DEFINIR CON BETO (tarea 88):
+  forma de entrega y si el cliente debe
+  cambiarla en el primer ingreso.
+end note
+:Responde que el acceso fue creado;
+
+|frontend-web|
+:Informa al contador que el acceso quedó creado;
+
+|Contador|
+stop
+
+footer Fuente: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. No se deriva de código: nada de esto existe en develop (6db0036). Los códigos de rechazo y el servicio responsable están por decidir.
+@enduml
