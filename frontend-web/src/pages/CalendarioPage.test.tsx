@@ -7,9 +7,11 @@ import { AxiosError } from 'axios'
 import CalendarioPage from './CalendarioPage'
 import { listarClientes } from '../services/clienteService'
 import { consultarCalendario, type CalendarioItem } from '../services/calendarioService'
+import { consultarCuotas, type CuotaCalendario } from '../services/fraccionamientoService'
 
 vi.mock('../services/clienteService', () => ({ listarClientes: vi.fn() }))
 vi.mock('../services/calendarioService', () => ({ consultarCalendario: vi.fn() }))
+vi.mock('../services/fraccionamientoService', () => ({ consultarCuotas: vi.fn() }))
 
 const HOY = new Date(2026, 10, 4, 12) // miércoles 4 de noviembre de 2026
 
@@ -31,8 +33,18 @@ function pantalla() {
 }
 
 const consulta = vi.mocked(consultarCalendario)
+const cuotasDe = vi.mocked(consultarCuotas)
+
+function cuota(id: number, numero: number, fecha: string, over: Partial<CuotaCalendario['cuota']> = {},
+               dias = 5): CuotaCalendario {
+  return {
+    cuota: { id, numero, fechaVencimiento: fecha, monto: 250, estado: 'PENDIENTE', fechaPago: null, enRiesgo: false, ...over },
+    fraccionamientoId: 7, diasRestantes: dias, vencida: dias < 0,
+  }
+}
 
 beforeEach(() => {
+  cuotasDe.mockResolvedValue([])
   vi.mocked(listarClientes).mockResolvedValue(clientes)
   consulta.mockImplementation(async (clienteId) =>
     clienteId === 1
@@ -102,6 +114,63 @@ describe('CalendarioPage', () => {
       { status: 403, data: {} } as never))
     pantalla()
     expect((await screen.findByRole('alert')).textContent).toContain('No tienes permiso')
+  })
+
+  it('cada cuota de fraccionamiento aparece en su día, junto a las obligaciones (T21, criterio 3)', async () => {
+    cuotasDe.mockImplementation(async (clienteId) => clienteId === 1 ? [cuota(100, 3, '2026-11-12')] : [])
+    pantalla()
+    const dia = await screen.findByRole('region', { name: '2026-11-12' })
+    expect(within(dia).getByText(/Cuota 3 del fraccionamiento/)).toBeTruthy()
+    expect(within(dia).getByText(/S\/ 250\.00/)).toBeTruthy()
+    expect(within(dia).getAllByRole('listitem')).toHaveLength(3) // obligación de Zeta, cuota de Zeta y RENTA de Alfa
+    expect(cuotasDe).toHaveBeenCalledWith(1, { desde: '2026-11-01', hasta: '2026-11-30' })
+    expect(cuotasDe).toHaveBeenCalledWith(2, { desde: '2026-11-01', hasta: '2026-11-30' })
+  })
+
+  it('un día con solo una cuota aparece aunque no haya obligaciones', async () => {
+    consulta.mockResolvedValue([])
+    cuotasDe.mockImplementation(async (clienteId) => clienteId === 2 ? [cuota(101, 1, '2026-11-20')] : [])
+    pantalla()
+    const dia = await screen.findByRole('region', { name: '2026-11-20' })
+    expect(within(dia).getByText('Alfa SAC')).toBeTruthy()
+  })
+
+  it('los filtros de estado y situación van a la API de cuotas, y vacíos no se mandan', async () => {
+    pantalla()
+    await screen.findByRole('region', { name: '2026-11-05' })
+    await userEvent.selectOptions(screen.getByLabelText('Estado de la cuota'), 'PAGADA')
+    await waitFor(() => expect(cuotasDe).toHaveBeenCalledWith(1,
+      { desde: '2026-11-01', hasta: '2026-11-30', estado: 'PAGADA' }))
+    await userEvent.selectOptions(screen.getByLabelText('Situación de la cuota'), 'VENCIDO')
+    await waitFor(() => expect(cuotasDe).toHaveBeenCalledWith(1,
+      { desde: '2026-11-01', hasta: '2026-11-30', estado: 'PAGADA', situacion: 'VENCIDO' }))
+    await userEvent.selectOptions(screen.getByLabelText('Estado de la cuota'), '')
+    await userEvent.selectOptions(screen.getByLabelText('Situación de la cuota'), 'PROXIMO')
+    await waitFor(() => expect(cuotasDe).toHaveBeenLastCalledWith(2,
+      { desde: '2026-11-01', hasta: '2026-11-30', situacion: 'PROXIMO' }))
+  })
+
+  it('"Solo obligaciones" no consulta cuotas y "Solo cuotas" no consulta obligaciones', async () => {
+    pantalla()
+    await screen.findByRole('region', { name: '2026-11-05' })
+    consulta.mockClear()
+    cuotasDe.mockClear()
+    await userEvent.selectOptions(screen.getByLabelText('Mostrar'), 'OBLIGACIONES')
+    await waitFor(() => expect(consulta).toHaveBeenCalled())
+    expect(cuotasDe).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Estado de la cuota')).toBeNull()
+    consulta.mockClear()
+    await userEvent.selectOptions(screen.getByLabelText('Mostrar'), 'CUOTAS')
+    await waitFor(() => expect(cuotasDe).toHaveBeenCalled())
+    expect(consulta).not.toHaveBeenCalled()
+  })
+
+  it('si falla la consulta de cuotas, las obligaciones se siguen mostrando con la alerta', async () => {
+    cuotasDe.mockRejectedValue(new AxiosError('x', 'ERR_BAD_REQUEST', undefined, undefined,
+      { status: 403, data: {} } as never))
+    pantalla()
+    expect((await screen.findByRole('alert')).textContent).toContain('No tienes permiso')
+    expect(within(screen.getByRole('region', { name: '2026-11-12' })).getByText('Zeta SAC')).toBeTruthy()
   })
 
   it('sin vencimientos lo dice', async () => {

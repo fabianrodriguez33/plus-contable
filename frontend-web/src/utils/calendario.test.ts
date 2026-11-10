@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarioItem } from '../services/calendarioService'
+import type { CuotaCalendario } from '../services/fraccionamientoService'
 import {
-  agruparPorDia, aIso, deIso, etiquetaSituacion, mapConLimite, rangoDeLaSemana, rangoDelMes, situacionVisual,
+  agruparEntradasPorDia, agruparPorDia, aIso, deIso, entradaDeCuota, entradaDeObligacion, etiquetaSituacion,
+  mapConLimite, rangoDeLaSemana, rangoDelMes, situacionVisual,
 } from './calendario'
 
 function item(id: number, clienteId: number, fecha: string, over: Partial<CalendarioItem> = {},
@@ -58,6 +60,27 @@ describe('agruparPorDia', () => {
   })
   it('sin vencimientos no hay grupos', () => {
     expect(agruparPorDia([], nombre)).toEqual([])
+  })
+})
+
+describe('agruparEntradasPorDia', () => {
+  const nombres: Record<number, string> = { 1: 'Zeta SAC', 2: 'Alfa SAC' }
+  const nombre = (id: number) => nombres[id]
+  const q = (id: number, numero: number, fecha: string): CuotaCalendario => ({
+    cuota: { id, numero, fechaVencimiento: fecha, monto: 100, estado: 'PENDIENTE', fechaPago: null, enRiesgo: false },
+    fraccionamientoId: 1, diasRestantes: 3, vencida: false,
+  })
+
+  it('mezcla cuotas y obligaciones por día: por cliente, obligaciones antes que cuotas y cuotas por número', () => {
+    const grupos = agruparEntradasPorDia([
+      entradaDeCuota(1, q(12, 2, '2026-11-10')), entradaDeCuota(1, q(11, 1, '2026-11-10')),
+      entradaDeObligacion(item(5, 1, '2026-11-10')), entradaDeCuota(2, q(20, 1, '2026-11-03')),
+      entradaDeObligacion(item(6, 2, '2026-11-10')),
+    ], nombre)
+    expect(grupos.map((g) => g.fecha)).toEqual(['2026-11-03', '2026-11-10'])
+    expect(grupos[1].entradas.map((e) => `${e.tipo}${e.clienteId}`))
+      .toEqual(['OBLIGACION2', 'OBLIGACION1', 'CUOTA1', 'CUOTA1'])
+    expect(grupos[1].entradas.slice(2).map((e) => (e.tipo === 'CUOTA' ? e.item.cuota.numero : 0))).toEqual([1, 2])
   })
 })
 

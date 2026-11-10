@@ -1,4 +1,5 @@
 import type { CalendarioItem } from '../services/calendarioService'
+import type { CuotaCalendario } from '../services/fraccionamientoService'
 
 export interface Rango {
   desde: string
@@ -55,6 +56,41 @@ export function agruparPorDia(items: CalendarioItem[], nombreCliente: (clienteId
         nombreCliente(x.obligacion.clienteId).localeCompare(nombreCliente(y.obligacion.clienteId))
         || (x.obligacion.tipoObligacion ?? '').localeCompare(y.obligacion.tipoObligacion ?? '')
         || x.obligacion.id - y.obligacion.id),
+    }))
+}
+
+/** Lo que se lista en un día del calendario: una obligación o una cuota de fraccionamiento (HU-17). */
+export type Entrada =
+  | { tipo: 'OBLIGACION'; clienteId: number; fecha: string; item: CalendarioItem }
+  | { tipo: 'CUOTA'; clienteId: number; fecha: string; item: CuotaCalendario }
+
+export const entradaDeObligacion = (item: CalendarioItem): Entrada =>
+  ({ tipo: 'OBLIGACION', clienteId: item.obligacion.clienteId, fecha: item.obligacion.fechaVencimiento, item })
+
+export const entradaDeCuota = (clienteId: number, item: CuotaCalendario): Entrada =>
+  ({ tipo: 'CUOTA', clienteId, fecha: item.cuota.fechaVencimiento, item })
+
+export interface GrupoEntradas {
+  fecha: string
+  entradas: Entrada[]
+}
+
+const idDe = (e: Entrada) => (e.tipo === 'OBLIGACION' ? e.item.obligacion.id : e.item.cuota.id)
+const claveDe = (e: Entrada) =>
+  e.tipo === 'OBLIGACION' ? `0 ${e.item.obligacion.tipoObligacion ?? ''}` : `1 ${String(e.item.cuota.numero).padStart(4, '0')}`
+
+/** Agrupa por día de vencimiento; dentro del día, por cliente, obligaciones antes que cuotas, y por tributo o número de cuota. */
+export function agruparEntradasPorDia(entradas: Entrada[], nombreCliente: (clienteId: number) => string): GrupoEntradas[] {
+  const porDia = new Map<string, Entrada[]>()
+  for (const e of entradas) porDia.set(e.fecha, [...(porDia.get(e.fecha) ?? []), e])
+  return [...porDia.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([fecha, lista]) => ({
+      fecha,
+      entradas: [...lista].sort((x, y) =>
+        nombreCliente(x.clienteId).localeCompare(nombreCliente(y.clienteId))
+        || claveDe(x).localeCompare(claveDe(y))
+        || idDe(x) - idDe(y)),
     }))
 }
 
