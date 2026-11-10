@@ -48,6 +48,25 @@ public class NotificacionSolService {
         return NotificacionSolDto.from(notificaciones.save(n));
     }
 
+    /** Las notificaciones pendientes del cliente, la de plazo más próximo primero (HU-18, criterio 4). */
+    @Transactional(readOnly = true)
+    public List<NotificacionSolDto> pendientes(Long clienteId) {
+        return listar(clienteId, EstadoNotificacion.PENDIENTE);
+    }
+
+    /**
+     * Las notificaciones del cliente, de plazo más próximo a más lejano; con {@code estado} solo las de ese estado.
+     * Lanza 404 si el cliente no existe.
+     */
+    @Transactional(readOnly = true)
+    public List<NotificacionSolDto> listar(Long clienteId, EstadoNotificacion estado) {
+        clientes.buscar(clienteId);
+        List<NotificacionSol> lista = estado == null
+                ? notificaciones.findByClienteIdOrderByPlazoRespuestaAscIdAsc(clienteId)
+                : notificaciones.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(clienteId, estado);
+        return lista.stream().map(NotificacionSolDto::from).toList();
+    }
+
     /** Pasa una notificación pendiente a ATENDIDA con la fecha de hoy; 404 si no existe y 400 si ya estaba atendida. */
     @Transactional
     public NotificacionSolDto marcarAtendida(Long notificacionId) {
