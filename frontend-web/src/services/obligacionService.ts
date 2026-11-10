@@ -1,5 +1,8 @@
 import { tributarioApi } from './apiClient'
 
+/** PAGO_PARCIAL y PAGADO los fija HU-13 según la suma de pagos (igual que el servidor). */
+export type EstadoObligacion = 'PENDIENTE' | 'DECLARADO' | 'PAGO_PARCIAL' | 'PAGADO'
+
 // PROVISIONAL: la obligacion es de HU-07 (Ricardo); aqui solo lo que usan HU-09 y HU-10
 export interface Obligacion {
   id: number
@@ -7,7 +10,7 @@ export interface Obligacion {
   tipoObligacion?: string
   periodo: string
   fechaVencimiento: string
-  estado: 'PENDIENTE' | 'DECLARADO'
+  estado: EstadoObligacion
   fechaDeclaracion?: string
   numeroFormulario?: string
   montoDeterminado?: number
