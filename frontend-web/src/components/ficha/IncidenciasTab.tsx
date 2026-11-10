@@ -11,7 +11,7 @@ import Table, { Td } from '../Table'
 const TIPOS: { id: TipoIncidencia; etiqueta: string }[] = [
   { id: 'CLIENTE_NO_ENVIA_DOCUMENTOS', etiqueta: 'Cliente no envía documentos' },
   { id: 'RECHAZO_FRACCIONAMIENTO', etiqueta: 'Rechazo de fraccionamiento' },
-  { id: 'CAIDA_PORTAL_SOL', etiqueta: 'Caída del portal SOL (general)' },
+  { id: 'CAIDA_PORTAL_SOL', etiqueta: 'Caída o indisponibilidad del portal SOL' },
   { id: 'PROBLEMA_SIRE', etiqueta: 'Problemas con SIRE' },
   { id: 'PROBLEMA_SERVICIOS_EXTERNOS', etiqueta: 'Problemas con SUNAT u otros servicios externos' },
   { id: 'FALLA_SISTEMA_INTERNO', etiqueta: 'Fallas del sistema interno' },

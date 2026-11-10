@@ -7,7 +7,10 @@ package com.pluscontable.tributario.model;
  * general (se asocia a toda la cartera activa); los demás van con un cliente.
  */
 public enum TipoIncidencia {
-    /** General: afecta a toda la cartera activa, no lleva cliente. */
+    /**
+     * Caída o indisponibilidad del portal SOL. Es el único tipo general (decisión de Beto, 10/11): afecta a toda la cartera
+     * activa y no lleva cliente. El valor interno no cambia aunque la etiqueta de la pantalla sí.
+     */
     CAIDA_PORTAL_SOL,
     CLIENTE_NO_ENVIA_DOCUMENTOS,
     RECHAZO_FRACCIONAMIENTO,

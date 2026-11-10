@@ -45,6 +45,19 @@ describe('Incidencias del servicio en la ficha (HU-23)', () => {
     expect(listarIncidencias).toHaveBeenCalledWith(4)
   })
 
+  it('la caída del portal SOL se llama «Caída o indisponibilidad del portal SOL» en el selector y en el historial, con el mismo valor interno', async () => {
+    vi.mocked(listarIncidencias).mockResolvedValue([
+      incidencia({ id: 2, tipo: 'CAIDA_PORTAL_SOL', descripcion: 'Portal SOL caído', clientesAsociados: 37 }),
+    ])
+    montar()
+
+    const fila = (await screen.findByText('Portal SOL caído')).closest('tr') as HTMLElement
+    expect(fila.textContent).toContain('Caída o indisponibilidad del portal SOL')
+    const opcion = screen.getByRole('option', { name: 'Caída o indisponibilidad del portal SOL' }) as HTMLOptionElement
+    expect(opcion.value).toBe('CAIDA_PORTAL_SOL')
+    expect(screen.queryByText(/Caída del portal SOL/)).toBeNull()
+  })
+
   it('sin incidencias lo indica', async () => {
     montar()
     expect(await screen.findByText('Este cliente no tiene incidencias registradas.')).toBeTruthy()
@@ -115,7 +128,7 @@ describe('Incidencias del servicio en la ficha (HU-23)', () => {
     expect(opciones).toEqual([
       ['CLIENTE_NO_ENVIA_DOCUMENTOS', 'Cliente no envía documentos'],
       ['RECHAZO_FRACCIONAMIENTO', 'Rechazo de fraccionamiento'],
-      ['CAIDA_PORTAL_SOL', 'Caída del portal SOL (general)'],
+      ['CAIDA_PORTAL_SOL', 'Caída o indisponibilidad del portal SOL'],
       ['PROBLEMA_SIRE', 'Problemas con SIRE'],
       ['PROBLEMA_SERVICIOS_EXTERNOS', 'Problemas con SUNAT u otros servicios externos'],
       ['FALLA_SISTEMA_INTERNO', 'Fallas del sistema interno'],
