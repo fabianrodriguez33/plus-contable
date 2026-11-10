@@ -1,4 +1,4 @@
-export type Regimen = 'MYPE' | 'REMIPE' | 'GENERAL'
+export type Regimen = 'MYPE' | 'RER' | 'GENERAL'
 
 export interface Usuario {
   id: number
