@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import java.util.List;
 import org.mockito.ArgumentCaptor;
 
 /** HU-18 · Tarea 70 (unitarias de registrar): tipo, fecha de recepción y plazo; sin plazo no se guarda. */
@@ -130,6 +131,50 @@ class NotificacionSolServiceTest {
         assertThat(guardada().getPlazoRespuesta()).isEqualTo(HOY);
     }
 
+    // ---- tarea 70: límites y rechazos que faltaban
+
+    @Test
+    void sinPlazoElMensajeNombraSoloElPlazo() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.ESQUELA, HOY, null), "Faltan o son inválidos: plazoRespuesta");
+    }
+
+    @Test
+    void sinTipoElMensajeNombraSoloElTipo() {
+        noSeGuardaConMensaje(entrada(null, HOY, HOY.plusDays(5)), "Faltan o son inválidos: tipo");
+    }
+
+    @Test
+    void sinFechaDeRecepcionNoSeComparaElPlazoYElMensajeNombraSoloLaFecha() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.COMUNICADO, null, HOY.minusDays(30)), "Faltan o son inválidos: fechaRecepcion");
+    }
+
+    @Test
+    void recepcionFuturaYPlazoAnteriorALaRecepcionListanLosDosErroresJuntos() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.ESQUELA, HOY.plusDays(3), HOY),
+                "Faltan o son inválidos: fechaRecepcion (no puede ser futura), "
+                        + "plazoRespuesta (no puede ser anterior a la fecha de recepción)");
+    }
+
+    @Test
+    void unaNotificacionConElPlazoYaVencidoSiSePuedeRegistrarMientrasNoSeaAnteriorALaRecepcion() {
+        service.registrar(CLIENTE, entrada(TipoNotificacion.CARTA_INDUCTIVA, HOY.minusDays(20), HOY.minusDays(5)));
+
+        assertThat(guardada().getPlazoRespuesta()).isEqualTo(HOY.minusDays(5));
+    }
+
+    @Test
+    void laFechaDeRecepcionDeMuchoAntesTambienEsValida() {
+        service.registrar(CLIENTE, entrada(TipoNotificacion.ESQUELA, LocalDate.of(2025, 1, 31), HOY.plusDays(1)));
+
+        assertThat(guardada().getFechaRecepcion()).isEqualTo(LocalDate.of(2025, 1, 31));
+    }
+
+    private void noSeGuardaConMensaje(NotificacionSolEntradaDto dto, String mensaje) {
+        assertThatThrownBy(() -> service.registrar(CLIENTE, dto))
+                .isInstanceOf(ValidationException.class).hasMessage(mensaje);
+        verify(repositorio, never()).save(any());
+    }
+
     @Test
     void siElClienteNoExisteResponde404YNoGuarda() {
         when(clientes.buscar(CLIENTE)).thenThrow(new EntityNotFoundException("Cliente no encontrado: " + CLIENTE));
@@ -145,6 +190,81 @@ class NotificacionSolServiceTest {
 
         assertThatThrownBy(() -> service.registrar(CLIENTE, entrada(null, null, null)))
                 .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    // ---- tarea 67: listar (pendientes del cliente)
+
+    private NotificacionSol conPlazo(long id, EstadoNotificacion estado, LocalDate plazo) {
+        NotificacionSol n = new NotificacionSol();
+        n.setId(id);
+        n.setClienteId(CLIENTE);
+        n.setTipo(TipoNotificacion.COMUNICADO);
+        n.setFechaRecepcion(HOY.minusDays(10));
+        n.setPlazoRespuesta(plazo);
+        n.setEstado(estado);
+        if (estado == EstadoNotificacion.ATENDIDA) n.setFechaAtencion(HOY.minusDays(1));
+        return n;
+    }
+
+    @Test
+    void pendientesConsultaSoloLasPendientesDelClienteEnElOrdenDelRepositorio() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE))
+                .thenReturn(List.of(conPlazo(2L, EstadoNotificacion.PENDIENTE, HOY.plusDays(3)),
+                        conPlazo(1L, EstadoNotificacion.PENDIENTE, HOY.plusDays(9))));
+
+        List<NotificacionSolDto> r = service.pendientes(CLIENTE);
+
+        verify(clientes).buscar(CLIENTE);
+        assertThat(r).extracting(NotificacionSolDto::id).containsExactly(2L, 1L);
+        assertThat(r).allSatisfy(d -> assertThat(d.estado()).isEqualTo(EstadoNotificacion.PENDIENTE));
+        assertThat(r.get(0).plazoRespuesta()).isEqualTo(HOY.plusDays(3));
+        assertThat(r.get(0).clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.get(0).tipo()).isEqualTo(TipoNotificacion.COMUNICADO);
+        assertThat(r.get(0).fechaRecepcion()).isEqualTo(HOY.minusDays(10));
+        verify(repositorio, never()).findByClienteIdOrderByPlazoRespuestaAscIdAsc(any());
+    }
+
+    @Test
+    void listarConEstadoAtendidaPideSoloLasAtendidas() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.ATENDIDA))
+                .thenReturn(List.of(conPlazo(5L, EstadoNotificacion.ATENDIDA, HOY.minusDays(2))));
+
+        List<NotificacionSolDto> r = service.listar(CLIENTE, EstadoNotificacion.ATENDIDA);
+
+        assertThat(r).hasSize(1);
+        assertThat(r.get(0).estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(r.get(0).fechaAtencion()).isEqualTo(HOY.minusDays(1));
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE);
+    }
+
+    @Test
+    void listarSinEstadoDevuelveTodasLasDelClienteSinFiltrar() {
+        when(repositorio.findByClienteIdOrderByPlazoRespuestaAscIdAsc(CLIENTE))
+                .thenReturn(List.of(conPlazo(5L, EstadoNotificacion.ATENDIDA, HOY.minusDays(2)),
+                        conPlazo(6L, EstadoNotificacion.PENDIENTE, HOY.plusDays(2))));
+
+        List<NotificacionSolDto> r = service.listar(CLIENTE, null);
+
+        assertThat(r).extracting(NotificacionSolDto::id).containsExactly(5L, 6L);
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(any(), any());
+    }
+
+    @Test
+    void unClienteSinNotificacionesDevuelveUnaListaVacia() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE))
+                .thenReturn(List.of());
+
+        assertThat(service.pendientes(CLIENTE)).isEmpty();
+    }
+
+    @Test
+    void listarConUnClienteInexistenteResponde404YNoConsultaLasNotificaciones() {
+        when(clientes.buscar(CLIENTE)).thenThrow(new EntityNotFoundException("Cliente no encontrado: " + CLIENTE));
+
+        assertThatThrownBy(() -> service.pendientes(CLIENTE)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> service.listar(CLIENTE, null)).isInstanceOf(EntityNotFoundException.class);
+        verify(repositorio, never()).findByClienteIdOrderByPlazoRespuestaAscIdAsc(any());
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(any(), any());
     }
 
     // ---- tarea 68: marcar como atendida
@@ -173,6 +293,21 @@ class NotificacionSolServiceTest {
         assertThat(r.estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
         assertThat(r.fechaAtencion()).isEqualTo(HOY);
         assertThat(r.plazoRespuesta()).isEqualTo(HOY.plusDays(10)); // el resto no cambia
+    }
+
+    @Test
+    void sePuedeMarcarAtendidaDespuesDelPlazoYLoDemasNoCambia() {
+        NotificacionSol n = existente(EstadoNotificacion.PENDIENTE);
+        n.setPlazoRespuesta(HOY.minusDays(3)); // ya venció: igual se puede dejar constancia de que se atendió
+
+        NotificacionSolDto r = service.marcarAtendida(55L);
+
+        assertThat(r.estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(r.fechaAtencion()).isEqualTo(HOY);
+        assertThat(r.clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.tipo()).isEqualTo(TipoNotificacion.ESQUELA);
+        assertThat(r.fechaRecepcion()).isEqualTo(HOY.minusDays(5));
+        assertThat(r.plazoRespuesta()).isEqualTo(HOY.minusDays(3));
     }
 
     @Test

@@ -79,3 +79,26 @@ export const obtenerAcuerdo = (clienteId: number) =>
 
 export const guardarAcuerdo = (clienteId: number, a: Acuerdo) =>
   tributarioApi.put<Acuerdo>(`${base(clienteId)}/acuerdo`, a).then((r) => r.data)
+
+// ---- HU-28 ----
+export type Periodicidad = 'MENSUAL' | 'QUINCENAL'
+
+export interface CobroHonorario {
+  id: number
+  fechaCobro: string
+  monto: number
+  estado: 'PENDIENTE'
+}
+
+export interface ProgramacionCobro {
+  periodicidad: Periodicidad
+  cobrosGenerados: number
+  cobrosYaExistentes: number
+  cobros: CobroHonorario[]
+}
+
+export const programarCobros = (clienteId: number, periodicidad: Periodicidad) =>
+  tributarioApi.post<ProgramacionCobro>(`${base(clienteId)}/cobros/programacion`, { periodicidad }).then((r) => r.data)
+
+export const listarCobrosPendientes = (clienteId: number) =>
+  tributarioApi.get<CobroHonorario[]>(`${base(clienteId)}/cobros`).then((r) => r.data)
