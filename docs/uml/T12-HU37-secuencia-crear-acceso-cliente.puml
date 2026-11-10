@@ -1,89 +1,129 @@
 @startuml
-title T12 · HU-37 · Secuencia: crear el acceso de un cliente MYPE (diseño previo)
+title T12 · HU-37 · Secuencia: crear la cuenta de un cliente, su primer ingreso y el cambio obligatorio de contraseña (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\n(ficha del cliente)" as FE
-participant "ms-auth\n(controlador de cuentas de cliente)" as AC
-participant "ms-auth\n(servicio de cuentas)" as AS
-participant "ms-tributario\n(ClienteController)" as TC
+actor "Cliente" as C
+participant "frontend-web" as FE
+participant "ms-auth\nCuentaClienteController" as CC
+participant "ms-auth\nCuentaClienteService" as CS
+participant "ClienteTributarioClient\n(HTTP)" as TC
+participant "ms-tributario\nClienteController" as TR
 participant "UsuarioRepository" as UR
 participant "PasswordEncoder\n(BCrypt)" as PE
+participant "BitacoraRepository" as BR
 database "auth_schema" as DB
 
-== Crear el acceso ==
-U -> FE : elige "Crear acceso" en la ficha de un cliente
-FE -> AC : POST (ruta por definir) {clienteId}\nAuthorization: Bearer <JWT del contador>
-note right
-  Ruta y cuerpo: por definir en T14.
-  Dato de acceso (RUC o correo): pendiente de confirmar con Beto.
-end note
+== Crear la cuenta del cliente (solo CONTADOR o ADMIN) ==
+U -> FE : elige "Crear acceso" en la ficha del cliente y escribe su correo
+FE -> CC : POST /api/auth/clientes/{clienteId}/cuenta {correo}\nAuthorization: Bearer <JWT del contador>
 alt token ausente, vencido o inválido
-  AC --> FE : 401
+  CC --> FE : 401
 end
 alt el usuario no tiene rol CONTADOR ni ADMIN
-  AC --> FE : 403
+  CC --> FE : 403
 end
-note over AC
-  Hoy ms-auth solo exige "autenticado" en las rutas no listadas: la regla de rol es nueva.
-  Códigos de rechazo (401, 403, 404, 409): propuesta del diseño, pendiente de confirmar con Beto.
-end note
-AC -> AS : crear(clienteId, usuario del token)
-
-== Validar el cliente en ms-tributario ==
-AS -> TC : GET /api/tributario/clientes/{clienteId}\n(reenvía el mismo JWT)
+CC -> CS : crear(clienteId, correo, usuario del token)
+CS -> CS : valida el correo (formato, hasta 60 caracteres)
+alt correo inválido
+  CS --> FE : 400 "Faltan o son inválidos: correo"
+end
+CS -> TC : buscar(clienteId, token del contador)
+TC -> TR : GET /api/tributario/clientes/{clienteId}\n(reenvía el mismo JWT)
 note right
   Supuesto del diseño: ms-auth consulta con el JWT del contador (mismo secreto en ambos servicios).
-  ms-auth no tiene hoy ningún cliente HTTP hacia ms-tributario.
+  ms-auth no tiene hoy ningún cliente HTTP hacia ms-tributario (sería nuevo, con tiempos de espera).
+  Si ms-tributario no responde: 502 y no se crea nada.
 end note
 alt el cliente no existe
-  TC --> AS : 404
-  AS --> FE : 404 "cliente no registrado"
+  TR --> TC : 404
+  CS --> FE : 404 "cliente no registrado"
 end
-TC --> AS : 200 {id, ruc, razonSocial}
+TR --> TC : 200 {id, ruc, razonSocial}
 
-== Evitar una segunda cuenta ==
-AS -> UR : existe un usuario con cliente_id = clienteId ?
-UR -> DB : SELECT en usuarios
-alt el cliente ya tiene cuenta
-  AS --> FE : 409 "el cliente ya tiene acceso"
+CS -> UR : existe una cuenta con cliente_id = clienteId ?
+alt la empresa ya tiene cuenta
+  CS --> FE : 409 "la empresa ya tiene cuenta"
 end
-note right
-  Más de una persona por empresa y desactivar o bloquear la cuenta:
-  pendiente de confirmar con Beto. Este diagrama supone una cuenta por cliente.
-end note
+CS -> UR : existe un usuario con ese correo ?
+alt el correo ya está en uso
+  CS --> FE : 409 "el correo ya está registrado"
+end
 
-== Crear el usuario y entregar la contraseña ==
-AS -> AS : genera la contraseña inicial
-AS -> PE : encode(contraseña inicial)
-PE --> AS : hash
-AS -> UR : save(usuario: dato de acceso, hash, activo,\ncliente_id = clienteId, rol CLIENTE_MYPE)
+CS -> CS : genera la contraseña temporal aleatoria (SecureRandom, 12 caracteres)
+CS -> PE : encode(contraseña temporal)
+PE --> CS : hash
+CS -> UR : save(usuario: correo, hash, rol CLIENTE_MYPE,\ncliente_id, debe_cambiar_password = true)
 UR -> DB : INSERT usuarios y usuario_roles
 note right
-  Dato de acceso (username): pendiente de confirmar con Beto.
-  Hoy no hay restricción única sobre usuarios.cliente_id (solo username es único), así que dos
-  contadores que crean el acceso a la vez podrían crear dos cuentas.
-  El diseño propone un índice único parcial sobre cliente_id (donde no sea nulo) y responder 409
-  si choca: decisión pendiente del equipo.
+  Decisión de Beto: ingreso con correo y contraseña; una sola cuenta por empresa.
+  El correo se guarda como username (supuesto del diseño: no cambia el login).
+  Índice único parcial sobre cliente_id (supuesto del diseño): si dos contadores crean a la vez,
+  el segundo falla y se responde 409.
 end note
-AS -> AS : registra el hecho en bitacora_seguridad
-AS --> FE : 201 {usuario, contraseña inicial}
+CS -> BR : save(CUENTA_CLIENTE_CREADA, quién la creó y empresa; sin contraseña)
+BR -> DB : INSERT bitacora_seguridad
+CS --> CC : cuenta creada + contraseña temporal
+CC --> FE : 201 {usuarioId, correo, clienteId, passwordTemporal}\nCache-Control: no-store
 note right
-  Entrega de la contraseña inicial (se muestra una sola vez, la da el contador,
-  correo o WhatsApp): pendiente de confirmar con Beto.
-  Cambio obligatorio en el primer ingreso: pendiente de confirmar con Beto.
-  La contraseña nunca se guarda en claro ni se escribe en el registro.
+  Decisión de Beto: la temporal se muestra UNA SOLA VEZ y no se vuelve a entregar ni se guarda en claro
+  (solo su hash). No se registra en la bitácora ni en ningún log.
 end note
-FE --> U : muestra que el acceso quedó creado
-
-== Después: el cliente ingresa ==
-note over U, DB
-  El cliente entra por POST /api/auth/login (ya existe, HU-36). El token lleva el claim clienteId y
-  ms-tributario solo le deja ver su empresa (HU-38). Recuperar la contraseña queda fuera: HU-41.
+FE --> U : muestra la contraseña temporal una sola vez
+U -> C : le entrega la contraseña por su medio\n(no hay envío automático de correos)
+note over U
+  Desactivar o bloquear una cuenta de cliente: pendiente de confirmar con Beto.
+  Fuera de alcance: invitaciones por correo, recuperación de contraseña (HU-41),
+  varios usuarios por empresa y subida de archivos por el cliente.
 end note
 
-footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, BCryptPasswordEncoder, bitacora_seguridad y GET /api/tributario/clientes/{id}. Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+== Primer ingreso del cliente ==
+C -> FE : escribe su correo y la contraseña temporal
+FE -> CC : POST /api/auth/login {username: correo, password}
+CC -> CS : login (flujo existente de AuthService)
+CS -> UR : findByUsername(correo)
+CS -> PE : matches(contraseña, hash)
+alt credenciales incorrectas
+  CS --> FE : 401 (con el bloqueo por intentos fallidos de hoy)
+end
+alt la temporal ya se usó antes
+  CS --> FE : 401 "la contraseña temporal ya fue usada"
+end
+CS -> UR : save(temporal usada en = ahora)
+CS --> FE : 200 {token restringido, debeCambiarPassword = true}
+note right
+  Decisión de Beto: la temporal deja de ser válida tras usarla por primera vez.
+  El token restringido no lleva roles y solo permite cambiar la contraseña y cerrar sesión;
+  ms-tributario le responde 403 en toda ruta (token sin rol).
+  Pendiente de confirmar con Beto: si el cliente no cambia la contraseña en esa sesión,
+  queda sin acceso (la temporal ya no sirve) y el reinicio por el contador no está en el alcance.
+end note
+
+== Cambio obligatorio de la contraseña ==
+FE -> C : obliga a cambiarla antes de cualquier otra opción
+C -> FE : escribe la nueva contraseña
+FE -> CC : POST /api/auth/cambiar-password {passwordNueva}\nAuthorization: Bearer <token restringido>
+alt el token no es el restringido (no hay cambio pendiente)
+  CC --> FE : 403
+end
+CC -> CS : cambiarPassword(usuario del token, passwordNueva)
+CS -> CS : valida la nueva (8 a 72 caracteres) y que no sea la temporal
+alt no cumple
+  CS --> FE : 400 con el motivo
+end
+CS -> PE : encode(passwordNueva)
+CS -> UR : save(nuevo hash, debe_cambiar_password = false)
+CS -> DB : revoca el token restringido (tokens_revocados)
+CS -> BR : save(CAMBIO_PASSWORD; sin contraseñas)
+CS --> FE : 200 {token normal (CLIENTE_MYPE y clienteId), debeCambiarPassword = false}
+note right
+  Supuesto del diseño: la regla de la nueva contraseña (8 a 72 caracteres) no la fijó Beto.
+  Desde aquí el cliente solo ve lo suyo (HU-38).
+end note
+FE --> C : accede a la información de su empresa
+
+footer Diseño previo, 10/11/2026 · Base: criterios de aceptación de HU-37, las decisiones definitivas de Beto del 10/11 y el código y la base de develop (5a891de). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, AuthService.login, JwtProvider, bitacora_seguridad y GET /api/tributario/clientes/{id}. Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md
 @enduml

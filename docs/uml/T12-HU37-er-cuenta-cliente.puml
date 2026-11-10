@@ -1,0 +1,86 @@
+@startuml
+!pragma layout smetana
+title T12 · HU-37 · Modelo de datos de la cuenta de un cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+skinparam linetype ortho
+
+entity "auth_schema.usuarios" as usuarios <<cambia>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * username : VARCHAR(60) <<UNIQUE>>  (el correo, en la cuenta de un cliente)
+  * password_hash : VARCHAR(100)
+  * nombre_completo : VARCHAR(150)
+  email : VARCHAR(150)
+  * activo : BOOLEAN = true
+  * intentos_fallidos : INTEGER = 0
+  bloqueado_hasta : TIMESTAMP
+  * creado_en : TIMESTAMP
+  cliente_id : BIGINT  (sin FK; NULL en el estudio)
+  --
+  * debe_cambiar_password : BOOLEAN = false  <<nuevo>>
+  temporal_usada_en : TIMESTAMP  <<nuevo>>
+  INDEX ÚNICO PARCIAL (cliente_id) WHERE cliente_id IS NOT NULL  <<nuevo>>
+}
+
+entity "auth_schema.roles" as roles <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * nombre : VARCHAR(50) <<UNIQUE>>
+}
+
+entity "auth_schema.usuario_roles" as usuario_roles <<existe>> {
+  * usuario_id : BIGINT <<PK, FK>>
+  * rol_id : BIGINT <<PK, FK>>
+}
+
+entity "auth_schema.bitacora_seguridad" as bitacora <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  usuario_id : BIGINT
+  username : VARCHAR(60)
+  * evento : VARCHAR(40)
+  detalle : VARCHAR(300)
+  ip : VARCHAR(60)
+  * fecha : TIMESTAMP
+}
+
+entity "auth_schema.tokens_revocados" as revocados <<existe>> {
+  * jti : VARCHAR(64) <<PK>>
+  --
+  * username : VARCHAR(60)
+  * expira_en : TIMESTAMP
+}
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)
+  * razon_social : VARCHAR(200)
+}
+
+usuarios ||--o{ usuario_roles : ON DELETE CASCADE
+roles ||--o{ usuario_roles : ON DELETE CASCADE
+usuarios }o..o| clientes : cliente_id\n(referencia lógica, sin clave foránea:\notro esquema y otro servicio)
+
+note right of usuarios
+  Decisión de Beto (10/11): una sola cuenta por empresa; ingreso con correo y contraseña;
+  la contraseña temporal se muestra una sola vez y no se guarda en claro (solo password_hash);
+  deja de valer tras usarla; el cambio en el primer ingreso es obligatorio.
+  Supuesto del diseño: debe_cambiar_password = true mientras la contraseña sea la temporal;
+  temporal_usada_en se llena en el primer ingreso con ella (ya no vuelve a servir).
+  Supuesto del diseño: el índice único parcial sobre cliente_id garantiza una cuenta por empresa
+  (la restricción no puede nombrar el rol, pero cliente_id solo se llena en cuentas CLIENTE_MYPE).
+  Las bases existentes lo reciben con ALTER TABLE ... ADD COLUMN IF NOT EXISTS y CREATE UNIQUE INDEX IF NOT EXISTS.
+  Fuera de alcance: invitaciones por correo, recuperación de contraseña (HU-41), varios usuarios por empresa.
+end note
+
+note bottom of bitacora
+  Eventos nuevos: CUENTA_CLIENTE_CREADA (quién la creó y para qué empresa) y CAMBIO_PASSWORD.
+  El detalle nunca lleva contraseñas. El token restringido del primer ingreso se revoca en tokens_revocados.
+end note
+
+footer Diseño previo, 10/11/2026 · Base: criterios de aceptación de HU-37, las decisiones definitivas de Beto del 10/11 y backend/ms-auth/src/main/resources/schema.sql de develop (5a891de). Código existente: Usuario, Rol, BitacoraSeguridad y TokenRevocado
+@enduml
