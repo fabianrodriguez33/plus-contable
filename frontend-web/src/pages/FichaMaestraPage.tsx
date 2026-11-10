@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Boxes, Building, CalendarClock, CalendarPlus, FileSignature, FolderOpen, PieChart, TriangleAlert, Users } from 'lucide-react'
+import { Boxes, Building, CalendarClock, CalendarPlus, FileSignature, FolderOpen, PieChart, TriangleAlert, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { mensajeError, tributarioApi } from '../services/apiClient'
 import { actualizarCliente, crearCliente, obtenerCliente } from '../services/clienteService'
@@ -9,6 +9,7 @@ import Card from '../components/Card'
 import DatosGeneralesTab from '../components/ficha/DatosGeneralesTab'
 import SociosTab from '../components/ficha/SociosTab'
 import ActivosTab from '../components/ficha/ActivosTab'
+import CobrosTab from '../components/ficha/CobrosTab'
 import IncidenciasTab from '../components/ficha/IncidenciasTab'
 import DocumentosPage from './DocumentosPage'
 import TrabajadoresPage from './TrabajadoresPage'
@@ -16,7 +17,7 @@ import AcuerdoPage from './AcuerdoPage'
 import VencimientosPage from './VencimientosPage'
 import ProgramacionPage from './ProgramacionPage'
 
-type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'vencimientos' | 'programacion' | 'incidencias'
+type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'cobros' | 'vencimientos' | 'programacion' | 'incidencias'
 
 const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'general', etiqueta: 'Datos generales', icono: Building },
@@ -25,6 +26,7 @@ const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'trabajadores', etiqueta: 'Planilla', icono: Users },
   { id: 'activos', etiqueta: 'Activos fijos', icono: Boxes },
   { id: 'acuerdo', etiqueta: 'Acuerdo de servicio', icono: FileSignature },
+  { id: 'cobros', etiqueta: 'Cobros', icono: Wallet },
   { id: 'vencimientos', etiqueta: 'Vencimientos', icono: CalendarClock },
   { id: 'programacion', etiqueta: 'Programación', icono: CalendarPlus },
   { id: 'incidencias', etiqueta: 'Incidencias', icono: TriangleAlert },
@@ -117,6 +119,9 @@ export default function FichaMaestraPage() {
       {clienteId !== null && tab === 'trabajadores' && <TrabajadoresPage />}
       {clienteId !== null && tab === 'activos' && <ActivosTab clienteId={clienteId} setError={setError} />}
       {clienteId !== null && tab === 'acuerdo' && <AcuerdoPage />}
+      {clienteId !== null && tab === 'cobros' && (
+        <CobrosTab clienteId={clienteId} setError={setError} setOk={setOk} onIrAlAcuerdo={() => { limpiar(); setTab('acuerdo') }} />
+      )}
       {clienteId !== null && tab === 'vencimientos' && <VencimientosPage />}
       {clienteId !== null && tab === 'programacion' && <ProgramacionPage />}
       {clienteId !== null && tab === 'incidencias' && <IncidenciasTab clienteId={clienteId} setError={setError} setOk={setOk} />}
