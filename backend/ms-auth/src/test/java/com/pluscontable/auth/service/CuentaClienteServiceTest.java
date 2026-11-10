@@ -1,0 +1,253 @@
+package com.pluscontable.auth.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.pluscontable.auth.dto.CuentaClienteResponse;
+import com.pluscontable.auth.model.BitacoraSeguridad;
+import com.pluscontable.auth.model.Rol;
+import com.pluscontable.auth.model.Usuario;
+import com.pluscontable.auth.repository.BitacoraRepository;
+import com.pluscontable.auth.repository.RolRepository;
+import com.pluscontable.auth.repository.UsuarioRepository;
+import com.pluscontable.auth.service.ClienteTributarioClient.ClienteResumen;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
+
+/** HU-37 (tareas 14, 15 y 16): crear la cuenta de un cliente MYPE (cuenta nueva, repetida y cliente no registrado). */
+class CuentaClienteServiceTest {
+
+    private static final long CLIENTE = 7L;
+    private static final String TEMPORAL = "Temporal2345";
+    private static final String TOKEN = "Bearer token-del-contador";
+
+    private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
+    private final RolRepository roles = mock(RolRepository.class);
+    private final BitacoraRepository bitacora = mock(BitacoraRepository.class);
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
+    private final ClienteTributarioClient tributario = mock(ClienteTributarioClient.class);
+    private final GeneradorPassword generador = mock(GeneradorPassword.class);
+    private final CuentaClienteService service =
+            new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador);
+
+    @BeforeEach
+    void preparar() {
+        Rol rol = new Rol();
+        rol.setNombre("CLIENTE_MYPE");
+        when(roles.findByNombre("CLIENTE_MYPE")).thenReturn(Optional.of(rol));
+        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.of(new ClienteResumen(CLIENTE, "Acme SAC")));
+        when(generador.generar()).thenReturn(TEMPORAL);
+        when(usuarios.save(any(Usuario.class))).thenAnswer(inv -> {
+            Usuario u = inv.getArgument(0);
+            ReflectionTestUtils.setField(u, "id", 9L);
+            return u;
+        });
+    }
+
+    private CuentaClienteResponse crear(String correo) {
+        return service.crear(CLIENTE, correo, TOKEN, "ana", "10.0.0.1");
+    }
+
+    private Usuario guardado() {
+        ArgumentCaptor<Usuario> c = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarios).save(c.capture());
+        return c.getValue();
+    }
+
+    private void noCrea(String correo, HttpStatus estado, String mensaje) {
+        assertThatThrownBy(() -> crear(correo))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(estado);
+                    assertThat(e.getReason()).contains(mensaje);
+                });
+        verify(usuarios, never()).save(any());
+        verify(bitacora, never()).save(any());
+    }
+
+    @Test
+    void creaLaCuentaDelClienteConRolCorreoEmpresaYCambioPendiente() {
+        CuentaClienteResponse r = crear("contacto@acme.pe");
+
+        Usuario u = guardado();
+        assertThat(u.getUsername()).isEqualTo("contacto@acme.pe");
+        assertThat(u.getEmail()).isEqualTo("contacto@acme.pe");
+        assertThat(u.getClienteId()).isEqualTo(CLIENTE);
+        assertThat(u.getRoles()).extracting(Rol::getNombre).containsExactly("CLIENTE_MYPE");
+        assertThat(u.isDebeCambiarPassword()).isTrue();
+        assertThat(u.getTemporalUsadaEn()).isNull();
+        assertThat(u.isActivo()).isTrue();
+        assertThat(u.getNombreCompleto()).isEqualTo("Acme SAC");
+        assertThat(r.usuarioId()).isEqualTo(9L);
+        assertThat(r.correo()).isEqualTo("contacto@acme.pe");
+        assertThat(r.clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.passwordTemporal()).isEqualTo(TEMPORAL);
+    }
+
+    @Test
+    void laContraseniaTemporalSeGuardaSoloComoHashNuncaEnClaro() {
+        crear("contacto@acme.pe");
+
+        Usuario u = guardado();
+        assertThat(u.getPasswordHash()).isNotEqualTo(TEMPORAL).doesNotContain(TEMPORAL).startsWith("$2");
+        assertThat(encoder.matches(TEMPORAL, u.getPasswordHash())).isTrue();
+        assertThat(u.getUsername()).doesNotContain(TEMPORAL);
+        assertThat(u.getEmail()).doesNotContain(TEMPORAL);
+        assertThat(u.getNombreCompleto()).doesNotContain(TEMPORAL);
+    }
+
+    @Test
+    void laBitacoraAnotaLaCreacionConQuienLaHizoYNuncaLaContrasenia() {
+        crear("contacto@acme.pe");
+
+        ArgumentCaptor<BitacoraSeguridad> c = ArgumentCaptor.forClass(BitacoraSeguridad.class);
+        verify(bitacora).save(c.capture());
+        BitacoraSeguridad b = c.getValue();
+        assertThat(b.getEvento()).isEqualTo("CUENTA_CLIENTE_CREADA");
+        assertThat(b.getUsername()).isEqualTo("ana");
+        assertThat(b.getIp()).isEqualTo("10.0.0.1");
+        assertThat(b.getDetalle()).contains("contacto@acme.pe").contains("cliente 7").doesNotContain(TEMPORAL);
+        assertThat(String.join("|", b.getEvento(), b.getDetalle(), b.getUsername(), b.getIp())).doesNotContain(TEMPORAL);
+    }
+
+    @Test
+    void elCorreoSeNormalizaEnMinusculasYSinEspacios() {
+        CuentaClienteResponse r = crear("  Ana.Perez@Empresa.PE ");
+
+        assertThat(guardado().getUsername()).isEqualTo("ana.perez@empresa.pe");
+        assertThat(r.correo()).isEqualTo("ana.perez@empresa.pe");
+    }
+
+    @Test
+    void reenviaAMsTributarioElTokenDelContadorParaComprobarLaEmpresa() {
+        crear("contacto@acme.pe");
+
+        verify(tributario).buscar(CLIENTE, TOKEN);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "sin-arroba", "a@b", "a b@acme.pe", "@acme.pe", "x@acme", "x@acme.p", "x@@acme.pe", "x@acme..pe"})
+    void uncorreoInvalidoDa400SinConsultarNiGuardar(String correo) {
+        noCrea(correo, HttpStatus.BAD_REQUEST, "Faltan o son inválidos: correo");
+        verify(tributario, never()).buscar(anyLong(), anyString());
+        verify(generador, never()).generar();
+    }
+
+    @Test
+    void elCorreoAdmiteHastaSesentaCaracteresPorqueTambienEsElUsuario() {
+        String de60 = "a".repeat(52) + "@acme.pe"; // 60
+        assertThat(de60).hasSize(60);
+        crear(de60);
+        assertThat(guardado().getUsername()).isEqualTo(de60);
+    }
+
+    @Test
+    void conSesentaYUnCaracteresSeRechaza() {
+        noCrea("a".repeat(53) + "@acme.pe", HttpStatus.BAD_REQUEST, "hasta 60 caracteres");
+    }
+
+    @Test
+    void siElClienteNoEstaRegistradoDa404NoGeneraContraseniaNiGuarda() {
+        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.empty());
+
+        noCrea("contacto@acme.pe", HttpStatus.NOT_FOUND, "Cliente no encontrado: 7");
+        verify(generador, never()).generar();
+    }
+
+    @Test
+    void siLaEmpresaYaTieneCuentaDa409YNoCreaUnaSegunda() {
+        when(usuarios.existsByClienteId(CLIENTE)).thenReturn(true);
+
+        noCrea("otro@acme.pe", HttpStatus.CONFLICT, "La empresa ya tiene una cuenta de acceso");
+        verify(generador, never()).generar();
+    }
+
+    @Test
+    void siElCorreoYaLoUsaOtraCuentaDa409() {
+        when(usuarios.existsByUsername("contacto@acme.pe")).thenReturn(true);
+
+        noCrea("contacto@acme.pe", HttpStatus.CONFLICT, "Ese correo ya está registrado");
+    }
+
+    @Test
+    void siMsTributarioNoResponde502YNoSeCreaNada() {
+        when(tributario.buscar(CLIENTE, TOKEN)).thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "No se pudo comprobar"));
+
+        noCrea("contacto@acme.pe", HttpStatus.BAD_GATEWAY, "No se pudo comprobar");
+    }
+
+    @Test
+    void siDosContadoresCreanAlaVezElSegundoRecibe409PorElIndiceUnicoDeLaEmpresa() {
+        when(usuarios.save(any(Usuario.class))).thenThrow(
+                new DataIntegrityViolationException("duplicate key value violates unique constraint \"ux_usuarios_cliente_id\""));
+
+        falla409("La empresa ya tiene una cuenta de acceso");
+    }
+
+    @Test
+    void siLaCarreraEsPorElMismoCorreoElMensajeEsDelCorreo() {
+        when(usuarios.save(any(Usuario.class))).thenThrow(
+                new DataIntegrityViolationException("duplicate key value violates unique constraint \"usuarios_username_key\""));
+
+        falla409("Ese correo ya está registrado");
+    }
+
+    private void falla409(String mensaje) {
+        assertThatThrownBy(() -> crear("contacto@acme.pe"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(e.getReason()).isEqualTo(mensaje);
+                });
+        verify(bitacora, never()).save(any()); // sin cuenta no hay nada que anotar
+    }
+
+    @Test
+    void sinElRolClienteMypeSembradoFallaSinCrearNada() {
+        when(roles.findByNombre("CLIENTE_MYPE")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> crear("contacto@acme.pe")).isInstanceOf(IllegalStateException.class);
+        verify(usuarios, never()).save(any());
+    }
+
+    @Test
+    void laRazonSocialMuyLargaSeRecortaYUnaVaciaUsaElNumeroDelCliente() {
+        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.of(new ClienteResumen(CLIENTE, "X".repeat(200))));
+        crear("contacto@acme.pe");
+        assertThat(guardado().getNombreCompleto()).hasSize(150);
+    }
+
+    @Test
+    void sinRazonSocialElNombreEsClienteYSuNumero() {
+        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.of(new ClienteResumen(CLIENTE, " ")));
+        crear("contacto@acme.pe");
+        assertThat(guardado().getNombreCompleto()).isEqualTo("Cliente 7");
+    }
+
+    @Test
+    void laContraseniaDeCadaCuentaSaleDelGenerador() {
+        when(generador.generar()).thenReturn("OtraClave2468");
+
+        CuentaClienteResponse r = crear("contacto@acme.pe");
+
+        assertThat(r.passwordTemporal()).isEqualTo("OtraClave2468");
+        assertThat(encoder.matches("OtraClave2468", guardado().getPasswordHash())).isTrue();
+        verify(generador).generar();
+    }
+}
