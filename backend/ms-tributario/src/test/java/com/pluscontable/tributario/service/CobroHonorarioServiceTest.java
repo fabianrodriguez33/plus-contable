@@ -215,6 +215,19 @@ class CobroHonorarioServiceTest {
     }
 
     @Test
+    void tampocoSePuedeCambiarDeQuincenalAMensualConUnCobroVencidoDelMesSinPagar() {
+        when(programaciones.findByClienteId(CLIENTE)).thenReturn(Optional.of(programacion(Periodicidad.QUINCENAL)));
+        when(cobros.existsByClienteIdAndEstadoAndFechaCobroBetween(
+                CLIENTE, EstadoCobro.PENDIENTE, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 8))).thenReturn(true);
+
+        assertThatThrownBy(() -> service.programar(CLIENTE, con(Periodicidad.MENSUAL)))
+                .isInstanceOf(ValidationException.class).hasMessageContaining("cobro vencido de este mes");
+        verify(cobros, never()).deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(any(), any(), any());
+        verify(cobros, never()).save(any());
+        verify(programaciones, never()).save(any());
+    }
+
+    @Test
     void unHonorarioDeUnCentimoNoSePuedeCobrarPorQuincenasPeroSiPorMes() {
         when(acuerdos.findByClienteId(CLIENTE)).thenReturn(Optional.of(acuerdo("0.01", LocalDate.of(2026, 1, 31))));
 

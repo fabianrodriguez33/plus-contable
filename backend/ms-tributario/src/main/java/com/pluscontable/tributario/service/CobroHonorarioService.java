@@ -83,7 +83,7 @@ public class CobroHonorarioService {
             // Un pendiente vencido de este mes seguiría vivo y el mes se cobraría dos veces con el nuevo esquema.
             if (cobros.existsByClienteIdAndEstadoAndFechaCobroBetween(clienteId, EstadoCobro.PENDIENTE, hoy.withDayOfMonth(1), hoy.minusDays(1))) {
                 throw new ValidationException("No se puede cambiar la periodicidad: hay un cobro vencido de este mes sin pagar. "
-                        + "Regístrelo como pagado o cambie la periodicidad desde el mes siguiente");
+                        + "Cambie la periodicidad desde el mes siguiente");
             }
             // HU-29: solo se reemplazan los PENDIENTE; los cobros con pago (total o parcial) no se deben borrar, o se pierde el pago.
             cobros.deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(clienteId, EstadoCobro.PENDIENTE, hoy);
