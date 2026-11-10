@@ -1,12 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AxiosError } from 'axios'
 import NotificacionesTab from './NotificacionesTab'
-import { registrarNotificacion } from '../../services/notificacionService'
+import {
+  listarNotificaciones, marcarAtendida, Notificacion, registrarNotificacion,
+} from '../../services/notificacionService'
 
-vi.mock('../../services/notificacionService', () => ({ registrarNotificacion: vi.fn() }))
+vi.mock('../../services/notificacionService', () => ({
+  registrarNotificacion: vi.fn(), listarNotificaciones: vi.fn(), marcarAtendida: vi.fn(),
+}))
+
+const pendiente = (id: number, plazo: string, tipo: Notificacion['tipo'] = 'ESQUELA'): Notificacion => ({
+  id, clienteId: 4, tipo, fechaRecepcion: '2026-11-02', plazoRespuesta: plazo, estado: 'PENDIENTE', fechaAtencion: null,
+})
 
 function montar() {
   const props = { setError: vi.fn(), setOk: vi.fn() }
@@ -20,15 +28,17 @@ const recepcion = (valor: string) => fireEvent.change(screen.getByLabelText('Fec
 const registrar = () => userEvent.click(screen.getByRole('button', { name: /Registrar notificación/ }))
 
 beforeEach(() => {
+  vi.mocked(listarNotificaciones).mockResolvedValue([])
+  vi.stubGlobal('confirm', vi.fn(() => true))
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date(2026, 10, 9, 12)) // lunes 9 de noviembre de 2026
   vi.mocked(registrarNotificacion).mockResolvedValue({
     id: 1, clienteId: 4, tipo: 'ESQUELA', fechaRecepcion: '2026-11-09', plazoRespuesta: '2026-11-20', estado: 'PENDIENTE',
   })
 })
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers() })
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals() })
 
-describe('Registrar una notificación del Buzón SOL en la ficha (HU-18, T65 y T66)', () => {
+describe('Notificaciones del Buzón SOL en la ficha (HU-18, T65, T66 y T67)', () => {
   it('el tipo se elige entre esquela, carta inductiva o comunicado (criterio 2)', () => {
     montar()
     expect([...tipo().options].map((o) => o.textContent)).toEqual(['Seleccione el tipo', 'Esquela', 'Carta inductiva', 'Comunicado'])
@@ -109,5 +119,87 @@ describe('Registrar una notificación del Buzón SOL en la ficha (HU-18, T65 y T
     expect(setOk).not.toHaveBeenCalledWith(expect.stringContaining('registrada'))
     expect(tipo().value).toBe('ESQUELA')
     expect((screen.getByLabelText('Plazo de respuesta') as HTMLInputElement).value).toBe('2026-11-20')
+  })
+  it('lista las pendientes del cliente con su tipo, recepción y plazo, en el orden del servidor (T67, criterio 4)', async () => {
+    vi.mocked(listarNotificaciones).mockResolvedValue([
+      pendiente(2, '2026-11-12', 'COMUNICADO'), pendiente(1, '2026-11-30', 'CARTA_INDUCTIVA')])
+    montar()
+
+    expect(await screen.findByText('Comunicado')).toBeTruthy()
+    const filas = screen.getAllByRole('row').slice(1)
+    expect(filas).toHaveLength(2)
+    expect(within(filas[0]).getByText('Comunicado')).toBeTruthy()
+    expect(within(filas[1]).getByText('Carta inductiva')).toBeTruthy()
+    expect(listarNotificaciones).toHaveBeenCalledWith(4, 'PENDIENTE')
+  })
+
+  it('sin pendientes lo dice', async () => {
+    montar()
+    expect(await screen.findByText('Este cliente no tiene notificaciones pendientes.')).toBeTruthy()
+  })
+
+  it('una notificación con el plazo ya vencido se marca como vencida y una al día no', async () => {
+    vi.mocked(listarNotificaciones).mockResolvedValue([pendiente(1, '2026-11-05'), pendiente(2, '2026-11-09'), pendiente(3, '2026-11-20')])
+    montar()
+    await screen.findAllByText('Esquela')
+
+    expect(screen.getAllByText('Plazo vencido')).toHaveLength(1) // solo la del 05/11: la del 09/11 vence hoy
+  })
+
+  it('al registrar una notificación la lista de pendientes se vuelve a pedir', async () => {
+    montar()
+    await screen.findByText('Este cliente no tiene notificaciones pendientes.')
+    await userEvent.selectOptions(tipo(), 'ESQUELA')
+    plazo('2026-11-20')
+    vi.mocked(listarNotificaciones).mockResolvedValue([pendiente(9, '2026-11-20')])
+    await registrar()
+
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2)) // encabezado y la nueva pendiente
+    expect(within(screen.getAllByRole('row')[1]).getByText('Esquela')).toBeTruthy()
+    expect(listarNotificaciones).toHaveBeenCalledTimes(2)
+  })
+
+  it('«Marcar atendida» pide confirmar, marca la notificación y la saca de la lista', async () => {
+    vi.mocked(listarNotificaciones).mockResolvedValueOnce([pendiente(7, '2026-11-20')]).mockResolvedValue([])
+    vi.mocked(marcarAtendida).mockResolvedValue({ ...pendiente(7, '2026-11-20'), estado: 'ATENDIDA', fechaAtencion: '2026-11-09' })
+    const { setOk, setError } = montar()
+    await userEvent.click(await screen.findByRole('button', { name: /Marcar atendida/ }))
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('No se puede deshacer'))
+    expect(marcarAtendida).toHaveBeenCalledWith(7)
+    expect(setOk).toHaveBeenCalledWith('Notificación marcada como atendida')
+    expect(setError).toHaveBeenLastCalledWith('')
+    expect(await screen.findByText('Este cliente no tiene notificaciones pendientes.')).toBeTruthy()
+  })
+
+  it('si se cancela la confirmación no se marca como atendida', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false))
+    vi.mocked(listarNotificaciones).mockResolvedValue([pendiente(7, '2026-11-20')])
+    montar()
+    await userEvent.click(await screen.findByRole('button', { name: /Marcar atendida/ }))
+
+    expect(window.confirm).toHaveBeenCalled()
+    expect(marcarAtendida).not.toHaveBeenCalled()
+    expect(screen.getAllByRole('row')).toHaveLength(2) // la notificación sigue en la lista
+  })
+
+  it('si el servidor rechaza marcarla (ya estaba atendida) se muestra el error y se recarga la lista', async () => {
+    vi.mocked(listarNotificaciones).mockResolvedValueOnce([pendiente(7, '2026-11-20')]).mockResolvedValue([])
+    vi.mocked(marcarAtendida).mockRejectedValue(new AxiosError('x', 'ERR_BAD_REQUEST', undefined, undefined,
+      { status: 400, data: { mensaje: 'La notificación ya fue atendida' } } as never))
+    const { setError, setOk } = montar()
+    await userEvent.click(await screen.findByRole('button', { name: /Marcar atendida/ }))
+
+    await waitFor(() => expect(setError).toHaveBeenLastCalledWith('La notificación ya fue atendida'))
+    expect(setOk).not.toHaveBeenCalledWith('Notificación marcada como atendida')
+    expect(await screen.findByText('Este cliente no tiene notificaciones pendientes.')).toBeTruthy()
+  })
+
+  it('un error al listar se muestra', async () => {
+    vi.mocked(listarNotificaciones).mockRejectedValue(new AxiosError('x', 'ERR_BAD_REQUEST', undefined, undefined,
+      { status: 404, data: { mensaje: 'Cliente no encontrado: 4' } } as never))
+    const { setError } = montar()
+
+    await waitFor(() => expect(setError).toHaveBeenCalledWith('Cliente no encontrado: 4'))
   })
 })

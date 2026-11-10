@@ -1,10 +1,14 @@
-import { FormEvent, useState } from 'react'
-import { Inbox } from 'lucide-react'
+import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { CheckCheck, Inbox } from 'lucide-react'
 import { mensajeError } from '../../services/apiClient'
-import { registrarNotificacion, TipoNotificacion } from '../../services/notificacionService'
+import {
+  listarNotificaciones, marcarAtendida, Notificacion, registrarNotificacion, TipoNotificacion,
+} from '../../services/notificacionService'
 import { aIso } from '../../utils/calendario'
+import { fechaCorta } from '../../utils/programacion'
 import Button from '../Button'
 import { Input, Select } from '../Input'
+import Table, { Td } from '../Table'
 
 /** HU-18, criterio 2: el tipo se elige entre estos tres. */
 const TIPOS: { id: TipoNotificacion; etiqueta: string }[] = [
@@ -12,6 +16,7 @@ const TIPOS: { id: TipoNotificacion; etiqueta: string }[] = [
   { id: 'CARTA_INDUCTIVA', etiqueta: 'Carta inductiva' },
   { id: 'COMUNICADO', etiqueta: 'Comunicado' },
 ]
+const etiqueta = (t: TipoNotificacion) => TIPOS.find((x) => x.id === t)?.etiqueta ?? t
 
 interface Props {
   clienteId: number
@@ -38,13 +43,41 @@ export function validarNotificacion(tipo: string, fechaRecepcion: string, plazoR
   return errores
 }
 
-/** HU-18 · Tareas 65 y 66: registrar una notificación del Buzón SOL (tipo y plazo obligatorios). */
+/**
+ * HU-18 · Tareas 65, 66 y 67: registrar una notificación del Buzón SOL (tipo y plazo obligatorios), ver las pendientes
+ * del cliente (la de plazo más próximo primero) y marcarlas como atendidas.
+ */
 export default function NotificacionesTab({ clienteId, setError, setOk }: Props) {
   const [tipo, setTipo] = useState<'' | TipoNotificacion>('')
   const [fechaRecepcion, setFechaRecepcion] = useState(() => aIso(new Date()))
   const [plazoRespuesta, setPlazoRespuesta] = useState('')
   const [errores, setErrores] = useState<Errores>({})
   const [guardando, setGuardando] = useState(false)
+  const [pendientes, setPendientes] = useState<Notificacion[]>([])
+  const [atendiendo, setAtendiendo] = useState<number | null>(null)
+
+  const cargar = useCallback(() => {
+    listarNotificaciones(clienteId, 'PENDIENTE').then(setPendientes).catch((e) => setError(mensajeError(e)))
+  }, [clienteId, setError])
+
+  useEffect(cargar, [cargar])
+
+  const atender = async (n: Notificacion) => {
+    // No hay forma de volver una notificación atendida a pendiente: se pide confirmar.
+    if (!window.confirm('¿Marcar esta notificación como atendida? No se puede deshacer.')) return
+    setError('')
+    setOk('')
+    setAtendiendo(n.id)
+    try {
+      await marcarAtendida(n.id)
+      setOk('Notificación marcada como atendida')
+    } catch (err) {
+      setError(mensajeError(err))
+    } finally {
+      setAtendiendo(null)
+      cargar() // también tras un error (por ejemplo, ya estaba atendida) para mostrar lo que hay de verdad
+    }
+  }
 
   const registrar = async (e: FormEvent) => {
     e.preventDefault()
@@ -59,6 +92,7 @@ export default function NotificacionesTab({ clienteId, setError, setOk }: Props)
       setOk('Notificación registrada: queda pendiente de atención')
       setTipo('')
       setPlazoRespuesta('')
+      cargar()
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -66,7 +100,10 @@ export default function NotificacionesTab({ clienteId, setError, setOk }: Props)
     }
   }
 
+  const hoy = aIso(new Date())
+
   return (
+    <div className="space-y-5">
     <form onSubmit={registrar} noValidate className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <div>
@@ -86,5 +123,25 @@ export default function NotificacionesTab({ clienteId, setError, setOk }: Props)
         <Inbox size={16} /> {guardando ? 'Registrando…' : 'Registrar notificación'}
       </Button>
     </form>
+
+    <Table columnas={['Tipo', 'Recepción', 'Plazo de respuesta', '']} hayFilas={pendientes.length > 0}
+      vacio="Este cliente no tiene notificaciones pendientes.">
+      {pendientes.map((n) => (
+        <tr key={n.id}>
+          <Td>{etiqueta(n.tipo)}</Td>
+          <Td>{fechaCorta(n.fechaRecepcion)}</Td>
+          <Td>
+            {fechaCorta(n.plazoRespuesta)}
+            {n.plazoRespuesta < hoy && <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Plazo vencido</span>}
+          </Td>
+          <Td>
+            <Button type="button" variant="secondary" disabled={atendiendo === n.id} onClick={() => atender(n)}>
+              <CheckCheck size={16} /> Marcar atendida
+            </Button>
+          </Td>
+        </tr>
+      ))}
+    </Table>
+    </div>
   )
 }
