@@ -193,6 +193,100 @@ class NotificacionSolIntegracionTest {
                 .isEqualTo(HOY.minusDays(1));
     }
 
+    // ---- tarea 67: listar las notificaciones del cliente
+
+    private ResponseEntity<NotificacionSolDto[]> listar(long cliente, String parametros, HttpHeaders cab) {
+        return http.exchange(BASE + "/clientes/" + cliente + "/notificaciones" + parametros, HttpMethod.GET,
+                new HttpEntity<>(cab), NotificacionSolDto[].class);
+    }
+
+    private static List<Long> ids(ResponseEntity<NotificacionSolDto[]> r) {
+        return java.util.Arrays.stream(r.getBody()).map(NotificacionSolDto::id).toList();
+    }
+
+    @Test
+    void listarLosPendientesLosDevuelveDelPlazoMasProximoAlMasLejanoYSoloDeEseCliente() {
+        long cliente = crearCliente();
+        long otro = crearCliente();
+        long lejana = registrar(cliente, "ESQUELA", HOY.plusDays(20)).id();
+        long proxima = registrar(cliente, "COMUNICADO", HOY.plusDays(5)).id();
+        long media = registrar(cliente, "CARTA_INDUCTIVA", HOY.plusDays(12)).id();
+        long ajena = registrar(otro, "ESQUELA", HOY.plusDays(1)).id();
+
+        ResponseEntity<NotificacionSolDto[]> r = listar(cliente, "?estado=PENDIENTE", contador());
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(ids(r)).containsExactly(proxima, media, lejana);
+        assertThat(ids(r)).doesNotContain(ajena);
+        assertThat(r.getBody()[0].tipo().name()).isEqualTo("COMUNICADO");
+        assertThat(r.getBody()[0].plazoRespuesta()).isEqualTo(HOY.plusDays(5));
+        assertThat(r.getBody()[0].clienteId()).isEqualTo(cliente);
+    }
+
+    @Test
+    void conElMismoPlazoSalenEnElOrdenEnQueSeRegistraron() {
+        long cliente = crearCliente();
+        long primera = registrar(cliente, "ESQUELA", HOY.plusDays(6)).id();
+        long segunda = registrar(cliente, "COMUNICADO", HOY.plusDays(6)).id();
+        long tercera = registrar(cliente, "CARTA_INDUCTIVA", HOY.plusDays(6)).id();
+
+        assertThat(ids(listar(cliente, "?estado=PENDIENTE", contador()))).containsExactly(primera, segunda, tercera);
+    }
+
+    @Test
+    void alMarcarAtendidaSaleDeLosPendientesYAparecePorEstadoYEnLaListaCompleta() {
+        long cliente = crearCliente();
+        long primera = registrar(cliente, "ESQUELA", HOY.plusDays(3)).id();
+        long segunda = registrar(cliente, "COMUNICADO", HOY.plusDays(8)).id();
+        assertThat(atender(primera, contador()).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        assertThat(ids(listar(cliente, "?estado=PENDIENTE", contador()))).containsExactly(segunda);
+        ResponseEntity<NotificacionSolDto[]> atendidas = listar(cliente, "?estado=ATENDIDA", contador());
+        assertThat(ids(atendidas)).containsExactly(primera);
+        assertThat(atendidas.getBody()[0].fechaAtencion()).isEqualTo(HOY);
+        assertThat(ids(listar(cliente, "", contador()))).containsExactly(primera, segunda);
+    }
+
+    @Test
+    void unClienteSinNotificacionesDevuelveUnaListaVaciaYUnoInexistenteResponde404() {
+        long cliente = crearCliente();
+
+        ResponseEntity<NotificacionSolDto[]> vacia = listar(cliente, "?estado=PENDIENTE", contador());
+        assertThat(vacia.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(vacia.getBody()).isEmpty();
+        ResponseEntity<String> inexistente = http.exchange(BASE + "/clientes/" + Long.MAX_VALUE + "/notificaciones?estado=PENDIENTE",
+                HttpMethod.GET, new HttpEntity<>(contador()), String.class);
+        assertThat(inexistente.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void unEstadoInvalidoResponde400() {
+        long cliente = crearCliente();
+
+        ResponseEntity<String> r = http.exchange(BASE + "/clientes/" + cliente + "/notificaciones?estado=ANULADA", HttpMethod.GET,
+                new HttpEntity<>(contador()), String.class);
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void listarSinSesionDa401UnClienteMypeDa403ElAdministradorPuede() {
+        long cliente = crearCliente();
+        registrar(cliente, "ESQUELA", HOY.plusDays(7));
+
+        ResponseEntity<String> sinSesion = http.exchange(BASE + "/clientes/" + cliente + "/notificaciones?estado=PENDIENTE",
+                HttpMethod.GET, HttpEntity.EMPTY, String.class);
+        ResponseEntity<String> mype = http.exchange(BASE + "/clientes/" + cliente + "/notificaciones?estado=PENDIENTE", HttpMethod.GET,
+                new HttpEntity<>(cabeceras(List.of("CLIENTE_MYPE"), cliente)), String.class);
+        ResponseEntity<NotificacionSolDto[]> admin = listar(cliente, "?estado=PENDIENTE", cabeceras(List.of("ADMIN"), null));
+
+        assertThat(sinSesion.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(mype.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN); // ni siquiera las de su propia empresa
+        assertThat(mype.getBody()).doesNotContain("ESQUELA");
+        assertThat(admin.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(admin.getBody()).hasSize(1);
+    }
+
     @Test
     void atenderUnaNotificacionInexistenteResponde404() {
         assertThat(atender(Long.MAX_VALUE, contador()).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);

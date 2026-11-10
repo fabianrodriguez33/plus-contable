@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import java.util.List;
 import org.mockito.ArgumentCaptor;
 
 /** HU-18 · Tarea 70 (unitarias de registrar): tipo, fecha de recepción y plazo; sin plazo no se guarda. */
@@ -189,6 +190,81 @@ class NotificacionSolServiceTest {
 
         assertThatThrownBy(() -> service.registrar(CLIENTE, entrada(null, null, null)))
                 .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    // ---- tarea 67: listar (pendientes del cliente)
+
+    private NotificacionSol conPlazo(long id, EstadoNotificacion estado, LocalDate plazo) {
+        NotificacionSol n = new NotificacionSol();
+        n.setId(id);
+        n.setClienteId(CLIENTE);
+        n.setTipo(TipoNotificacion.COMUNICADO);
+        n.setFechaRecepcion(HOY.minusDays(10));
+        n.setPlazoRespuesta(plazo);
+        n.setEstado(estado);
+        if (estado == EstadoNotificacion.ATENDIDA) n.setFechaAtencion(HOY.minusDays(1));
+        return n;
+    }
+
+    @Test
+    void pendientesConsultaSoloLasPendientesDelClienteEnElOrdenDelRepositorio() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE))
+                .thenReturn(List.of(conPlazo(2L, EstadoNotificacion.PENDIENTE, HOY.plusDays(3)),
+                        conPlazo(1L, EstadoNotificacion.PENDIENTE, HOY.plusDays(9))));
+
+        List<NotificacionSolDto> r = service.pendientes(CLIENTE);
+
+        verify(clientes).buscar(CLIENTE);
+        assertThat(r).extracting(NotificacionSolDto::id).containsExactly(2L, 1L);
+        assertThat(r).allSatisfy(d -> assertThat(d.estado()).isEqualTo(EstadoNotificacion.PENDIENTE));
+        assertThat(r.get(0).plazoRespuesta()).isEqualTo(HOY.plusDays(3));
+        assertThat(r.get(0).clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.get(0).tipo()).isEqualTo(TipoNotificacion.COMUNICADO);
+        assertThat(r.get(0).fechaRecepcion()).isEqualTo(HOY.minusDays(10));
+        verify(repositorio, never()).findByClienteIdOrderByPlazoRespuestaAscIdAsc(any());
+    }
+
+    @Test
+    void listarConEstadoAtendidaPideSoloLasAtendidas() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.ATENDIDA))
+                .thenReturn(List.of(conPlazo(5L, EstadoNotificacion.ATENDIDA, HOY.minusDays(2))));
+
+        List<NotificacionSolDto> r = service.listar(CLIENTE, EstadoNotificacion.ATENDIDA);
+
+        assertThat(r).hasSize(1);
+        assertThat(r.get(0).estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(r.get(0).fechaAtencion()).isEqualTo(HOY.minusDays(1));
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE);
+    }
+
+    @Test
+    void listarSinEstadoDevuelveTodasLasDelClienteSinFiltrar() {
+        when(repositorio.findByClienteIdOrderByPlazoRespuestaAscIdAsc(CLIENTE))
+                .thenReturn(List.of(conPlazo(5L, EstadoNotificacion.ATENDIDA, HOY.minusDays(2)),
+                        conPlazo(6L, EstadoNotificacion.PENDIENTE, HOY.plusDays(2))));
+
+        List<NotificacionSolDto> r = service.listar(CLIENTE, null);
+
+        assertThat(r).extracting(NotificacionSolDto::id).containsExactly(5L, 6L);
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(any(), any());
+    }
+
+    @Test
+    void unClienteSinNotificacionesDevuelveUnaListaVacia() {
+        when(repositorio.findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(CLIENTE, EstadoNotificacion.PENDIENTE))
+                .thenReturn(List.of());
+
+        assertThat(service.pendientes(CLIENTE)).isEmpty();
+    }
+
+    @Test
+    void listarConUnClienteInexistenteResponde404YNoConsultaLasNotificaciones() {
+        when(clientes.buscar(CLIENTE)).thenThrow(new EntityNotFoundException("Cliente no encontrado: " + CLIENTE));
+
+        assertThatThrownBy(() -> service.pendientes(CLIENTE)).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> service.listar(CLIENTE, null)).isInstanceOf(EntityNotFoundException.class);
+        verify(repositorio, never()).findByClienteIdOrderByPlazoRespuestaAscIdAsc(any());
+        verify(repositorio, never()).findByClienteIdAndEstadoOrderByPlazoRespuestaAscIdAsc(any(), any());
     }
 
     // ---- tarea 68: marcar como atendida
