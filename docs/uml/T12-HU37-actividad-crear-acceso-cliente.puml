@@ -1,0 +1,80 @@
+@startuml
+title T12 · HU-37 · Actividad: crear acceso de cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+|Contador|
+start
+:Abre la ficha de un cliente registrado
+y elige "Crear acceso";
+
+|frontend-web|
+:Envía la solicitud para crear el acceso
+(id del cliente);
+note right
+  Diseño previo. Hoy la ficha no tiene esta acción (T13).
+  Si el cliente ya tiene acceso, la pantalla no debería ofrecer la acción: pendiente de confirmar con Beto.
+end note
+
+|ms-auth|
+if (¿Token válido?) then (no)
+  :401;
+  stop
+endif
+if (¿El usuario tiene rol CONTADOR o ADMIN?) then (no)
+  :403 (solo el estudio crea accesos);
+  stop
+endif
+
+|ms-tributario|
+:Consulta el cliente por id
+(GET /api/tributario/clientes/{id});
+
+|ms-auth|
+if (¿El cliente está registrado?) then (no)
+  :404 "cliente no registrado";
+  note right
+    Códigos de rechazo (401, 403, 404, 409): propuesta del diseño,
+    pendiente de confirmar con Beto.
+  end note
+  stop
+endif
+if (¿El cliente ya tiene una cuenta de acceso?) then (sí)
+  :409 "el cliente ya tiene acceso"
+  (no se crea una segunda cuenta);
+  stop
+endif
+:Crea el usuario con rol CLIENTE_MYPE y
+cliente_id = id del cliente (sin FK: clientes vive
+en tributario_schema);
+note right
+  Vínculo ya soportado por HU-38: columna usuarios.cliente_id
+  y claim clienteId en el token. ms-auth todavía no tiene el
+  endpoint que crea usuarios.
+  Dato de acceso (RUC o correo): pendiente de confirmar con Beto.
+  Más de una persona por empresa: pendiente de confirmar con Beto
+  (el diseño supone una cuenta por cliente, como pide el criterio 3).
+end note
+:Genera la contraseña inicial y guarda solo
+su hash (BCrypt);
+:Entrega la contraseña inicial al contador;
+note right
+  Forma de entrega (se muestra una vez, la entrega el contador,
+  por correo o WhatsApp): pendiente de confirmar con Beto.
+  Cambio obligatorio en el primer ingreso: pendiente de confirmar con Beto.
+end note
+:Responde que el acceso fue creado;
+
+|frontend-web|
+:Informa al contador que el acceso quedó creado;
+note right
+  Desactivar o bloquear una cuenta de cliente: fuera de este
+  diagrama; pendiente de confirmar con Beto.
+end note
+
+|Contador|
+stop
+
+footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0): usuarios.cliente_id, rol CLIENTE_MYPE y claim clienteId (HU-38). Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+@enduml
