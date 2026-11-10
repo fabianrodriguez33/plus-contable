@@ -130,6 +130,50 @@ class NotificacionSolServiceTest {
         assertThat(guardada().getPlazoRespuesta()).isEqualTo(HOY);
     }
 
+    // ---- tarea 70: límites y rechazos que faltaban
+
+    @Test
+    void sinPlazoElMensajeNombraSoloElPlazo() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.ESQUELA, HOY, null), "Faltan o son inválidos: plazoRespuesta");
+    }
+
+    @Test
+    void sinTipoElMensajeNombraSoloElTipo() {
+        noSeGuardaConMensaje(entrada(null, HOY, HOY.plusDays(5)), "Faltan o son inválidos: tipo");
+    }
+
+    @Test
+    void sinFechaDeRecepcionNoSeComparaElPlazoYElMensajeNombraSoloLaFecha() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.COMUNICADO, null, HOY.minusDays(30)), "Faltan o son inválidos: fechaRecepcion");
+    }
+
+    @Test
+    void recepcionFuturaYPlazoAnteriorALaRecepcionListanLosDosErroresJuntos() {
+        noSeGuardaConMensaje(entrada(TipoNotificacion.ESQUELA, HOY.plusDays(3), HOY),
+                "Faltan o son inválidos: fechaRecepcion (no puede ser futura), "
+                        + "plazoRespuesta (no puede ser anterior a la fecha de recepción)");
+    }
+
+    @Test
+    void unaNotificacionConElPlazoYaVencidoSiSePuedeRegistrarMientrasNoSeaAnteriorALaRecepcion() {
+        service.registrar(CLIENTE, entrada(TipoNotificacion.CARTA_INDUCTIVA, HOY.minusDays(20), HOY.minusDays(5)));
+
+        assertThat(guardada().getPlazoRespuesta()).isEqualTo(HOY.minusDays(5));
+    }
+
+    @Test
+    void laFechaDeRecepcionDeMuchoAntesTambienEsValida() {
+        service.registrar(CLIENTE, entrada(TipoNotificacion.ESQUELA, LocalDate.of(2025, 1, 31), HOY.plusDays(1)));
+
+        assertThat(guardada().getFechaRecepcion()).isEqualTo(LocalDate.of(2025, 1, 31));
+    }
+
+    private void noSeGuardaConMensaje(NotificacionSolEntradaDto dto, String mensaje) {
+        assertThatThrownBy(() -> service.registrar(CLIENTE, dto))
+                .isInstanceOf(ValidationException.class).hasMessage(mensaje);
+        verify(repositorio, never()).save(any());
+    }
+
     @Test
     void siElClienteNoExisteResponde404YNoGuarda() {
         when(clientes.buscar(CLIENTE)).thenThrow(new EntityNotFoundException("Cliente no encontrado: " + CLIENTE));
@@ -173,6 +217,21 @@ class NotificacionSolServiceTest {
         assertThat(r.estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
         assertThat(r.fechaAtencion()).isEqualTo(HOY);
         assertThat(r.plazoRespuesta()).isEqualTo(HOY.plusDays(10)); // el resto no cambia
+    }
+
+    @Test
+    void sePuedeMarcarAtendidaDespuesDelPlazoYLoDemasNoCambia() {
+        NotificacionSol n = existente(EstadoNotificacion.PENDIENTE);
+        n.setPlazoRespuesta(HOY.minusDays(3)); // ya venció: igual se puede dejar constancia de que se atendió
+
+        NotificacionSolDto r = service.marcarAtendida(55L);
+
+        assertThat(r.estado()).isEqualTo(EstadoNotificacion.ATENDIDA);
+        assertThat(r.fechaAtencion()).isEqualTo(HOY);
+        assertThat(r.clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.tipo()).isEqualTo(TipoNotificacion.ESQUELA);
+        assertThat(r.fechaRecepcion()).isEqualTo(HOY.minusDays(5));
+        assertThat(r.plazoRespuesta()).isEqualTo(HOY.minusDays(3));
     }
 
     @Test
