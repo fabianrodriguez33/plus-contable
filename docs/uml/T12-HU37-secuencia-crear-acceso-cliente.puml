@@ -1,0 +1,87 @@
+@startuml
+title T12 · HU-37 · Secuencia: crear el acceso de un cliente MYPE (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha del cliente)" as FE
+participant "ms-auth\n(controlador de cuentas de cliente)" as AC
+participant "ms-auth\n(servicio de cuentas)" as AS
+participant "ms-tributario\n(ClienteController)" as TC
+participant "UsuarioRepository" as UR
+participant "PasswordEncoder\n(BCrypt)" as PE
+database "auth_schema" as DB
+
+== Crear el acceso ==
+U -> FE : elige "Crear acceso" en la ficha de un cliente
+FE -> AC : POST (ruta por definir) {clienteId}\nAuthorization: Bearer <JWT del contador>
+note right
+  Ruta y cuerpo: por definir en T14.
+  Dato de acceso (RUC o correo): pendiente de confirmar con Beto.
+end note
+alt token ausente, vencido o inválido
+  AC --> FE : 401
+end
+alt el usuario no tiene rol CONTADOR ni ADMIN
+  AC --> FE : 403
+end
+note over AC
+  Hoy ms-auth solo exige "autenticado" en las rutas no listadas: la regla de rol es nueva.
+  Códigos de rechazo (401, 403, 404, 409): propuesta del diseño, pendiente de confirmar con Beto.
+end note
+AC -> AS : crear(clienteId, usuario del token)
+
+== Validar el cliente en ms-tributario ==
+AS -> TC : GET /api/tributario/clientes/{clienteId}\n(reenvía el mismo JWT)
+note right
+  Supuesto del diseño: ms-auth consulta con el JWT del contador (mismo secreto en ambos servicios).
+  ms-auth no tiene hoy ningún cliente HTTP hacia ms-tributario.
+end note
+alt el cliente no existe
+  TC --> AS : 404
+  AS --> FE : 404 "cliente no registrado"
+end
+TC --> AS : 200 {id, ruc, razonSocial}
+
+== Evitar una segunda cuenta ==
+AS -> UR : existe un usuario con cliente_id = clienteId ?
+UR -> DB : SELECT en usuarios
+alt el cliente ya tiene cuenta
+  AS --> FE : 409 "el cliente ya tiene acceso"
+end
+note right
+  Más de una persona por empresa y desactivar o bloquear la cuenta:
+  pendiente de confirmar con Beto. Este diagrama supone una cuenta por cliente.
+end note
+
+== Crear el usuario y entregar la contraseña ==
+AS -> AS : genera la contraseña inicial
+AS -> PE : encode(contraseña inicial)
+PE --> AS : hash
+AS -> UR : save(usuario: dato de acceso, hash, activo,\ncliente_id = clienteId, rol CLIENTE_MYPE)
+UR -> DB : INSERT usuarios y usuario_roles
+note right
+  Dato de acceso (username): pendiente de confirmar con Beto.
+  Si dos contadores crean el acceso a la vez, la restricción única evita el duplicado:
+  se respondería 409.
+end note
+AS -> AS : registra el hecho en bitacora_seguridad
+AS --> FE : 201 {usuario, contraseña inicial}
+note right
+  Entrega de la contraseña inicial (se muestra una sola vez, la da el contador,
+  correo o WhatsApp): pendiente de confirmar con Beto.
+  Cambio obligatorio en el primer ingreso: pendiente de confirmar con Beto.
+  La contraseña nunca se guarda en claro ni se escribe en el registro.
+end note
+FE --> U : muestra que el acceso quedó creado
+
+== Después: el cliente ingresa ==
+note over U, DB
+  El cliente entra por POST /api/auth/login (ya existe, HU-36). El token lleva el claim clienteId y
+  ms-tributario solo le deja ver su empresa (HU-38). Recuperar la contraseña queda fuera: HU-41.
+end note
+
+footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, BCryptPasswordEncoder, bitacora_seguridad y GET /api/tributario/clientes/{id}. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+@enduml
