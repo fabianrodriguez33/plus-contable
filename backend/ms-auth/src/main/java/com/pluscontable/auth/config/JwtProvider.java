@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtProvider {
 
+    public static final String CLAIM_CAMBIAR_PASSWORD = "cambiarPassword";
+
     private final SecretKey key;
     private final Duration expiration;
 
@@ -45,6 +47,23 @@ public class JwtProvider {
                 .claim("roles", roles);
         if (clienteId != null) builder.claim("clienteId", clienteId);
         return builder
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + expiration.toMillis()))
+                .signWith(key)
+                .compact();
+    }
+
+    /**
+     * HU-37: token del primer ingreso con la contraseña temporal. No lleva roles (ms-tributario le responde 403 en toda ruta) y
+     * ms-auth solo lo deja usar para cambiar la contraseña y cerrar sesión; se revoca al cambiarla.
+     */
+    public String generateCambioPassword(String username) {
+        Date now = new Date();
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(username)
+                .claim("roles", List.of())
+                .claim(CLAIM_CAMBIAR_PASSWORD, true)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration.toMillis()))
                 .signWith(key)
