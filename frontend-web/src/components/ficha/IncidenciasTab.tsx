@@ -12,10 +12,16 @@ const TIPOS: { id: TipoIncidencia; etiqueta: string }[] = [
   { id: 'CLIENTE_NO_ENVIA_DOCUMENTOS', etiqueta: 'Cliente no envía documentos' },
   { id: 'RECHAZO_FRACCIONAMIENTO', etiqueta: 'Rechazo de fraccionamiento' },
   { id: 'CAIDA_PORTAL_SOL', etiqueta: 'Caída del portal SOL (general)' },
+  { id: 'PROBLEMA_SIRE', etiqueta: 'Problemas con SIRE' },
+  { id: 'PROBLEMA_SERVICIOS_EXTERNOS', etiqueta: 'Problemas con SUNAT u otros servicios externos' },
+  { id: 'FALLA_SISTEMA_INTERNO', etiqueta: 'Fallas del sistema interno' },
+  { id: 'PROBLEMA_CONEXION_INTERNET', etiqueta: 'Problemas de conexión a internet' },
+  { id: 'ERROR_PROCESO_CONTABLE', etiqueta: 'Errores en procesos contables o en la presentación de declaraciones' },
   { id: 'OTRO', etiqueta: 'Otro' },
 ]
 const etiqueta = (t: TipoIncidencia) => TIPOS.find((x) => x.id === t)?.etiqueta ?? t
 const MAX_DESCRIPCION = 1000
+const MAX_OBSERVACIONES = 1000
 
 interface Props {
   clienteId: number
@@ -29,6 +35,7 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
   const [tipo, setTipo] = useState<TipoIncidencia>('CLIENTE_NO_ENVIA_DOCUMENTOS')
   const [fecha, setFecha] = useState(() => aIso(new Date()))
   const [descripcion, setDescripcion] = useState('')
+  const [observaciones, setObservaciones] = useState('')
   const [guardando, setGuardando] = useState(false)
 
   const cargar = useCallback(() => {
@@ -47,11 +54,15 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
     setOk('')
     setGuardando(true)
     try {
-      const r = await registrarIncidencia({ tipo, clienteId: esGeneral ? undefined : clienteId, fecha, descripcion })
+      const notas = observaciones.trim()
+      const r = await registrarIncidencia({
+        tipo, clienteId: esGeneral ? undefined : clienteId, fecha, descripcion, ...(notas && { observaciones: notas }),
+      })
       setOk(esGeneral
         ? `Incidencia general registrada: quedó asociada a ${r.clientesAsociados} clientes activos`
         : 'Incidencia registrada en el historial del cliente')
       setDescripcion('')
+      setObservaciones('')
       cargar()
     } catch (err) {
       setError(mensajeError(err))
@@ -77,6 +88,13 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" />
           <p className="mt-1 text-xs text-slate-500">{descripcion.length}/{MAX_DESCRIPCION}</p>
         </div>
+        <div>
+          <label htmlFor="incidencia-observaciones" className="mb-1 block text-sm font-medium text-slate-700">Observaciones (opcional)</label>
+          <textarea id="incidencia-observaciones" rows={2} maxLength={MAX_OBSERVACIONES} value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+          <p className="mt-1 text-xs text-slate-500">{observaciones.length}/{MAX_OBSERVACIONES}</p>
+        </div>
         {esGeneral && (
           <p className="flex items-center gap-2 text-sm text-slate-500">
             <Info size={16} /> Es una incidencia general: no es de este cliente, se asocia a todos los clientes activos.
@@ -87,13 +105,14 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
         </Button>
       </form>
 
-      <Table columnas={['Fecha', 'Tipo', 'Descripción', 'Alcance', 'Registrada por']} hayFilas={incidencias.length > 0}
+      <Table columnas={['Fecha', 'Tipo', 'Descripción', 'Observaciones', 'Alcance', 'Registrada por']} hayFilas={incidencias.length > 0}
         vacio="Este cliente no tiene incidencias registradas.">
         {incidencias.map((i) => (
           <tr key={i.id}>
             <Td>{fechaCorta(i.fecha)}</Td>
             <Td>{etiqueta(i.tipo)}</Td>
             <Td>{i.descripcion}</Td>
+            <Td>{i.observaciones || '—'}</Td>
             <Td>{i.tipo === 'CAIDA_PORTAL_SOL' ? `General · ${i.clientesAsociados} clientes` : 'Este cliente'}</Td>
             <Td>{i.registradaPor}</Td>
           </tr>
