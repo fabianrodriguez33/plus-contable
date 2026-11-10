@@ -22,8 +22,11 @@ async function escribir(texto: string) {
   fireEvent.change(screen.getByLabelText('Descripción'), { target: { value: texto } })
 }
 
-beforeEach(() => { vi.mocked(listarIncidencias).mockResolvedValue([]) })
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+beforeEach(() => {
+  vi.mocked(listarIncidencias).mockResolvedValue([])
+  vi.stubGlobal('confirm', vi.fn(() => true))
+})
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 
 describe('Incidencias del servicio en la ficha (HU-23)', () => {
   it('muestra el historial del cliente con sus incidencias y las generales (criterio 2)', async () => {
@@ -78,6 +81,19 @@ describe('Incidencias del servicio en la ficha (HU-23)', () => {
     await waitFor(() => expect(registrarIncidencia).toHaveBeenCalled())
     expect(vi.mocked(registrarIncidencia).mock.calls[0][0].clienteId).toBeUndefined()
     expect(setOk).toHaveBeenCalledWith('Incidencia general registrada: quedó asociada a 37 clientes activos')
+  })
+
+  it('la incidencia general pide confirmación y, si se cancela, no se registra', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false))
+    montar()
+    await screen.findByText('Este cliente no tiene incidencias registradas.')
+
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de incidencia'), 'CAIDA_PORTAL_SOL')
+    await escribir('El portal no cargaba')
+    await userEvent.click(screen.getByRole('button', { name: /Registrar incidencia/ }))
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('TODOS los clientes'))
+    expect(registrarIncidencia).not.toHaveBeenCalled()
   })
 
   it('un error del servidor se muestra y la descripción escrita no se pierde', async () => {

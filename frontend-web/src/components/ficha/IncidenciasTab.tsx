@@ -41,6 +41,8 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
 
   const registrar = async (e: FormEvent) => {
     e.preventDefault()
+    // La general se asocia a toda la cartera y aún no se puede borrar: se pide confirmar.
+    if (esGeneral && !window.confirm('Esta incidencia se asociará a TODOS los clientes activos y no se puede borrar. ¿Registrarla?')) return
     setError('')
     setOk('')
     setGuardando(true)
