@@ -48,6 +48,14 @@ public class CuentaClienteController {
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(r);
     }
 
+    /** HU-37: otra contraseña temporal para la cuenta existente; solo CONTADOR y ADMIN (regla de SecurityConfig). */
+    @PostMapping("/clientes/{clienteId}/cuenta/restablecer")
+    public ResponseEntity<CuentaClienteResponse> restablecer(@PathVariable Long clienteId, Authentication autenticacion,
+                                                             HttpServletRequest http) {
+        CuentaClienteResponse r = cuentas.restablecer(clienteId, autenticacion.getName(), http.getRemoteAddr());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(r);
+    }
+
     @PostMapping("/cambiar-password")
     public ResponseEntity<LoginResponse> cambiarPassword(@RequestBody(required = false) CambiarPasswordRequest cuerpo,
                                                          Authentication autenticacion, HttpServletRequest http) {

@@ -52,6 +52,13 @@ public class Usuario {
     @Column(name = "temporal_vence_en")
     private LocalDateTime temporalVenceEn;
 
+    /**
+     * HU-37: versión de las sesiones de la cuenta. Todo token lleva la versión con la que se emitió (claim sv); al restablecer el
+     * acceso sube y los tokens anteriores dejan de valer en ms-auth.
+     */
+    @Column(name = "sesion_version", nullable = false)
+    private int sesionVersion = 0;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "usuario_roles", schema = "auth_schema",
             joinColumns = @JoinColumn(name = "usuario_id"),
@@ -80,6 +87,8 @@ public class Usuario {
     public void setTemporalUsadaEn(LocalDateTime temporalUsadaEn) { this.temporalUsadaEn = temporalUsadaEn; }
     public LocalDateTime getTemporalVenceEn() { return temporalVenceEn; }
     public void setTemporalVenceEn(LocalDateTime temporalVenceEn) { this.temporalVenceEn = temporalVenceEn; }
+    public int getSesionVersion() { return sesionVersion; }
+    public void setSesionVersion(int sesionVersion) { this.sesionVersion = sesionVersion; }
     public Long getClienteId() { return clienteId; }
     public void setClienteId(Long clienteId) { this.clienteId = clienteId; }
     public Set<Rol> getRoles() { return roles; }

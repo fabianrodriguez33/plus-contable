@@ -22,6 +22,7 @@ class HealthControllerTest {
     @Autowired MockMvc mvc;
     @MockBean JwtProvider jwtProvider;
     @MockBean TokenRevocadoRepository revocados;
+    @MockBean com.pluscontable.auth.repository.UsuarioRepository usuarios;
 
     @Test
     void respondeUpSinSesion() throws Exception {

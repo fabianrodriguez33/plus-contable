@@ -18,6 +18,8 @@ import org.springframework.stereotype.Component;
 public class JwtProvider {
 
     public static final String CLAIM_CAMBIAR_PASSWORD = "cambiarPassword";
+    /** HU-37: versión de sesión de la cuenta con la que se emitió el token (ver Usuario.sesionVersion). */
+    public static final String CLAIM_SESION_VERSION = "sv";
 
     private final SecretKey key;
     private final Duration expiration;
@@ -57,11 +59,17 @@ public class JwtProvider {
      * HU-36 (tarea 2): todo token lleva un jti unico para poder revocarlo al cerrar sesion.
      */
     public String generate(String username, List<String> roles, Long clienteId) {
+        return generate(username, roles, clienteId, 0);
+    }
+
+    /** HU-37: el token lleva la versión de sesión de la cuenta; al restablecer el acceso sube y los anteriores dejan de valer. */
+    public String generate(String username, List<String> roles, Long clienteId, int sesionVersion) {
         Date now = new Date();
         var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim("roles", roles);
+                .claim("roles", roles)
+                .claim(CLAIM_SESION_VERSION, sesionVersion);
         if (clienteId != null) builder.claim("clienteId", clienteId);
         return builder
                 .issuedAt(now)
@@ -75,11 +83,16 @@ public class JwtProvider {
      * ms-auth solo lo deja usar para cambiar la contraseña y cerrar sesión; se revoca al cambiarla.
      */
     public String generateCambioPassword(String username) {
+        return generateCambioPassword(username, 0);
+    }
+
+    public String generateCambioPassword(String username, int sesionVersion) {
         Date now = new Date();
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
                 .claim("roles", List.of())
+                .claim(CLAIM_SESION_VERSION, sesionVersion)
                 .claim(CLAIM_CAMBIAR_PASSWORD, true)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + cambioPasswordExpiration.toMillis()))

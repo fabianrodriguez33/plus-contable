@@ -124,6 +124,173 @@ class CuentaClienteServiceTest {
         assertThat(r.passwordTemporal()).isEqualTo(TEMPORAL);
     }
 
+    // ---- restablecer el acceso (decisión de Beto del 11/11)
+
+    private static final String ANTERIOR = "Anterior-prueba-1";
+
+    /** La cuenta que ya existe: el cliente ya cambió su contraseña, la temporal anterior se gastó y venció. */
+    private Usuario cuentaExistente() {
+        Rol rol = new Rol();
+        rol.setNombre("CLIENTE_MYPE");
+        Usuario u = new Usuario();
+        ReflectionTestUtils.setField(u, "id", 9L);
+        u.setUsername("contacto@acme.pe");
+        u.setEmail("contacto@acme.pe");
+        u.setNombreCompleto("Acme SAC");
+        u.setClienteId(CLIENTE);
+        u.setPasswordHash(encoder.encode(ANTERIOR));
+        u.setDebeCambiarPassword(false);
+        u.setTemporalUsadaEn(LocalDateTime.now().minusDays(3));
+        u.setTemporalVenceEn(LocalDateTime.now().minusDays(1));
+        u.setSesionVersion(2);
+        u.setIntentosFallidos(3);
+        u.setRoles(new java.util.HashSet<>(java.util.Set.of(rol)));
+        when(usuarios.findByClienteId(CLIENTE)).thenReturn(Optional.of(u));
+        return u;
+    }
+
+    private CuentaClienteResponse restablecer() {
+        return service.restablecer(CLIENTE, "ana", "10.0.0.1");
+    }
+
+    @Test
+    void restablecerEntregaOtraTemporalSoloEnLaRespuesta() {
+        cuentaExistente();
+
+        CuentaClienteResponse r = restablecer();
+
+        assertThat(r.passwordTemporal()).isEqualTo(TEMPORAL);
+        assertThat(r.usuarioId()).isEqualTo(9L);
+        assertThat(r.correo()).isEqualTo("contacto@acme.pe");
+        assertThat(r.clienteId()).isEqualTo(CLIENTE);
+        assertThat(r.venceEn()).isNotNull();
+    }
+
+    @Test
+    void restablecerGuardaSoloElHashDeLaNuevaYLaAnteriorDejaDeServir() {
+        Usuario u = cuentaExistente();
+
+        restablecer();
+
+        assertThat(u.getPasswordHash()).isNotEqualTo(TEMPORAL).doesNotContain(TEMPORAL).startsWith("$2");
+        assertThat(encoder.matches(TEMPORAL, u.getPasswordHash())).isTrue();
+        assertThat(encoder.matches(ANTERIOR, u.getPasswordHash())).isFalse();
+    }
+
+    @Test
+    void restablecerReiniciaLas48HorasYVuelveAExigirElCambio() {
+        Usuario u = cuentaExistente();
+        LocalDateTime antes = LocalDateTime.now();
+
+        CuentaClienteResponse r = restablecer();
+
+        assertThat(u.getTemporalVenceEn()).isBetween(antes.plusHours(48), LocalDateTime.now().plusHours(48));
+        assertThat(r.venceEn()).isEqualTo(u.getTemporalVenceEn());
+        assertThat(u.isDebeCambiarPassword()).isTrue();
+        assertThat(u.getTemporalUsadaEn()).isNull();
+    }
+
+    @Test
+    void restablecerCierraLasSesionesActivasSubiendoLaVersion() {
+        Usuario u = cuentaExistente();
+
+        restablecer();
+        assertThat(u.getSesionVersion()).isEqualTo(3);
+        restablecer();
+        assertThat(u.getSesionVersion()).isEqualTo(4);
+    }
+
+    @Test
+    void restablecerGuardaLaCuentaYNoTocaSusOtrosDatos() {
+        Usuario u = cuentaExistente();
+
+        restablecer();
+
+        verify(usuarios).save(u);
+        assertThat(u.getUsername()).isEqualTo("contacto@acme.pe");
+        assertThat(u.getEmail()).isEqualTo("contacto@acme.pe");
+        assertThat(u.getClienteId()).isEqualTo(CLIENTE);
+        assertThat(u.getNombreCompleto()).isEqualTo("Acme SAC");
+        assertThat(u.isActivo()).isTrue();
+        assertThat(u.getRoles()).extracting(Rol::getNombre).containsExactly("CLIENTE_MYPE");
+        assertThat(u.getIntentosFallidos()).isEqualTo(3);
+    }
+
+    @Test
+    void restablecerFuncionaTambienConLaTemporalAunSinUsarYAunVigente() {
+        Usuario u = cuentaExistente();
+        u.setDebeCambiarPassword(true);
+        u.setTemporalUsadaEn(null);
+        u.setTemporalVenceEn(LocalDateTime.now().plusHours(1));
+
+        restablecer();
+
+        assertThat(encoder.matches(TEMPORAL, u.getPasswordHash())).isTrue();
+        assertThat(u.getTemporalVenceEn()).isAfter(LocalDateTime.now().plusHours(47));
+    }
+
+    @Test
+    void restablecerLoAnotaEnLaBitacoraSinLaContrasenia() {
+        Usuario u = cuentaExistente();
+        when(usuarios.findByUsername("ana")).thenReturn(Optional.of(quien(5L)));
+
+        restablecer();
+
+        ArgumentCaptor<BitacoraSeguridad> c = ArgumentCaptor.forClass(BitacoraSeguridad.class);
+        verify(bitacora).save(c.capture());
+        BitacoraSeguridad b = c.getValue();
+        assertThat(b.getEvento()).isEqualTo("CUENTA_CLIENTE_RESTABLECIDA");
+        assertThat(b.getUsername()).isEqualTo("ana");
+        assertThat(b.getUsuarioId()).isEqualTo(5L);
+        assertThat(b.getIp()).isEqualTo("10.0.0.1");
+        assertThat(b.getDetalle()).contains("contacto@acme.pe").contains("cliente " + CLIENTE)
+                .doesNotContain(TEMPORAL).doesNotContain(ANTERIOR).doesNotContain(u.getPasswordHash());
+    }
+
+    private Usuario quien(long id) {
+        Usuario q = new Usuario();
+        ReflectionTestUtils.setField(q, "id", id);
+        q.setUsername("ana");
+        return q;
+    }
+
+    @Test
+    void restablecerSinCuentaDa404YNoGeneraNiGuardaNada() {
+        when(usuarios.findByClienteId(CLIENTE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(this::restablecer).isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+            assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(e.getReason()).isEqualTo("El cliente no tiene una cuenta de acceso");
+        });
+        verify(generador, never()).generar();
+        verify(usuarios, never()).save(any());
+        verify(bitacora, never()).save(any());
+    }
+
+    @Test
+    void laVigenciaDelRestablecimientoSeConfigura() {
+        Usuario u = cuentaExistente();
+        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm));
+        LocalDateTime antes = LocalDateTime.now();
+
+        de72.restablecer(CLIENTE, "ana", "10.0.0.1");
+
+        assertThat(u.getTemporalVenceEn()).isBetween(antes.plusHours(72), LocalDateTime.now().plusHours(72));
+    }
+
+    @Test
+    void restablecerGuardaDentroDeUnaTransaccionYSiFallaSeDeshace() {
+        cuentaExistente();
+        restablecer();
+        assertThat(guardoDentroDeTransaccion).isTrue();
+        assertThat(tm.confirmadas).isEqualTo(1);
+
+        cuentaExistente();
+        when(bitacora.save(any())).thenThrow(new IllegalStateException("la base se cayó"));
+        assertThatThrownBy(this::restablecer).isInstanceOf(IllegalStateException.class);
+        assertThat(tm.deshechas).isEqualTo(1);
+    }
+
     @Test
     void laConsultaAMsTributarioSeHaceFueraDeLaTransaccionYElGuardadoDentro() {
         crear("contacto@acme.pe");

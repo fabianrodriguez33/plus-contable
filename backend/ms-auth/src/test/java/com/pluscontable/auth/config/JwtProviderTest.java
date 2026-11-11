@@ -29,6 +29,15 @@ class JwtProviderTest {
     }
 
     @Test
+    void elTokenLlevaLaVersionDeSesionDeLaCuentaYSinIndicarlaEsCero() {
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CLIENTE_MYPE"), 7L, 4)).get("sv", Integer.class)).isEqualTo(4);
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CLIENTE_MYPE"), 7L)).get("sv", Integer.class)).isZero();
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CONTADOR"))).get("sv", Integer.class)).isZero();
+        assertThat(proveedor.parse(proveedor.generateCambioPassword("c", 3)).get("sv", Integer.class)).isEqualTo(3);
+        assertThat(proveedor.parse(proveedor.generateCambioPassword("c")).get("sv", Integer.class)).isZero();
+    }
+
+    @Test
     void laDuracionConfiguradaEsLaQueSeExpone() {
         assertThat(proveedor.getExpiration()).isEqualTo(Duration.ofHours(8));
     }

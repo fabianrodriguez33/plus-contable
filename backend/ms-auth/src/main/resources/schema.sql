@@ -27,6 +27,8 @@ ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS cliente_id BIGINT;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_password BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_usada_en TIMESTAMP;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_vence_en TIMESTAMP;
+-- HU-37: sube cada vez que el contador restablece el acceso; los tokens con una version anterior dejan de valer en ms-auth.
+ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS sesion_version INTEGER NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_cliente_id ON auth_schema.usuarios(cliente_id) WHERE cliente_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS auth_schema.usuario_roles (

@@ -140,6 +140,19 @@ class PrimerIngresoServiceTest {
     }
 
     @Test
+    void todoTokenDelServicioLlevaLaVersionDeSesionDeLaCuenta() {
+        cliente.setSesionVersion(5);
+
+        LoginResponse restringido = entrar(TEMPORAL);
+        assertThat(jwt.parse(restringido.token()).get("sv", Integer.class)).isEqualTo(5);
+
+        LoginResponse normal = service.cambiarPassword(CORREO, restringida(), NUEVA, "10.0.0.2");
+        assertThat(jwt.parse(normal.token()).get("sv", Integer.class)).isEqualTo(5);
+
+        assertThat(jwt.parse(entrar(NUEVA).token()).get("sv", Integer.class)).isEqualTo(5);
+    }
+
+    @Test
     void laTemporalVencidaSeRechazaAunqueSeaLaCorrectaYSeAnota() {
         cliente.setTemporalVenceEn(LocalDateTime.now().minusMinutes(1));
 

@@ -105,6 +105,103 @@ class CuentaClienteIntegracionTest {
         return jdbc.queryForObject("SELECT count(*) FROM auth_schema.usuarios WHERE cliente_id = ?", Integer.class, cliente);
     }
 
+    // ---- restablecer el acceso (decisión de Beto del 11/11)
+
+    private MvcResult restablecer(String autorizacion, long cliente, int estado) throws Exception {
+        var r = post("/api/auth/clientes/" + cliente + "/cuenta/restablecer");
+        if (autorizacion != null) r.header(HttpHeaders.AUTHORIZATION, autorizacion);
+        return mvc.perform(r).andExpect(status().is(estado)).andReturn();
+    }
+
+    @Test
+    void restablecerRecorridoCompletoLaAnteriorMuereLaNuevaVale48HorasYSeCierranLasSesiones() throws Exception {
+        String contador = contador();
+        String anterior = cuerpo(crear(contador, CLIENTE, CORREO, 201)).get("passwordTemporal").asText();
+        String restringidoViejo = cuerpo(entrar(CORREO, anterior, 200)).get("token").asText();
+        String restringidoSinUsar = cuerpo(entrar(CORREO, anterior, 200)).get("token").asText(); // otro ingreso que no llegó a cambiar
+        String normalViejo = cuerpo(cambiar(restringidoViejo, NUEVA, 200)).get("token").asText();
+        assertThat(estadoDe("/api/auth/me", normalViejo)).isEqualTo(200);
+
+        JsonNode r = cuerpo(restablecer(contador, CLIENTE, 200));
+        String nueva = r.get("passwordTemporal").asText();
+
+        // la respuesta: otra temporal, solo aquí, sin caché
+        assertThat(nueva).hasSize(12).isNotEqualTo(anterior);
+        assertThat(r.get("correo").asText()).isEqualTo(CORREO);
+        assertThat(r.get("clienteId").asLong()).isEqualTo(CLIENTE);
+        assertThat(r.get("venceEn").asText()).isNotBlank();
+        // en la base: solo el hash, y la cuenta vuelve a exigir el cambio con 48 h nuevas
+        String hash = jdbc.queryForObject("SELECT password_hash FROM auth_schema.usuarios WHERE username = ?", String.class, CORREO);
+        assertThat(hash).startsWith("$2").doesNotContain(nueva);
+        assertThat(jdbc.queryForObject("SELECT debe_cambiar_password FROM auth_schema.usuarios WHERE username = ?", Boolean.class, CORREO)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT temporal_usada_en FROM auth_schema.usuarios WHERE username = ?", java.sql.Timestamp.class, CORREO)).isNull();
+        java.time.LocalDateTime vence = jdbc.queryForObject("SELECT temporal_vence_en FROM auth_schema.usuarios WHERE username = ?", java.time.LocalDateTime.class, CORREO);
+        assertThat(vence).isBetween(java.time.LocalDateTime.now().plusHours(47), java.time.LocalDateTime.now().plusHours(48).plusMinutes(1));
+        // las sesiones anteriores ya no valen y la contraseña que el cliente había elegido tampoco
+        assertThat(estadoDe("/api/auth/me", normalViejo)).isEqualTo(401);
+        assertThat(estadoDe("/api/auth/me", restringidoViejo)).isEqualTo(401);
+        assertThat(estadoDe("/api/auth/me", restringidoSinUsar)).isEqualTo(401); // solo la versión de sesión lo invalida
+        cambiar(restringidoSinUsar, "NoDebeServir9", 401);
+        entrar(CORREO, NUEVA, 401);
+        entrar(CORREO, anterior, 401);
+        // la nueva temporal sirve, y sigue sirviendo aunque el cliente ingrese
+        JsonNode primero = cuerpo(entrar(CORREO, nueva, 200));
+        assertThat(primero.get("debeCambiarPassword").asBoolean()).isTrue();
+        entrar(CORREO, nueva, 200);
+        // hasta completar el cambio; después queda invalidada
+        String restringidoNuevo = cuerpo(entrar(CORREO, nueva, 200)).get("token").asText();
+        assertThat(estadoDe("/api/auth/me", restringidoNuevo)).isEqualTo(403);
+        String normalNuevo = cuerpo(cambiar(restringidoNuevo, "OtraClaveNueva7", 200)).get("token").asText();
+        assertThat(estadoDe("/api/auth/me", normalNuevo)).isEqualTo(200);
+        entrar(CORREO, nueva, 401);
+        assertThat(cuerpo(entrar(CORREO, "OtraClaveNueva7", 200)).get("debeCambiarPassword").asBoolean()).isFalse();
+    }
+
+    @Test
+    void despuesDeLas48HorasSinCambioElContadorGeneraOtraDesdeElMismoBoton() throws Exception {
+        String contador = contador();
+        String vencida = cuerpo(crear(contador, CLIENTE, CORREO, 201)).get("passwordTemporal").asText();
+        jdbc.update("UPDATE auth_schema.usuarios SET temporal_vence_en = NOW() - INTERVAL '1 minute' WHERE username = ?", CORREO);
+        entrar(CORREO, vencida, 401);
+
+        String nueva = cuerpo(restablecer(contador, CLIENTE, 200)).get("passwordTemporal").asText();
+
+        entrar(CORREO, vencida, 401);
+        assertThat(cuerpo(entrar(CORREO, nueva, 200)).get("debeCambiarPassword").asBoolean()).isTrue();
+    }
+
+    @Test
+    void restablecerSinCuentaDa404ConUnClienteDa403SinSesionDa401() throws Exception {
+        String contador = contador();
+        restablecer(contador, OTRO_CLIENTE, 404);
+        String temporal = cuerpo(crear(contador, CLIENTE, CORREO, 201)).get("passwordTemporal").asText();
+        String restringido = cuerpo(entrar(CORREO, temporal, 200)).get("token").asText();
+        String normal = cuerpo(cambiar(restringido, NUEVA, 200)).get("token").asText();
+
+        restablecer(null, CLIENTE, 401);
+        restablecer("Bearer " + normal, CLIENTE, 403); // el propio cliente no puede restablecerse
+        restablecer("Bearer " + restringido, CLIENTE, 401); // ya revocado
+        assertThat(jdbc.queryForObject("SELECT sesion_version FROM auth_schema.usuarios WHERE username = ?", Integer.class, CORREO)).isZero();
+    }
+
+    @Test
+    void restablecerQuedaEnLaBitacoraSinLaContraseniaYSoloAfectaALaEmpresaIndicada() throws Exception {
+        String contador = contador();
+        crear(contador, CLIENTE, CORREO, 201);
+        crear(contador, OTRO_CLIENTE, "itest-hu37-b@acme.pe", 201);
+        String hashDeLaOtra = jdbc.queryForObject("SELECT password_hash FROM auth_schema.usuarios WHERE username = 'itest-hu37-b@acme.pe'", String.class);
+
+        String nueva = cuerpo(restablecer(contador, CLIENTE, 200)).get("passwordTemporal").asText();
+
+        java.util.List<String> eventos = jdbc.queryForList(
+                "SELECT evento || ' | ' || username || ' | ' || COALESCE(detalle, '') FROM auth_schema.bitacora_seguridad WHERE evento = 'CUENTA_CLIENTE_RESTABLECIDA' AND detalle LIKE '%itest-hu37-%'", String.class);
+        assertThat(eventos).hasSize(1);
+        assertThat(eventos.get(0)).contains(admin).contains(CORREO).contains("cliente " + CLIENTE).doesNotContain(nueva);
+        assertThat(jdbc.queryForObject("SELECT password_hash FROM auth_schema.usuarios WHERE username = 'itest-hu37-b@acme.pe'", String.class)).isEqualTo(hashDeLaOtra);
+        assertThat(jdbc.queryForObject("SELECT sesion_version FROM auth_schema.usuarios WHERE username = 'itest-hu37-b@acme.pe'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT sesion_version FROM auth_schema.usuarios WHERE username = ?", Integer.class, CORREO)).isEqualTo(1);
+    }
+
     // ---- la llamada a ms-tributario va fuera de la transacción (HU-37)
 
     @Test

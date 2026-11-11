@@ -117,14 +117,14 @@ public class AuthService {
             }
             usuarioRepository.save(u);
             log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", "Primer ingreso con la contraseña temporal: debe cambiarla", ip);
-            return new LoginResponse(jwtProvider.generateCambioPassword(u.getUsername()), "Bearer",
+            return new LoginResponse(jwtProvider.generateCambioPassword(u.getUsername(), u.getSesionVersion()), "Bearer",
                     jwtProvider.getCambioPasswordExpiration().toSeconds(), usuarioDto(u), true);
         }
         usuarioRepository.save(u);
         log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", null, ip);
 
         List<String> roles = u.getRoles().stream().map(Rol::getNombre).sorted().toList();
-        String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId());
+        String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId(), u.getSesionVersion());
         return new LoginResponse(token, "Bearer", jwtProvider.getExpiration().toSeconds(),
                 new UserDto(u.getId(), u.getUsername(), u.getNombreCompleto(), roles));
     }
@@ -165,7 +165,7 @@ public class AuthService {
         }
         log(u.getId(), u.getUsername(), "CAMBIO_PASSWORD", "Cambio obligatorio de la contraseña temporal", ip);
         List<String> roles = u.getRoles().stream().map(Rol::getNombre).sorted().toList();
-        return new LoginResponse(jwtProvider.generate(u.getUsername(), roles, u.getClienteId()), "Bearer",
+        return new LoginResponse(jwtProvider.generate(u.getUsername(), roles, u.getClienteId(), u.getSesionVersion()), "Bearer",
                 jwtProvider.getExpiration().toSeconds(), usuarioDto(u), false);
     }
 

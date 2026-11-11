@@ -53,6 +53,7 @@ class CuentaClienteControllerTest {
     @MockBean CuentaClienteService cuentas;
     @MockBean AuthService auth;
     @MockBean TokenRevocadoRepository revocados;
+    @MockBean com.pluscontable.auth.repository.UsuarioRepository usuarios;
 
     private String bearer(String... roles) {
         return "Bearer " + jwt.generate("ana", List.of(roles));
@@ -223,6 +224,74 @@ class CuentaClienteControllerTest {
 
         mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer("CONTADOR")))
                 .andExpect(status().isOk());
+    }
+
+    // ---- restablecer el acceso (decisión de Beto del 11/11)
+
+    private static final String RUTA_RESTABLECER = "/api/auth/clientes/7/cuenta/restablecer";
+
+    private MockHttpServletRequestBuilder restablecer(String autorizacion) {
+        var r = post(RUTA_RESTABLECER);
+        if (autorizacion != null) r.header(HttpHeaders.AUTHORIZATION, autorizacion);
+        return r;
+    }
+
+    @Test
+    void elContadorYElAdminRestablecenYRecibenLaTemporalSinCache() throws Exception {
+        when(cuentas.restablecer(eq(7L), eq("ana"), anyString()))
+                .thenReturn(new CuentaClienteResponse(9L, "contacto@acme.pe", 7L, "Temporal2345", java.time.LocalDateTime.parse("2026-11-13T08:00:00")));
+
+        for (String rol : new String[] {"CONTADOR", "ADMIN"}) {
+            mvc.perform(restablecer(bearer(rol)))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+                    .andExpect(jsonPath("$.usuarioId").value(9))
+                    .andExpect(jsonPath("$.correo").value("contacto@acme.pe"))
+                    .andExpect(jsonPath("$.clienteId").value(7))
+                    .andExpect(jsonPath("$.passwordTemporal").value("Temporal2345"))
+                    .andExpect(jsonPath("$.venceEn").value("2026-11-13T08:00:00"));
+        }
+    }
+
+    @Test
+    void alServicioLeLlegaLaEmpresaYElUsuarioDelToken() throws Exception {
+        when(cuentas.restablecer(any(), any(), any())).thenReturn(new CuentaClienteResponse(9L, "c@a.pe", 7L, "x"));
+
+        mvc.perform(restablecer(bearer("CONTADOR"))).andExpect(status().isOk());
+
+        verify(cuentas).restablecer(eq(7L), eq("ana"), anyString());
+    }
+
+    @Test
+    void restablecerSinSesionDa401ConUnClienteOSinRolesDa403SinLlamarAlServicio() throws Exception {
+        mvc.perform(restablecer(null)).andExpect(status().isUnauthorized());
+        mvc.perform(restablecer(bearer("CLIENTE_MYPE"))).andExpect(status().isForbidden());
+        mvc.perform(restablecer("Bearer " + jwt.generate("ana", List.of()))).andExpect(status().isForbidden());
+
+        verify(cuentas, never()).restablecer(any(), any(), any());
+    }
+
+    @Test
+    void elTokenRestringidoNoRestablece() throws Exception {
+        mvc.perform(restablecer(restringido()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("Debe cambiar la contraseña temporal antes de usar el sistema"));
+
+        verify(cuentas, never()).restablecer(any(), any(), any());
+    }
+
+    @Test
+    void sinCuentaDa404ConSuMensaje() throws Exception {
+        when(cuentas.restablecer(any(), any(), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "El cliente no tiene una cuenta de acceso"));
+
+        mvc.perform(restablecer(bearer("CONTADOR"))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value("El cliente no tiene una cuenta de acceso"));
+    }
+
+    @Test
+    void restablecerSoloAceptaPost() throws Exception {
+        mvc.perform(get(RUTA_RESTABLECER).header(HttpHeaders.AUTHORIZATION, bearer("CONTADOR"))).andExpect(status().isMethodNotAllowed());
     }
 
     @Test

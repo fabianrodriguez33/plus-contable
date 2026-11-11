@@ -100,11 +100,38 @@ public class CuentaClienteService {
         // la bitácora nunca lleva la contraseña
         bitacora.save(new BitacoraSeguridad(creadorId, creador, "CUENTA_CLIENTE_CREADA",
                 "Cuenta " + u.getId() + " (" + normalizado + ") para el cliente " + clienteId, ip));
-        return new CuentaClienteResponse(u.getId(), normalizado, clienteId, temporal);
+        return new CuentaClienteResponse(u.getId(), normalizado, clienteId, temporal, u.getTemporalVenceEn());
+    }
+
+    /**
+     * HU-37 · «Restablecer acceso» (decisión de Beto del 11/11): genera otra contraseña temporal para la cuenta existente de la
+     * empresa. La anterior deja de servir (cambia el hash), se reinician las 48 horas, vuelve a exigirse el cambio de contraseña y
+     * se cierran las sesiones activas de la cuenta (sube la versión de sesión). La nueva solo viaja en esta respuesta.
+     *
+     * @param restablecedor usuario del token que lo pide (queda en la bitácora de seguridad)
+     */
+    public CuentaClienteResponse restablecer(Long clienteId, String restablecedor, String ip) {
+        return transaccion.execute(estado -> {
+            Usuario u = usuarios.findByClienteId(clienteId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, MSG_SIN_CUENTA));
+            String temporal = generador.generar();
+            u.setPasswordHash(encoder.encode(temporal));
+            u.setDebeCambiarPassword(true);
+            u.setTemporalUsadaEn(null);
+            u.setTemporalVenceEn(LocalDateTime.now().plusHours(temporalHoras));
+            u.setSesionVersion(u.getSesionVersion() + 1);
+            usuarios.save(u);
+            Long quienId = usuarios.findByUsername(restablecedor).map(Usuario::getId).orElse(null);
+            // la bitácora nunca lleva la contraseña
+            bitacora.save(new BitacoraSeguridad(quienId, restablecedor, "CUENTA_CLIENTE_RESTABLECIDA",
+                    "Cuenta " + u.getId() + " (" + u.getUsername() + ") del cliente " + clienteId, ip));
+            return new CuentaClienteResponse(u.getId(), u.getUsername(), clienteId, temporal, u.getTemporalVenceEn());
+        });
     }
 
     static final String MSG_EMPRESA_CON_CUENTA = "La empresa ya tiene una cuenta de acceso";
     static final String MSG_CORREO_EN_USO = "Ese correo ya está registrado";
+    static final String MSG_SIN_CUENTA = "El cliente no tiene una cuenta de acceso";
 
     private static String normalizar(String correo) {
         String c = correo == null ? "" : correo.trim().toLowerCase(Locale.ROOT);

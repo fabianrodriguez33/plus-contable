@@ -42,7 +42,7 @@ class ContratoTokenTest {
         Set<String> nombres = Set.copyOf(StreamSupport.stream(
                 java.util.Spliterators.spliteratorUnknownSize(contenido.fieldNames(), 0), false).toList());
 
-        assertThat(nombres).containsExactlyInAnyOrder("sub", "roles", "iat", "exp", "jti");
+        assertThat(nombres).containsExactlyInAnyOrder("sub", "roles", "iat", "exp", "jti", "sv");
         assertThat(contenido.get("sub").asText()).isEqualTo("contador1");
         assertThat(contenido.get("roles").isArray()).isTrue();
         assertThat(StreamSupport.stream(contenido.get("roles").spliterator(), false).map(JsonNode::asText).toList())
