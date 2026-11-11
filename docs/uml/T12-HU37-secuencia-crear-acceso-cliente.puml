@@ -1,5 +1,5 @@
 @startuml
-title T12 · HU-37 · Secuencia: crear la cuenta de un cliente, su primer ingreso y el cambio obligatorio de contraseña (diseño previo)
+title T12 · HU-37 · Secuencia: crear la cuenta de un cliente, su primer ingreso, el cambio obligatorio y el restablecimiento del acceso (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -94,12 +94,11 @@ alt la temporal venció (48 h desde el alta, configurable)
 end
 CS --> FE : 200 {token restringido (15 min, configurable), debeCambiarPassword = true}
 note right
-  Entrar NO gasta la temporal (corrección tras la revisión de Jeanpierre): si el cliente se
-  corta antes del cambio, vuelve a entrar con la misma hasta que venza. Esto precisa la
-  decisión de Beto («deja de valer tras usarla»): pendiente de confirmarlo con él.
+  Decisión de Beto (11/11): la temporal vale 48 horas y no deja de funcionar porque el cliente
+  ingrese; sigue válida hasta completar el cambio obligatorio y después queda invalidada.
+  Si pasan las 48 horas sin cambio, el contador la genera de nuevo con «Restablecer acceso».
   El token restringido no lleva roles y solo permite cambiar la contraseña y cerrar sesión;
   ms-tributario lo rechaza con 403 por su claim cambiarPassword (además de no tener roles).
-  Si la temporal vence sin usarse, el reinicio por el contador no está en el alcance.
 end note
 
 == Cambio obligatorio de la contraseña ==
@@ -124,6 +123,38 @@ note right
   Desde aquí el cliente solo ve lo suyo (HU-38).
 end note
 FE --> C : accede a la información de su empresa
+
+== Restablecer el acceso (solo CONTADOR o ADMIN) ==
+note over U
+  Decisión de Beto (11/11): botón «Restablecer acceso» en la ficha del cliente. Genera una nueva
+  temporal que se muestra UNA SOLA VEZ para que el contador la entregue por su medio. Sin correos.
+  Sirve si pasaron las 48 horas sin cambio, si el cliente perdió la temporal o si necesita volver a entrar.
+end note
+U -> FE : pulsa "Restablecer acceso" en la pestaña «Acceso del cliente» y confirma
+FE -> CC : POST /api/auth/clientes/{clienteId}/cuenta/restablecer\nAuthorization: Bearer <JWT del contador>
+alt token ausente, vencido o inválido
+  CC --> FE : 401
+end
+alt el usuario no tiene rol CONTADOR ni ADMIN
+  CC --> FE : 403
+end
+CC -> CS : restablecer(clienteId, usuario del token)
+CS -> UR : findByClienteId(clienteId)
+alt el cliente no tiene cuenta
+  CS --> FE : 404 "el cliente no tiene cuenta de acceso"
+end
+CS -> CS : genera otra contraseña temporal aleatoria (SecureRandom, 12 caracteres)
+CS -> PE : encode(contraseña temporal)
+CS -> UR : save(nuevo hash, debe_cambiar_password = true, temporal_usada_en = NULL,\ntemporal_vence_en = ahora + 48 h, sesion_version + 1)
+note right
+  La temporal anterior deja de servir (el hash cambió) y las sesiones activas de la cuenta
+  dejan de valer en ms-auth (sesion_version). Limitación conocida: ms-tributario no consulta
+  revocaciones y acepta esos tokens hasta su vencimiento.
+end note
+CS -> BR : save(CUENTA_CLIENTE_RESTABLECIDA, quién lo hizo y empresa; sin contraseña)
+CS --> FE : 200 {usuarioId, correo, clienteId, passwordTemporal, venceEn}\nCache-Control: no-store
+FE --> U : muestra la contraseña temporal una sola vez
+U -> C : le entrega la nueva contraseña por su medio\n(no hay envío automático de correos)
 
 footer Diseño previo, 10/11/2026 · Base: criterios de aceptación de HU-37, las decisiones definitivas de Beto del 10/11 y el código y la base de develop (5a891de). Código existente: Usuario.clienteId, rol CLIENTE_MYPE, AuthService.login, JwtProvider, bitacora_seguridad y GET /api/tributario/clientes/{id}. Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md
 @enduml

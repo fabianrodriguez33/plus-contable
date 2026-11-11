@@ -1,5 +1,5 @@
 @startuml
-title T12 · HU-37 · Actividad: crear la cuenta de un cliente y su primer ingreso (diseño previo)
+title T12 · HU-37 · Actividad: crear la cuenta de un cliente, restablecer su acceso y su primer ingreso (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -78,6 +78,54 @@ note right
   Desactivar o bloquear una cuenta de cliente: pendiente de confirmar con Beto.
 end note
 
+if (¿Pasaron 48 h sin cambio, o el cliente perdió la temporal o necesita volver a entrar?) then (sí)
+  |Contador|
+  :Elige "Restablecer acceso" en la pestaña «Acceso del cliente»
+  y confirma la pregunta;
+
+  |frontend-web|
+  :Envía POST /api/auth/clientes/{id}/cuenta/restablecer;
+  note right
+    Decisión de Beto (11/11): botón «Restablecer acceso» en la ficha del cliente.
+    Genera una nueva temporal, que se muestra UNA SOLA VEZ; no hay correos.
+  end note
+
+  |ms-auth|
+  if (¿Token válido?) then (no)
+    :401;
+    stop
+  endif
+  if (¿El usuario tiene rol CONTADOR o ADMIN?) then (no)
+    :403 (solo el estudio restablece accesos);
+    stop
+  endif
+  if (¿El cliente tiene una cuenta de acceso?) then (no)
+    :404 "el cliente no tiene cuenta de acceso"
+    (se crea con «Crear acceso»);
+    stop
+  endif
+  :Genera otra contraseña temporal aleatoria y guarda SOLO su hash:
+  la anterior deja de servir, reinicia las 48 h y
+  vuelve a exigir el cambio (debe_cambiar_password = true);
+  note right
+    Decisión de Beto (11/11): la temporal vale 48 horas, sigue válida aunque el cliente
+    ingrese y queda invalidada al completar el cambio obligatorio.
+    Supuesto del diseño: se invalidan las sesiones activas de la cuenta con un número de
+    versión de sesión (usuarios.sesion_version): los tokens emitidos antes ya no pasan por ms-auth.
+    Limitación conocida: ms-tributario no consulta revocaciones y los acepta hasta su vencimiento.
+  end note
+  :Anota CUENTA_CLIENTE_RESTABLECIDA en la bitácora de seguridad
+  (quién lo hizo y para qué empresa; nunca la contraseña);
+  :Responde 200 con la contraseña temporal
+  (es la única vez que se entrega);
+
+  |frontend-web|
+  :Muestra la contraseña temporal UNA SOLA VEZ;
+
+  |Contador|
+  :Entrega la nueva contraseña al cliente por su medio;
+endif
+
 |Cliente|
 :Entra con su correo y la contraseña temporal;
 
@@ -93,13 +141,11 @@ endif
 :Entrega un token restringido (15 min, configurable): sin roles y solo para
 cambiar la contraseña (y cerrar sesión). Entrar NO gasta la temporal;
 note right
-  Corrección tras la revisión de Jeanpierre: la temporal se gasta al CAMBIAR la
-  contraseña, no al entrar. Si el cliente se corta antes del cambio, vuelve a
-  entrar con la misma hasta que venza. Esto precisa la decisión de Beto
-  («deja de valer tras usarla»): pendiente de confirmarlo con él.
+  Decisión de Beto (11/11): la temporal vale 48 horas y no deja de funcionar porque el
+  cliente ingrese; sigue válida hasta completar el cambio obligatorio y después queda
+  invalidada. Si pasan las 48 horas sin cambio, el contador genera otra con «Restablecer acceso».
   ms-tributario rechaza con 403 todo token con el claim cambiarPassword, además de no
   tener roles; ms-auth solo deja pasar el cambio de contraseña y el cierre de sesión.
-  Si la temporal vence sin usarse, el reinicio por el contador no está en el alcance.
 end note
 
 |frontend-web|
