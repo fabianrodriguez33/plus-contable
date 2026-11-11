@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.clientes (
     id                 BIGSERIAL PRIMARY KEY,
     ruc                VARCHAR(11)  NOT NULL UNIQUE CHECK (ruc ~ '^[0-9]{11}$'),
     razon_social       VARCHAR(200) NOT NULL,
-    regimen_tributario VARCHAR(20)  NOT NULL CHECK (regimen_tributario IN ('MYPE', 'REMIPE', 'GENERAL')),
+    regimen_tributario VARCHAR(20)  NOT NULL CHECK (regimen_tributario IN ('MYPE', 'RER', 'GENERAL')),
     condicion_habido   VARCHAR(20)  NOT NULL DEFAULT 'HABIDO' CHECK (condicion_habido IN ('HABIDO', 'NO_HABIDO')),
     direccion          VARCHAR(250),
     activo             BOOLEAN      NOT NULL DEFAULT TRUE,
@@ -265,6 +265,15 @@ ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS obligacione
 ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_estado;
 ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_estado
     CHECK (estado IN ('PENDIENTE', 'DECLARADO', 'PAGO_PARCIAL', 'PAGADO'));
+-- Régimen: RER (Régimen Especial del Impuesto a la Renta) reemplaza a REMIPE (decisión de Beto, 10/11). Orden obligatorio: primero se
+-- borra la restricción vieja (la en línea sin nombre, que PostgreSQL llamó clientes_regimen_tributario_check, o la ya renombrada),
+-- luego los clientes que estaban en REMIPE pasan a RER sin perder ningún otro dato y recién entonces se crea la restricción nueva
+-- con nombre estable. La condición (condicion_habido) es otra columna y no se toca. regimen_laboral de trabajadores no cambia.
+ALTER TABLE tributario_schema.clientes DROP CONSTRAINT IF EXISTS clientes_regimen_tributario_check;
+ALTER TABLE tributario_schema.clientes DROP CONSTRAINT IF EXISTS ck_clientes_regimen;
+UPDATE tributario_schema.clientes SET regimen_tributario = 'RER' WHERE regimen_tributario = 'REMIPE';
+ALTER TABLE tributario_schema.clientes ADD CONSTRAINT ck_clientes_regimen
+    CHECK (regimen_tributario IN ('MYPE', 'RER', 'GENERAL'));
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 -- HU-07: marca manual de buen contribuyente (BUEN_CONTRIB_UESP); los clientes existentes quedan en FALSE.
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS buen_contribuyente BOOLEAN NOT NULL DEFAULT FALSE;

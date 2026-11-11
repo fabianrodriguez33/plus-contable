@@ -9,7 +9,7 @@ entity "tributario_schema.clientes" as clientes {
   --
   * ruc : VARCHAR(11)  CHECK (ruc ~ '^[0-9]{11}$') <<UNIQUE>>
   * razon_social : VARCHAR(200)
-  * regimen_tributario : MYPE | REMIPE | GENERAL
+  * regimen_tributario : MYPE | RER | GENERAL
   * condicion_habido : HABIDO | NO_HABIDO = HABIDO
     direccion : VARCHAR(250)
   * activo : BOOLEAN = true

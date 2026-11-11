@@ -112,7 +112,7 @@ export default function DatosGeneralesTab({ cliente, esNuevo, onCambio, onGuarda
         <Select label="Régimen tributario" value={cliente.regimenTributario}
           onChange={(e) => onCambio('regimenTributario', e.target.value as Regimen)}>
           <option value="MYPE">MYPE Tributario</option>
-          <option value="REMIPE">RER (REMIPE)</option>
+          <option value="RER">Régimen Especial del Impuesto a la Renta (RER)</option>
           <option value="GENERAL">Régimen General</option>
         </Select>
         <Select label="Condición" value={cliente.condicionHabido}

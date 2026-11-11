@@ -44,4 +44,47 @@ describe('DatosGeneralesTab · buen contribuyente (HU-07)', () => {
     ficha(cliente())
     expect(screen.getByText(/No recalcula lo ya programado/)).toBeTruthy()
   })
+})
+
+describe('DatosGeneralesTab · régimen y condición (RER, decisión de Beto del 10/11)', () => {
+  const opciones = (etiqueta: string) =>
+    [...(screen.getByLabelText(etiqueta) as HTMLSelectElement).options].map((o) => [o.value, o.textContent])
+
+  it('el régimen tributario ofrece MYPE, RER y General, y REMIPE ya no aparece', () => {
+    ficha(cliente())
+
+    expect(opciones('Régimen tributario')).toEqual([
+      ['MYPE', 'MYPE Tributario'],
+      ['RER', 'Régimen Especial del Impuesto a la Renta (RER)'],
+      ['GENERAL', 'Régimen General'],
+    ])
+    expect(screen.queryByText(/REMIPE/i)).toBeNull()
+    expect(document.body.innerHTML).not.toMatch(/REMIPE/i)
+  })
+
+  it('la condición es otro campo con sus propios valores: habido y no habido', () => {
+    ficha(cliente())
+
+    expect(opciones('Condición')).toEqual([['HABIDO', 'Habido'], ['NO_HABIDO', 'No habido']])
+    expect(screen.getByLabelText('Régimen tributario')).not.toBe(screen.getByLabelText('Condición'))
+  })
+
+  it('un cliente en RER y no habido muestra cada dato en su propio campo', () => {
+    ficha(cliente({ regimenTributario: 'RER', condicionHabido: 'NO_HABIDO' }))
+
+    expect((screen.getByLabelText('Régimen tributario') as HTMLSelectElement).value).toBe('RER')
+    expect((screen.getByLabelText('Condición') as HTMLSelectElement).value).toBe('NO_HABIDO')
+  })
+
+  it('elegir el régimen avisa solo el régimen y elegir la condición avisa solo la condición', async () => {
+    const onCambio = ficha(cliente())
+
+    await userEvent.selectOptions(screen.getByLabelText('Régimen tributario'), 'RER')
+    expect(onCambio).toHaveBeenCalledTimes(1)
+    expect(onCambio).toHaveBeenLastCalledWith('regimenTributario', 'RER')
+
+    await userEvent.selectOptions(screen.getByLabelText('Condición'), 'NO_HABIDO')
+    expect(onCambio).toHaveBeenCalledTimes(2)
+    expect(onCambio).toHaveBeenLastCalledWith('condicionHabido', 'NO_HABIDO')
+  })
 })
