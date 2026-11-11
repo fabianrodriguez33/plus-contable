@@ -27,6 +27,10 @@ ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS cliente_id BIGINT;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_password BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_usada_en TIMESTAMP;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_vence_en TIMESTAMP;
+-- HU-37: las cuentas creadas antes de este vencimiento quedaron en NULL (sin vencimiento). Si aun esperan el cambio de contrasena,
+-- se les pone el vencimiento AHORA: no se sabe cuando se creo su temporal, asi que no se le da mas tiempo y el contador genera otra
+-- con «Restablecer acceso». Idempotente: despues de correr, ya no hay filas en NULL con cambio pendiente.
+UPDATE auth_schema.usuarios SET temporal_vence_en = NOW() WHERE debe_cambiar_password = TRUE AND temporal_vence_en IS NULL;
 -- HU-37: sube cada vez que el contador restablece el acceso; los tokens con una version anterior dejan de valer en ms-auth.
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS sesion_version INTEGER NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_cliente_id ON auth_schema.usuarios(cliente_id) WHERE cliente_id IS NOT NULL;
