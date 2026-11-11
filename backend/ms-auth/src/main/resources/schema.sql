@@ -62,6 +62,20 @@ CREATE TABLE IF NOT EXISTS auth_schema.tokens_revocados (
 
 CREATE INDEX IF NOT EXISTS idx_tokens_revocados_expira ON auth_schema.tokens_revocados(expira_en);
 
+-- HU-41: el cliente que olvido su contrasena pide restablecerla desde el login; el estudio la atiende con «Restablecer acceso»
+-- (HU-37), que le genera otra temporal (decision del 11/11: el sistema no envia correos). A lo sumo una pendiente por cuenta.
+CREATE TABLE IF NOT EXISTS auth_schema.solicitudes_restablecimiento (
+    id            BIGSERIAL PRIMARY KEY,
+    usuario_id    BIGINT      NOT NULL REFERENCES auth_schema.usuarios(id) ON DELETE CASCADE,
+    solicitada_en TIMESTAMP   NOT NULL DEFAULT NOW(),
+    ip            VARCHAR(60),
+    atendida_en   TIMESTAMP,
+    atendida_por  VARCHAR(60),
+    CONSTRAINT ck_solicitudes_atendida CHECK ((atendida_en IS NULL) = (atendida_por IS NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_solicitudes_restablecimiento_pendiente
+    ON auth_schema.solicitudes_restablecimiento(usuario_id) WHERE atendida_en IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_bitacora_username ON auth_schema.bitacora_seguridad(username);
 CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON auth_schema.bitacora_seguridad(fecha);
 
