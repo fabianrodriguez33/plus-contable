@@ -117,7 +117,7 @@ note right of ParametroSistema
   Supuesto: corresponde SIRE a los clientes activos con obligación de IGV en el periodo (no hay un tipo SIRE en TipoObligacion).
   Supuesto: el aviso del sistema es una bandeja compartida del estudio; el correo va a la dirección del parámetro avisos.correo_estudio.
   Supuesto: si el correo falla, el aviso queda FALLIDO y el del sistema se muestra igual.
-  Supuesto (decisión de Beto, 06/11): el régimen RER se agrega a los regímenes del cliente (cambio de HU-01, fuera de esta historia).
+  Decisión de Beto (10/11): RER (Régimen Especial del Impuesto a la Renta) reemplaza a REMIPE en los regímenes del cliente (cambio de HU-01, fuera de esta historia).
 end note
 footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-12, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteRepository, ObligacionRepository, TipoObligacion, model.Cliente.activo, GlobalExceptionHandler
 @enduml

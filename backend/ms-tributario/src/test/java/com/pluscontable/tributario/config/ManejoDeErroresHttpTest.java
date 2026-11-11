@@ -100,7 +100,7 @@ class ManejoDeErroresHttpTest {
         HttpResponse<String> r = llamar("POST", "/api/tributario/clientes", cuerpo, token("CONTADOR"));
 
         assertThat(r.statusCode()).isEqualTo(400);
-        assertThat(mensaje(r)).contains("regimenTributario").contains("XXX").contains("GENERAL", "MYPE", "REMIPE");
+        assertThat(mensaje(r)).contains("regimenTributario").contains("XXX").contains("GENERAL", "MYPE", "RER").doesNotContain("REMIPE");
     }
 
     @Test
