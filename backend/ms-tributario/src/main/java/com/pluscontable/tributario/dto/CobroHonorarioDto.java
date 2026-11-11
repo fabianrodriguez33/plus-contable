@@ -5,9 +5,10 @@ import com.pluscontable.tributario.model.EstadoCobro;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record CobroHonorarioDto(Long id, LocalDate fechaCobro, BigDecimal monto, EstadoCobro estado) {
+public record CobroHonorarioDto(Long id, LocalDate fechaCobro, BigDecimal monto, BigDecimal pagado, BigDecimal saldo,
+                                EstadoCobro estado) {
 
     public static CobroHonorarioDto from(CobroHonorario c) {
-        return new CobroHonorarioDto(c.getId(), c.getFechaCobro(), c.getMonto(), c.getEstado());
+        return new CobroHonorarioDto(c.getId(), c.getFechaCobro(), c.getMonto(), c.getPagado(), c.saldo(), c.getEstado());
     }
 }

@@ -87,7 +87,9 @@ export interface CobroHonorario {
   id: number
   fechaCobro: string
   monto: number
-  estado: 'PENDIENTE'
+  pagado: number
+  saldo: number
+  estado: 'PENDIENTE' | 'PAGO_PARCIAL' | 'PAGADO'
 }
 
 export interface ProgramacionCobro {
@@ -102,3 +104,15 @@ export const programarCobros = (clienteId: number, periodicidad: Periodicidad) =
 
 export const listarCobrosPendientes = (clienteId: number) =>
   tributarioApi.get<CobroHonorario[]>(`${base(clienteId)}/cobros`).then((r) => r.data)
+
+// ---- HU-29 ----
+export type MedioPago = 'EFECTIVO' | 'TRANSFERENCIA' | 'DEPOSITO' | 'YAPE_PLIN' | 'OTRO'
+
+export interface PagoHonorario {
+  fechaPago: string
+  monto: number
+  medioPago: MedioPago
+}
+
+export const registrarPagoHonorario = (clienteId: number, cobroId: number, p: PagoHonorario) =>
+  tributarioApi.post<CobroHonorario>(`${base(clienteId)}/cobros/${cobroId}/pagos`, p).then((r) => r.data)

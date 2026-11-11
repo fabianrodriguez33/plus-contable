@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AxiosError, AxiosResponse } from 'axios'
 import CobrosTab from './CobrosTab'
-import { listarCobrosPendientes, programarCobros } from '../../services/expedienteService'
+import { soles } from '../../utils/societario'
+import { CobroHonorario, listarCobrosPendientes, programarCobros, registrarPagoHonorario } from '../../services/expedienteService'
 
-vi.mock('../../services/expedienteService', () => ({ listarCobrosPendientes: vi.fn(), programarCobros: vi.fn() }))
+vi.mock('../../services/expedienteService', () => ({
+  listarCobrosPendientes: vi.fn(), programarCobros: vi.fn(), registrarPagoHonorario: vi.fn(),
+}))
 
-const cobro = (id: number, fechaCobro: string, monto: number) => ({ id, fechaCobro, monto, estado: 'PENDIENTE' as const })
+const cobro = (id: number, fechaCobro: string, monto: number): CobroHonorario =>
+  ({ id, fechaCobro, monto, pagado: 0, saldo: monto, estado: 'PENDIENTE' })
 
 function error400(mensaje: string) {
   return new AxiosError('400', 'ERR_BAD_REQUEST', undefined, undefined, { status: 400, data: { mensaje } } as AxiosResponse)
@@ -78,5 +82,55 @@ describe('Cobros de honorarios en la ficha (HU-28)', () => {
 
     await waitFor(() => expect(setError).toHaveBeenCalledWith('Faltan o son inválidos: periodicidad'))
     expect(screen.queryByRole('button', { name: /Ir al acuerdo de servicio/ })).toBeNull()
+  })
+})
+
+describe('Pago de honorarios en la ficha (HU-29)', () => {
+  it('registra un pago parcial con fecha, monto y medio; el cobro sigue en la lista con su saldo (criterios 1 y 3)', async () => {
+    vi.mocked(listarCobrosPendientes)
+      .mockResolvedValueOnce([cobro(1, '2026-11-30', 500)])
+      .mockResolvedValueOnce([{ ...cobro(1, '2026-11-30', 500), pagado: 200, saldo: 300, estado: 'PAGO_PARCIAL' }])
+    vi.mocked(registrarPagoHonorario).mockResolvedValue(
+      { ...cobro(1, '2026-11-30', 500), pagado: 200, saldo: 300, estado: 'PAGO_PARCIAL' })
+    const { setOk } = montar()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar pago/ }))
+    const dialogo = screen.getByRole('dialog')
+    const monto = within(dialogo).getByLabelText('Monto pagado (S/)')
+    expect((monto as HTMLInputElement).value).toBe('500')
+    await userEvent.clear(monto)
+    await userEvent.type(monto, '200')
+    await userEvent.selectOptions(within(dialogo).getByLabelText('Medio de pago'), 'YAPE_PLIN')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+
+    expect(registrarPagoHonorario).toHaveBeenCalledWith(4, 1, expect.objectContaining({ monto: 200, medioPago: 'YAPE_PLIN' }))
+    expect(vi.mocked(registrarPagoHonorario).mock.calls[0][2].fechaPago).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    await waitFor(() => expect(setOk).toHaveBeenCalledWith(`Pago parcial registrado: queda un saldo de ${soles(300)}`))
+    expect(await screen.findByText('Pago parcial')).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('un pago por el total avisa que el cobro quedó pagado (criterio 2)', async () => {
+    vi.mocked(listarCobrosPendientes).mockResolvedValueOnce([cobro(1, '2026-11-30', 500)]).mockResolvedValueOnce([])
+    vi.mocked(registrarPagoHonorario).mockResolvedValue({ ...cobro(1, '2026-11-30', 500), pagado: 500, saldo: 0, estado: 'PAGADO' })
+    const { setOk } = montar()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar pago/ }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(setOk).toHaveBeenCalledWith('Pago registrado: el cobro del 30/11/2026 quedó pagado'))
+    expect(await screen.findByText('El cliente no tiene cobros pendientes.')).toBeTruthy()
+  })
+
+  it('el rechazo del servidor se muestra dentro del formulario y no lo cierra (criterio 4)', async () => {
+    vi.mocked(listarCobrosPendientes).mockResolvedValue([cobro(1, '2026-11-30', 500)])
+    vi.mocked(registrarPagoHonorario).mockRejectedValue(
+      error400('Solo se registran pagos sobre un cobro pendiente: este cobro ya está pagado'))
+    montar()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar pago/ }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await within(screen.getByRole('dialog')).findByText(/este cobro ya está pagado/)).toBeTruthy()
   })
 })

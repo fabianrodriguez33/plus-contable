@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.incidencias_clientes (
 CREATE INDEX IF NOT EXISTS idx_incidencias_clientes_cliente ON tributario_schema.incidencias_clientes(cliente_id);
 
 -- HU-28 (Jeanpierre): programación del cobro periódico de honorarios (una por cliente) y los cobros que genera.
--- HU-28 solo crea cobros PENDIENTE; HU-29 ampliará el CHECK de estado con el pago.
+-- HU-29 amplía el CHECK de estado con el pago y agrega la columna pagado (en la sección de actualización).
 CREATE TABLE IF NOT EXISTS tributario_schema.programaciones_cobro (
     id              BIGSERIAL PRIMARY KEY,
     cliente_id      BIGINT NOT NULL UNIQUE REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
@@ -249,6 +249,21 @@ CREATE TABLE IF NOT EXISTS tributario_schema.cobros_honorarios (
 CREATE INDEX IF NOT EXISTS idx_cobros_honorarios_pendientes
     ON tributario_schema.cobros_honorarios(cliente_id, estado, fecha_cobro);
 
+-- HU-29 (Jeanpierre): pagos recibidos de un cobro de honorarios. Varios pagos parciales hasta saldar el cobro; el cobro
+-- guarda lo pagado (columna pagado, agregada abajo) y pasa a PAGO_PARCIAL o PAGADO.
+CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
+    id              BIGSERIAL PRIMARY KEY,
+    cobro_id        BIGINT NOT NULL REFERENCES tributario_schema.cobros_honorarios(id) ON DELETE CASCADE,
+    fecha_pago      DATE NOT NULL,
+    monto           NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+    medio_pago      VARCHAR(20) NOT NULL
+                    CHECK (medio_pago IN ('EFECTIVO', 'TRANSFERENCIA', 'DEPOSITO', 'YAPE_PLIN', 'OTRO')),
+    registrado_por  VARCHAR(60) NOT NULL,
+    registrado_en   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
@@ -265,6 +280,16 @@ ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS obligacione
 ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_estado;
 ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_estado
     CHECK (estado IN ('PENDIENTE', 'DECLARADO', 'PAGO_PARCIAL', 'PAGADO'));
+-- HU-29: el cobro guarda lo pagado (0 en los cobros anteriores) y su estado admite PAGO_PARCIAL y PAGADO. Igual que en
+-- HU-13, se borra la restricción en línea sin nombre (cobros_honorarios_estado_check) y se recrea con nombre estable.
+ALTER TABLE tributario_schema.cobros_honorarios ADD COLUMN IF NOT EXISTS pagado NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS cobros_honorarios_estado_check;
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS ck_cobros_honorarios_estado;
+ALTER TABLE tributario_schema.cobros_honorarios ADD CONSTRAINT ck_cobros_honorarios_estado
+    CHECK (estado IN ('PENDIENTE', 'PAGO_PARCIAL', 'PAGADO'));
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS ck_cobros_honorarios_pagado;
+ALTER TABLE tributario_schema.cobros_honorarios ADD CONSTRAINT ck_cobros_honorarios_pagado
+    CHECK (pagado >= 0 AND pagado <= monto);
 -- Régimen: RER (Régimen Especial del Impuesto a la Renta) reemplaza a REMIPE (decisión de Beto, 10/11). Orden obligatorio: primero se
 -- borra la restricción vieja (la en línea sin nombre, que PostgreSQL llamó clientes_regimen_tributario_check, o la ya renombrada),
 -- luego los clientes que estaban en REMIPE pasan a RER sin perder ningún otro dato y recién entonces se crea la restricción nueva

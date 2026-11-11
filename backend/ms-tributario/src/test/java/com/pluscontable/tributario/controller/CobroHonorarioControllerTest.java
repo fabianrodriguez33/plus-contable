@@ -17,6 +17,7 @@ import com.pluscontable.tributario.dto.ProgramacionCobroDto;
 import com.pluscontable.tributario.model.EstadoCobro;
 import com.pluscontable.tributario.model.Periodicidad;
 import com.pluscontable.tributario.service.CobroHonorarioService;
+import com.pluscontable.tributario.service.PagoHonorarioService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.persistence.EntityNotFoundException;
@@ -37,7 +38,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** HU-28: contrato HTTP de la programación de cobros; solo el estudio programa y consulta. */
+/** HU-28 y HU-29: contrato HTTP de la programación de cobros y de sus pagos; solo el estudio programa, consulta y registra pagos. */
 @WebMvcTest(controllers = CobroHonorarioController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
 class CobroHonorarioControllerTest {
@@ -49,6 +50,7 @@ class CobroHonorarioControllerTest {
     @Autowired MockMvc mvc;
     @Value("${app.jwt.secret}") String secreto;
     @MockBean CobroHonorarioService service;
+    @MockBean PagoHonorarioService pagos;
 
     private String bearer(String usuario, String... roles) {
         var key = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
@@ -62,7 +64,55 @@ class CobroHonorarioControllerTest {
     }
 
     private static CobroHonorarioDto cobro() {
-        return new CobroHonorarioDto(1L, LocalDate.of(2026, 11, 30), new BigDecimal("500.00"), EstadoCobro.PENDIENTE);
+        return new CobroHonorarioDto(1L, LocalDate.of(2026, 11, 30), new BigDecimal("500.00"), BigDecimal.ZERO,
+                new BigDecimal("500.00"), EstadoCobro.PENDIENTE);
+    }
+
+    // ---- HU-29 · Tarea 143 (contrato HTTP y permisos del pago) ----
+
+    private static final String PAGAR = "/api/tributario/clientes/7/cobros/1/pagos";
+    private static final String PAGO = "{\"fechaPago\":\"2026-11-10\",\"monto\":200.00,\"medioPago\":\"TRANSFERENCIA\"}";
+
+    @Test
+    void elContadorRegistraUnPagoParcialYRecibe201ConElSaldoYQuienLoRegistro() throws Exception {
+        when(pagos.registrar(eq(7L), eq(1L), any(), eq("contador1"))).thenReturn(new CobroHonorarioDto(1L, LocalDate.of(2026, 11, 30),
+                new BigDecimal("500.00"), new BigDecimal("200.00"), new BigDecimal("300.00"), EstadoCobro.PAGO_PARCIAL));
+
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON).content(PAGO), bearer("contador1", "CONTADOR")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("PAGO_PARCIAL"))
+                .andExpect(jsonPath("$.pagado").value(200.00))
+                .andExpect(jsonPath("$.saldo").value(300.00));
+    }
+
+    @Test
+    void pagarUnCobroYaPagadoDa400YUnCobroAjenoDa404() throws Exception {
+        when(pagos.registrar(eq(7L), eq(1L), any(), any()))
+                .thenThrow(new ValidationException("Solo se registran pagos sobre un cobro pendiente: este cobro ya está pagado"));
+        when(pagos.registrar(eq(7L), eq(2L), any(), any())).thenThrow(new EntityNotFoundException("Cobro no encontrado"));
+
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON).content(PAGO), bearer("contador1", "CONTADOR")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Solo se registran pagos sobre un cobro pendiente: este cobro ya está pagado"));
+        mvc.perform(con(post("/api/tributario/clientes/7/cobros/2/pagos").contentType(MediaType.APPLICATION_JSON).content(PAGO),
+                        bearer("admin", "ADMIN")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void unMedioDePagoInventadoDa400SinLlamarAlServicio() throws Exception {
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fechaPago\":\"2026-11-10\",\"monto\":200,\"medioPago\":\"CHEQUE_VOLADOR\"}"), bearer("contador1", "CONTADOR")))
+                .andExpect(status().isBadRequest());
+        verify(pagos, never()).registrar(any(), any(), any(), any());
+    }
+
+    @Test
+    void sinSesionDa401YUnClienteMypeDa403AlPagarSinLlamarAlServicio() throws Exception {
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON).content(PAGO), null)).andExpect(status().isUnauthorized());
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON).content(PAGO), bearer("cliente1", "CLIENTE_MYPE")))
+                .andExpect(status().isForbidden());
+        verify(pagos, never()).registrar(any(), any(), any(), any());
     }
 
     @Test
