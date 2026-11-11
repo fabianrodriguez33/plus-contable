@@ -92,6 +92,53 @@ class PagoObligacionEsquemaPostgresTest {
     }
 
     @Test
+    void lasColumnasDelArchivoAdmitenNuloPeroLasDelPagoNo() {
+        List<String> obligatorias = jdbc.queryForList("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'tributario_schema' AND table_name = 'pagos_obligacion' AND is_nullable = 'NO'
+                """, String.class);
+
+        assertThat(obligatorias).contains("fecha_pago", "monto_pagado", "numero_constancia", "acumulado_despues", "saldo_despues")
+                .doesNotContain("nombre_archivo", "content_type", "tamano_bytes", "ruta_almacenamiento");
+    }
+
+    @Test
+    void unPagoSinArchivoSeGuardaYSeLeePorJpaConSusDatosDelArchivoNulos() {
+        PagoObligacion p = new PagoObligacion();
+        p.setObligacionId(obligacion);
+        p.setFechaPago(LocalDate.of(2026, 11, 8));
+        p.setMontoPagado(new BigDecimal("100.00"));
+        p.setNumeroConstancia("C-SIN-PDF");
+        p.setAcumuladoDespues(new BigDecimal("100.00"));
+        p.setSaldoDespues(new BigDecimal("900.00"));
+        pagos.saveAndFlush(p);
+
+        PagoObligacion leido = pagos.findByObligacionIdOrderByFechaPagoAscIdAsc(obligacion).get(0);
+        assertThat(leido.getNumeroConstancia()).isEqualTo("C-SIN-PDF");
+        assertThat(leido.getNombreArchivo()).isNull();
+        assertThat(leido.getTamanoBytes()).isNull();
+        assertThat(leido.getRutaAlmacenamiento()).isNull();
+    }
+
+    @Test
+    void unaBaseAnteriorConLasColumnasDelArchivoObligatoriasSeActualizaYConservaSusPagos() {
+        insertar(obligacion, "400.00", "C-001", "400.00", "600.00");
+        for (String c : List.of("nombre_archivo", "content_type", "tamano_bytes", "ruta_almacenamiento")) {
+            jdbc.execute("ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN " + c + " SET NOT NULL");
+        }
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues) VALUES (?, ?, 1, 'C-SIN', 1, 999)",
+                obligacion, LocalDate.of(2026, 11, 8))).isInstanceOf(DataIntegrityViolationException.class);
+
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource("schema.sql"))
+                .execute(jdbc.getDataSource());
+
+        assertThat(jdbc.update("INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues) VALUES (?, ?, 1, 'C-SIN', 401, 599)",
+                obligacion, LocalDate.of(2026, 11, 9))).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT nombre_archivo FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-001' AND obligacion_id = ?", String.class, obligacion))
+                .isEqualTo("c.pdf");
+    }
+
+    @Test
     void elMontoDebeSerMayorQueCeroYElSaldoNoPuedeSerNegativo() {
         assertThatThrownBy(() -> insertar(obligacion, "0", "C-001", "0", "1000.00")).isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> insertar(obligacion, "-1.00", "C-001", "0", "1000.00")).isInstanceOf(DataIntegrityViolationException.class);
@@ -170,7 +217,7 @@ class PagoObligacionEsquemaPostgresTest {
         p.setNumeroConstancia(constancia);
         p.setNombreArchivo("c.pdf");
         p.setContentType("application/pdf");
-        p.setTamanoBytes(10);
+        p.setTamanoBytes(10L);
         p.setRutaAlmacenamiento("pagos/1/x.pdf");
         p.setAcumuladoDespues(new BigDecimal(acumulado));
         p.setSaldoDespues(new BigDecimal(saldo));
