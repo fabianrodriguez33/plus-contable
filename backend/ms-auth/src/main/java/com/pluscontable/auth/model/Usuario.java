@@ -48,6 +48,10 @@ public class Usuario {
     @Column(name = "temporal_usada_en")
     private LocalDateTime temporalUsadaEn;
 
+    /** HU-37: hasta cuándo sirve la contraseña temporal para entrar; pasada esa hora hay que pedir una nueva al estudio. */
+    @Column(name = "temporal_vence_en")
+    private LocalDateTime temporalVenceEn;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "usuario_roles", schema = "auth_schema",
             joinColumns = @JoinColumn(name = "usuario_id"),
@@ -74,6 +78,8 @@ public class Usuario {
     public void setDebeCambiarPassword(boolean debeCambiarPassword) { this.debeCambiarPassword = debeCambiarPassword; }
     public LocalDateTime getTemporalUsadaEn() { return temporalUsadaEn; }
     public void setTemporalUsadaEn(LocalDateTime temporalUsadaEn) { this.temporalUsadaEn = temporalUsadaEn; }
+    public LocalDateTime getTemporalVenceEn() { return temporalVenceEn; }
+    public void setTemporalVenceEn(LocalDateTime temporalVenceEn) { this.temporalVenceEn = temporalVenceEn; }
     public Long getClienteId() { return clienteId; }
     public void setClienteId(Long clienteId) { this.clienteId = clienteId; }
     public Set<Rol> getRoles() { return roles; }

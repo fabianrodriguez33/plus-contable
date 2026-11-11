@@ -18,6 +18,7 @@ import com.pluscontable.auth.repository.BitacoraRepository;
 import com.pluscontable.auth.repository.RolRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
 import com.pluscontable.auth.service.ClienteTributarioClient.ClienteResumen;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -98,6 +99,24 @@ class CuentaClienteServiceTest {
         assertThat(r.correo()).isEqualTo("contacto@acme.pe");
         assertThat(r.clienteId()).isEqualTo(CLIENTE);
         assertThat(r.passwordTemporal()).isEqualTo(TEMPORAL);
+    }
+
+    @Test
+    void laTemporalVenceALas48HorasPorDefecto() {
+        LocalDateTime antes = LocalDateTime.now();
+        crear("contacto@acme.pe");
+
+        LocalDateTime vence = guardado().getTemporalVenceEn();
+        assertThat(vence).isNotNull().isBetween(antes.plusHours(48), LocalDateTime.now().plusHours(48));
+    }
+
+    @Test
+    void laVigenciaDeLaTemporalSeConfigura() {
+        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72);
+        LocalDateTime antes = LocalDateTime.now();
+        de72.crear(CLIENTE, "contacto@acme.pe", TOKEN, "ana", "10.0.0.1");
+
+        assertThat(guardado().getTemporalVenceEn()).isBetween(antes.plusHours(72), LocalDateTime.now().plusHours(72));
     }
 
     @Test

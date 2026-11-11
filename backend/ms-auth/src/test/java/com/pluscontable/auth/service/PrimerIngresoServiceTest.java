@@ -20,7 +20,9 @@ import com.pluscontable.auth.repository.BitacoraRepository;
 import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
 import io.jsonwebtoken.Claims;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -135,6 +137,63 @@ class PrimerIngresoServiceTest {
 
         assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(cliente.getTemporalUsadaEn()).isNotNull();
+    }
+
+    @Test
+    void laTemporalVencidaSeRechazaAunqueSeaLaCorrectaYSeAnota() {
+        cliente.setTemporalVenceEn(LocalDateTime.now().minusMinutes(1));
+
+        ResponseStatusException e = falla(() -> entrar(TEMPORAL));
+
+        assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(e.getReason()).contains("venció").contains("estudio");
+        assertThat(bitacoraGuardada()).anySatisfy(b -> {
+            assertThat(b.getEvento()).isEqualTo("LOGIN_RECHAZADO");
+            assertThat(b.getDetalle()).contains("temporal vencida");
+        });
+    }
+
+    @Test
+    void laTemporalNoVencidaSirveHastaElUltimoMomento() {
+        cliente.setTemporalVenceEn(LocalDateTime.now().plusMinutes(1));
+
+        assertThat(entrar(TEMPORAL).debeCambiarPassword()).isTrue();
+    }
+
+    @Test
+    void conLaContraseniaIncorrectaLaTemporalVencidaNoDelataQueVencio() {
+        cliente.setTemporalVenceEn(LocalDateTime.now().minusHours(1));
+
+        ResponseStatusException e = falla(() -> entrar("OtraCosa123"));
+
+        assertThat(e.getReason()).isEqualTo("Usuario o contraseña incorrectos");
+    }
+
+    @Test
+    void unaCuentaSinCambioPendienteNoDependeDeLaVigenciaDeLaTemporal() {
+        cliente.setDebeCambiarPassword(false);
+        cliente.setPasswordHash(encoder.encode(NUEVA));
+        cliente.setTemporalVenceEn(LocalDateTime.now().minusDays(30));
+
+        assertThat(entrar(NUEVA).debeCambiarPassword()).isFalse();
+    }
+
+    @Test
+    void elTokenRestringidoAnunciaSuPropiaVigenciaDeQuinceMinutos() {
+        LoginResponse r = entrar(TEMPORAL);
+
+        assertThat(r.expiraEnSegundos()).isEqualTo(15 * 60);
+        Claims c = jwt.parse(r.token());
+        long segundos = Duration.between(Instant.now(), c.getExpiration().toInstant()).toSeconds();
+        assertThat(segundos).isBetween(14 * 60L, 15 * 60L);
+    }
+
+    @Test
+    void elTokenNormalAnunciaLaVigenciaDeLaSesion() {
+        cliente.setDebeCambiarPassword(false);
+        cliente.setPasswordHash(encoder.encode(NUEVA));
+
+        assertThat(entrar(NUEVA).expiraEnSegundos()).isEqualTo(8 * 3600);
     }
 
     @Test

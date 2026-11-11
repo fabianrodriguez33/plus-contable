@@ -105,6 +105,31 @@ class CuentaClienteIntegracionTest {
         return jdbc.queryForObject("SELECT count(*) FROM auth_schema.usuarios WHERE cliente_id = ?", Integer.class, cliente);
     }
 
+    // ---- vigencias (HU-37): la temporal 48 horas y el token restringido 15 minutos, tomadas de application.yml
+
+    @Test
+    void laTemporalVenceALas48HorasYElTokenRestringidoDuraQuinceMinutos() throws Exception {
+        String temporal = cuerpo(crear(contador(), CLIENTE, CORREO, 201)).get("passwordTemporal").asText();
+
+        java.time.LocalDateTime vence = jdbc.queryForObject(
+                "SELECT temporal_vence_en FROM auth_schema.usuarios WHERE username = ?", java.time.LocalDateTime.class, CORREO);
+        assertThat(vence).isBetween(java.time.LocalDateTime.now().plusHours(47), java.time.LocalDateTime.now().plusHours(48).plusMinutes(1));
+        JsonNode primero = cuerpo(entrar(CORREO, temporal, 200));
+        assertThat(primero.get("expiraEnSegundos").asLong()).isEqualTo(15 * 60);
+        long segundos = java.time.Duration.between(java.time.Instant.now(), jwt.parse(primero.get("token").asText()).getExpiration().toInstant()).toSeconds();
+        assertThat(segundos).isBetween(14 * 60L, 15 * 60L);
+    }
+
+    @Test
+    void conLaTemporalVencidaNoSeEntraYAlVolverASerVigenteSi() throws Exception {
+        String temporal = cuerpo(crear(contador(), CLIENTE, CORREO, 201)).get("passwordTemporal").asText();
+
+        jdbc.update("UPDATE auth_schema.usuarios SET temporal_vence_en = NOW() - INTERVAL '1 minute' WHERE username = ?", CORREO);
+        assertThat(entrar(CORREO, temporal, 401).getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).contains("venció");
+        jdbc.update("UPDATE auth_schema.usuarios SET temporal_vence_en = NOW() + INTERVAL '1 hour' WHERE username = ?", CORREO);
+        entrar(CORREO, temporal, 200);
+    }
+
     // ---- el recorrido completo
 
     @Test

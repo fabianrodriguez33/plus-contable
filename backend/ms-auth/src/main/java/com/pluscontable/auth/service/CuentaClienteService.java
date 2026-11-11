@@ -7,10 +7,13 @@ import com.pluscontable.auth.model.Usuario;
 import com.pluscontable.auth.repository.BitacoraRepository;
 import com.pluscontable.auth.repository.RolRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,9 +39,21 @@ public class CuentaClienteService {
     private final PasswordEncoder encoder;
     private final ClienteTributarioClient tributario;
     private final GeneradorPassword generador;
+    private final long temporalHoras;
+
+    /** Vigencia de la contraseña temporal si no se configura: 48 horas. */
+    static final long TEMPORAL_HORAS_POR_DEFECTO = 48;
 
     public CuentaClienteService(UsuarioRepository usuarios, RolRepository roles, BitacoraRepository bitacora,
                                 PasswordEncoder encoder, ClienteTributarioClient tributario, GeneradorPassword generador) {
+        this(usuarios, roles, bitacora, encoder, tributario, generador, TEMPORAL_HORAS_POR_DEFECTO);
+    }
+
+    @Autowired
+    public CuentaClienteService(UsuarioRepository usuarios, RolRepository roles, BitacoraRepository bitacora,
+                                PasswordEncoder encoder, ClienteTributarioClient tributario, GeneradorPassword generador,
+                                @Value("${app.security.temporal-horas:48}") long temporalHoras) {
+        this.temporalHoras = temporalHoras;
         this.usuarios = usuarios;
         this.roles = roles;
         this.bitacora = bitacora;
@@ -73,6 +88,7 @@ public class CuentaClienteService {
         u.setNombreCompleto(nombreDe(cliente, clienteId));
         u.setClienteId(clienteId);
         u.setDebeCambiarPassword(true);
+        u.setTemporalVenceEn(LocalDateTime.now().plusHours(temporalHoras));
         u.setRoles(new HashSet<>(Set.of(rol)));
         try {
             u = usuarios.save(u);

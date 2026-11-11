@@ -10,6 +10,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import javax.crypto.SecretKey;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -20,15 +21,31 @@ public class JwtProvider {
 
     private final SecretKey key;
     private final Duration expiration;
+    private final Duration cambioPasswordExpiration;
 
+    /** Vigencia del token restringido del primer ingreso si no se configura: 15 minutos bastan para cambiar la contraseña. */
+    static final long CAMBIO_PASSWORD_MINUTOS_POR_DEFECTO = 15;
+
+    public JwtProvider(String secret, long expirationHours) {
+        this(secret, expirationHours, CAMBIO_PASSWORD_MINUTOS_POR_DEFECTO);
+    }
+
+    @Autowired
     public JwtProvider(@Value("${app.jwt.secret}") String secret,
-                       @Value("${app.jwt.expiration-hours}") long expirationHours) {
+                       @Value("${app.jwt.expiration-hours}") long expirationHours,
+                       @Value("${app.jwt.cambio-password-minutes:15}") long cambioPasswordMinutes) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = Duration.ofHours(expirationHours);
+        this.cambioPasswordExpiration = Duration.ofMinutes(cambioPasswordMinutes);
     }
 
     public Duration getExpiration() {
         return expiration;
+    }
+
+    /** Vigencia del token restringido del primer ingreso (HU-37). */
+    public Duration getCambioPasswordExpiration() {
+        return cambioPasswordExpiration;
     }
 
     public String generate(String username, List<String> roles) {
@@ -65,7 +82,7 @@ public class JwtProvider {
                 .claim("roles", List.of())
                 .claim(CLAIM_CAMBIAR_PASSWORD, true)
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + expiration.toMillis()))
+                .expiration(new Date(now.getTime() + cambioPasswordExpiration.toMillis()))
                 .signWith(key)
                 .compact();
     }

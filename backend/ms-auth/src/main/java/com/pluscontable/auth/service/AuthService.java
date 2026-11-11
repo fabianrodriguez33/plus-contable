@@ -107,11 +107,18 @@ public class AuthService {
         u.setBloqueadoHasta(null);
         if (u.isDebeCambiarPassword()) {
             // HU-37: con la contraseña temporal se obtiene un token restringido para cambiarla. Entrar no la gasta: si el cliente
-            // se corta antes del cambio, vuelve a entrar con la misma; se gasta recién al cambiarla (ver cambiarPassword)
+            // se corta antes del cambio, vuelve a entrar con la misma; se gasta recién al cambiarla (ver cambiarPassword).
+            // Pero no vale para siempre: vence a las horas configuradas desde que se creó la cuenta
+            if (u.getTemporalVenceEn() != null && !now.isBefore(u.getTemporalVenceEn())) {
+                usuarioRepository.save(u);
+                log(u.getId(), u.getUsername(), "LOGIN_RECHAZADO", "Contraseña temporal vencida", ip);
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                        "La contraseña temporal venció. Comuníquese con el estudio");
+            }
             usuarioRepository.save(u);
             log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", "Primer ingreso con la contraseña temporal: debe cambiarla", ip);
             return new LoginResponse(jwtProvider.generateCambioPassword(u.getUsername()), "Bearer",
-                    jwtProvider.getExpiration().toSeconds(), usuarioDto(u), true);
+                    jwtProvider.getCambioPasswordExpiration().toSeconds(), usuarioDto(u), true);
         }
         usuarioRepository.save(u);
         log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", null, ip);

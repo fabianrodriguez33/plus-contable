@@ -34,6 +34,27 @@ class JwtProviderTest {
     }
 
     @Test
+    void elTokenRestringidoDelPrimerIngresoDuraQuinceMinutosPorDefectoYElNormalSigueEnOchoHoras() {
+        Claims restringido = proveedor.parse(proveedor.generateCambioPassword("cliente1"));
+
+        long minutos = Duration.between(new Date().toInstant(), restringido.getExpiration().toInstant()).toMinutes();
+        assertThat(minutos).isBetween(14L, 15L);
+        assertThat(proveedor.getCambioPasswordExpiration()).isEqualTo(Duration.ofMinutes(15));
+        assertThat(proveedor.getExpiration()).isEqualTo(Duration.ofHours(8));
+    }
+
+    @Test
+    void laVigenciaDelTokenRestringidoSeConfiguraAparteDeLaDeLaSesion() {
+        JwtProvider corto = new JwtProvider(SECRETO, 8, 5);
+
+        long minutos = Duration.between(new Date().toInstant(), corto.parse(corto.generateCambioPassword("c")).getExpiration().toInstant()).toMinutes();
+        assertThat(minutos).isBetween(4L, 5L);
+        assertThat(corto.getCambioPasswordExpiration()).isEqualTo(Duration.ofMinutes(5));
+        long horas = Duration.between(new Date().toInstant(), corto.parse(corto.generate("c", List.of("CONTADOR"))).getExpiration().toInstant()).toHours();
+        assertThat(horas).isBetween(7L, 8L);
+    }
+
+    @Test
     void tokenVencidoSeRechaza() {
         JwtProvider yaVencido = new JwtProvider(SECRETO, -1);
 

@@ -26,6 +26,7 @@ ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS cliente_id BIGINT;
 -- cliente_id solo se llena en las cuentas CLIENTE_MYPE (el estudio lo deja en NULL), por eso el indice unico es parcial.
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS debe_cambiar_password BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_usada_en TIMESTAMP;
+ALTER TABLE auth_schema.usuarios ADD COLUMN IF NOT EXISTS temporal_vence_en TIMESTAMP;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_usuarios_cliente_id ON auth_schema.usuarios(cliente_id) WHERE cliente_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS auth_schema.usuario_roles (
