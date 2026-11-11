@@ -1,93 +1,140 @@
 @startuml
 !pragma layout smetana
 skinparam classAttributeIconSize 0
-title T79 · HU-22 · Estado actual e historial RUC (propuesta pendiente de Beto)
+title T79 · HU-22 · Verificación RUC, estado actual e historial (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 
-class Cliente <<existe>> {
-  id: Long
-  ruc: String
-  condicionHabido: CondicionHabido
-  activo: boolean
+class VerificacionRucJob <<diseño, no implementado>> {
+  +ejecutarDiario(): void
 }
-enum "Cliente.CondicionHabido" as CondicionHabido <<existe>> {
-  HABIDO
-  NO_HABIDO
+class VerificacionRucService <<diseño, no implementado>> {
+  +verificarCartera(hoy): ResumenVerificacion
+  +verificarCliente(clienteId): ResultadoVerificacion
+  -cambioRelevante(antes, ahora): boolean
 }
-interface ConsultaRuc <<existe>> {
+interface ConsultaRuc <<existe en develop>> {
   +consultar(ruc): ResultadoConsulta
 }
-interface ResultadoConsulta <<existe>> {
+interface ResultadoConsulta <<existe en develop>> {
   Encontrado(DatosRuc)
   NoEncontrado
   NoDisponible
 }
-class DatosRuc <<existe>> {
+class DatosRuc <<existe en develop>> {
   condicion: String
   estado: String
   fuente: String
   fechaDatos: LocalDate
 }
 class DetectorCambioCondicionRuc <<PR #49, no integrado>> {
-  +evaluar(anterior, consulta): Resultado
+  +evaluar(condicionAnterior, consulta): Resultado
 }
 enum "Detector.Resultado" as Deteccion <<PR #49>> {
   CAMBIO
   SIN_CAMBIO
   CONSULTA_NO_VALIDA
 }
-class VerificacionRucService <<propuesto, pendiente Beto>> {
-  +verificarCliente(clienteId): ResultadoVerificacion
-  +verificarCartera(): ResumenVerificacion
+class ClienteService <<existe; ampliación diseñada>> {
+  +actualizar(id, dto): ClienteDto
+  +registrarCondicionYEstado(id, datos): void  <<diseño>>
 }
-class HistorialVerificacionRuc <<propuesto, pendiente Beto>> {
+class Cliente <<existe; campos propuestos>> {
+  id: Long
+  ruc: String
+  condicionHabido: CondicionHabido
+  regimenTributario: Regimen
+  estadoSunat: EstadoSunat  <<propuesto>>
+  condicionVerificadaEn: LocalDateTime  <<propuesto>>
+  activo: boolean
+}
+enum "Cliente.CondicionHabido" as CondicionHabido <<existe>> {
+  HABIDO
+  NO_HABIDO
+}
+enum EstadoSunat <<propuesto, no persistido>> {
+  ACTIVO
+  SUSPENDIDO
+  BAJA
+  DESCONOCIDO
+}
+class ResultadoVerificacion <<diseño, no implementado>> {
+  clienteId: Long
+  resultadoConsulta
+  cambioCondicion: boolean
+  cambioEstado: boolean
+  avisoInterno: boolean
+}
+class ResumenVerificacion <<diseño, no implementado>> {
+  revisados: int
+  conCambioRelevante: int
+  noActualizados: int
+}
+class HistorialVerificacionRuc <<propuesta pendiente de Beto>> {
   clienteId
   consultadoEn
   condicionAnterior
   condicionObservada
+  estadoAnterior
   estadoObservado
-  resultadoVerificacion
+  resultadoConsulta
   fuente
 }
-interface HistorialVerificacionRucRepository <<propuesto, pendiente Beto>>
-class VerificacionRucJob <<propuesto, pendiente Beto>>
-class AvisoService <<diseño T48, no implementado>>
-class ParametroSistemaService <<diseño T48, no implementado>>
-class ClienteRepository <<existe>>
+interface HistorialVerificacionRucRepository <<propuesta pendiente de Beto>>
+interface ClienteRepository <<existe en develop>> {
+  findByActivoTrue()
+}
+class ParametroSistemaService <<diseño T48, no implementado>> {
+  +entero(clave, valorInicial): int
+}
+class AvisoService <<diseño T48, no implementado>> {
+  +crearAvisoInterno(cliente, cambio): void
+  +bandeja(): List<AvisoDto>
+}
 
-Cliente --> CondicionHabido : estado actual
-Cliente "1" -- "0..*" HistorialVerificacionRuc : verificaciones propuestas
+VerificacionRucJob --> VerificacionRucService
+VerificacionRucService --> ParametroSistemaService : ruc.verificacion_cada_dias = 1 inicialmente
+VerificacionRucService --> ClienteRepository : cartera activa
+VerificacionRucService --> ConsultaRuc
+VerificacionRucService --> DetectorCambioCondicionRuc : solo HABIDO / NO_HABIDO
+VerificacionRucService --> ClienteService : estado actual válido
+VerificacionRucService ..> HistorialVerificacionRucRepository : solo si Beto aprueba
+VerificacionRucService ..> AvisoService : cambio válido a BAJA / NO_HABIDO
+VerificacionRucService ..> ResultadoVerificacion
+VerificacionRucService ..> ResumenVerificacion
 ConsultaRuc --> ResultadoConsulta
 ResultadoConsulta --> DatosRuc : Encontrado
 DetectorCambioCondicionRuc --> Deteccion
-DetectorCambioCondicionRuc --> ResultadoConsulta
-VerificacionRucJob --> VerificacionRucService
-VerificacionRucService --> ClienteRepository
-VerificacionRucService --> ConsultaRuc
-VerificacionRucService --> DetectorCambioCondicionRuc
-VerificacionRucService --> HistorialVerificacionRucRepository
-VerificacionRucService ..> AvisoService : solo cambio válido relevante
-VerificacionRucService ..> ParametroSistemaService : frecuencia por confirmar
+ClienteRepository --> Cliente
+Cliente --> CondicionHabido
+Cliente --> EstadoSunat
+Cliente "1" -- "0..*" HistorialVerificacionRuc : historial propuesto
 HistorialVerificacionRucRepository ..> HistorialVerificacionRuc
-ClienteRepository ..> Cliente
 
-note right of DetectorCambioCondicionRuc
-  El PR #49 compara solo HABIDO / NO_HABIDO.
-  CAMBIO no equivale por sí solo a enviar aviso.
-  No cambia Cliente ni persiste historial.
+note right of Cliente
+  Condición, estado SUNAT y régimen tributario son datos independientes.
+  Solo condicionHabido y regimenTributario existen hoy en Cliente.
+  estadoSunat y condicionVerificadaEn son cambios diseñados, no implementados.
+  RER pertenece al régimen y llegó con el PR #48.
+end note
+note right of VerificacionRucService
+  Decisión de Beto comunicada por Julio: verificar diariamente la cartera;
+  parámetro configurable con valor inicial 1 día. Ante fallo, conservar
+  último estado, mostrar «No se pudo actualizar», permitir consulta o
+  actualización manual; no asumir BAJA / NO_HABIDO ni generar aviso.
+  Aviso interno solo ante cambio válido hacia BAJA o NO_HABIDO.
+  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
 end note
 note bottom of HistorialVerificacionRuc
-  Propuesta de Julio y Ricardo: conservar historial y estado actual.
-  Beto aún debe confirmar alcance, datos retenidos y tratamiento
-  de intentos sin respuesta. No existe entidad ni tabla implementada.
+  Solo el historial completo y su esquema siguen pendientes de Beto.
+  Julio y Ricardo proponen conservarlo junto al estado actual.
+  No existe entidad ni tabla histórica implementada.
 end note
-note bottom of VerificacionRucService
-  Pendiente de Beto: frecuencia; qué hacer si falla el proveedor;
-  cómo representar SUSPENDIDO; qué datos conservar de cada consulta;
-  si se almacena historial completo y cómo vincular cambios con avisos.
-  El correo electrónico está pospuesto. AvisoService sigue siendo diseño T48.
+note bottom of DetectorCambioCondicionRuc
+  El PR #49 detecta cambios HABIDO / NO_HABIDO; no compara estado SUNAT,
+  no persiste datos ni genera avisos. La comparación del estado BAJA
+  pertenece al servicio diseñado y aún no está implementada.
 end note
-footer Actualización propuesta T79 · Contraste: origin/develop dbe22ce y PR #49 · Pendiente de Beto; sin migración ni implementación
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio · Historial pendiente de Beto
 @enduml

@@ -1,55 +1,72 @@
 @startuml
 !pragma layout smetana
-title T79 · HU-22 · Estado actual e historial de verificaciones RUC (modelo conceptual pendiente de Beto)
+title T79 · HU-22 · Estado actual, avisos e historial RUC (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 hide circle
 
-entity "Cliente (existente)" as cliente <<existente>> {
-  id : identificador
+entity "tributario_schema.clientes" as clientes <<existe; cambios propuestos>> {
+  * id : BIGSERIAL <<PK>>
   --
-  ruc : identificador tributario
-  condicion_habido : HABIDO / NO_HABIDO (estado actual)
-  activo : vigencia en cartera
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * condicion_habido : HABIDO | NO_HABIDO <<existe>>
+  * regimen_tributario : MYPE | RER | GENERAL <<existe; PR #48>>
+    estado_sunat : ACTIVO | SUSPENDIDO | BAJA | DESCONOCIDO <<propuesto>>
+    condicion_verificada_en : fecha y hora <<propuesto>>
+  * activo : BOOLEAN <<existe>>
 }
-entity "Historial de verificaciones RUC\n(nombre por definir)" as historial <<propuesta, pendiente Beto>> {
+entity "Historial de verificaciones RUC\n(nombre y esquema por definir)" as historial <<propuesta pendiente de Beto>> {
   referencia al cliente
   --
   fecha y hora de consulta
-  condición anterior
-  condición observada (si hubo respuesta válida)
-  estado observado del proveedor (si existe)
+  condición y estado anteriores
+  condición y estado observados (si respuesta válida)
   resultado de verificación
   fuente de información
 }
-entity "Avisos internos (diseño T48)" as aviso <<propuesta, no implementada>> {
-  vínculo con cliente y cambio (por definir)
+entity "tributario_schema.avisos" as avisos <<diseño T48; no implementado>> {
+  * id : identificador propuesto
+  --
+  tipo : CAMBIO_CONDICION_RUC (propuesto)
+  mensaje : cliente y nuevo dato
+  canal : SISTEMA
+  creado_en : fecha y hora
+}
+entity "tributario_schema.avisos_clientes" as ac <<diseño T48; no implementado>> {
+  aviso_id : referencia propuesta
+  cliente_id : referencia propuesta
+}
+entity "tributario_schema.parametros_sistema" as param <<diseño T48; no implementado>> {
+  clave : ruc.verificacion_cada_dias
+  valor : configurable; inicial 1 día
 }
 
-cliente ||--o{ historial : verificaciones propuestas
-cliente ||--o{ aviso : avisos propuestos
-historial .. aviso : vínculo por confirmar
+clientes ||--o{ historial : verificaciones propuestas
+clientes ||--o{ ac : destinatarios propuestos
+avisos ||--o{ ac : avisos internos propuestos
+historial .. avisos : vínculo pendiente de diseño
+param .. historial : frecuencia de verificación
 
-note right of cliente
-  El código actual almacena solo condicion_habido.
-  SUSPENDIDO llega como texto del proveedor, pero no hay
-  representación persistida acordada en Cliente.
-  Conservar estado actual más historial es una propuesta
-  de Julio y Ricardo, no una decisión aprobada por Beto.
+note right of clientes
+  Condición HABIDO / NO_HABIDO, estado SUNAT y régimen tributario
+  son datos independientes. El régimen RER llegó con el PR #48.
+  estado_sunat y condicion_verificada_en NO existen aún en clientes.
+  SUSPENDIDO es un estado representable, pero no dispara aviso automático.
 end note
 note bottom of historial
-  Beto debe confirmar historial completo, datos retenidos,
-  frecuencia, tratamiento de fallos del proveedor y
-  representación de SUSPENDIDO. Un intento fallido no
-  confirma condición nueva ni debe originar aviso.
-  Nombre de tabla, columnas, tipos, índices y restricciones:
-  pendientes de diseño y aprobación; no existen en la BD.
+  Julio y Ricardo proponen estado actual más historial completo.
+  Solo la persistencia histórica y sus datos siguen pendientes de Beto.
+  Esta entidad no existe: nombre de tabla, columnas, tipos,
+  índices y restricciones no quedan fijados por el diagrama.
+  Un fallo del proveedor no confirma BAJA ni NO_HABIDO.
 end note
-note right of aviso
-  Beto debe confirmar cómo relacionar cambios con avisos internos.
-  La infraestructura compartida T48 no está implementada.
-  El correo electrónico quedó pospuesto.
+note right of avisos
+  Decisión de Beto comunicada por Julio: aviso INTERNO solo ante
+  cambio válido hacia BAJA o NO_HABIDO. Sin cambio relevante ni
+  respuesta válida, no se crea aviso. Correo electrónico pospuesto.
+  avisos, avisos_clientes y parametros_sistema son diseño T48,
+  no tablas implementadas.
 end note
-footer Actualización conceptual T79 · Contraste: origin/develop dbe22ce · Sin cambios de schema.sql ni migración
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio · Sin migración
 @enduml

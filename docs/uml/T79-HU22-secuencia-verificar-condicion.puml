@@ -1,56 +1,91 @@
 @startuml
-title T79 · HU-22 · Verificación e historial RUC (propuesta pendiente de Beto)
+title T79 · HU-22 · Verificar cartera y avisar cambio RUC (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
-participant "Inicio de verificación\n(job propuesto)" as J
-participant "VerificacionRucService\n(propuesto)" as VS
-database "Cliente\n(estado actual, existe)" as C
+participant "VerificacionRucJob\n(diseño)" as J
+participant "VerificacionRucService\n(diseño)" as VS
+participant "ParametroSistemaService\n(diseño T48)" as PS
+database "Clientes\n(existe)" as C
 participant "ConsultaRuc\n(existe; OpenRUC actual)" as CR
-participant "DetectorCambioCondicionRuc\n(PR #49, no integrado)" as DC
-database "Historial RUC\n(propuesto)" as H
-participant "AvisoService\n(diseño compartido T48)" as AS
+participant "DetectorCambioCondicionRuc\n(PR #49 abierto)" as DC
+database "Historial RUC\n(propuesta pendiente de Beto)" as H
+participant "ClienteService\n(existe; ampliación diseñada)" as CS
+participant "AvisoService\n(diseño T48)" as AS
+actor "Contador" as U
+participant "Ficha y bandeja\n(interfaz propuesta)" as FE
 
-J -> VS : iniciar verificación de cliente
-VS -> C : leer RUC y condición HABIDO/NO_HABIDO actual
-VS -> CR : consultar(ruc)
-CR --> VS : ResultadoConsulta
-VS -> DC : evaluar(condición anterior, resultado)
-DC --> VS : CAMBIO / SIN_CAMBIO / CONSULTA_NO_VALIDA
-
-alt CONSULTA_NO_VALIDA (sin respuesta, no encontrado o datos inválidos)
-  opt si Beto aprueba registrar intentos fallidos
-    VS -> H : registrar intento y causa, sin estado observado confirmado
-  end
-  VS --> J : no actualizar condición; no generar aviso
-else respuesta válida y SIN_CAMBIO
-  VS -> H : registrar verificación sin cambio (propuesta)
-  VS --> J : conservar condición actual; no generar aviso
-else respuesta válida y CAMBIO
-  VS -> H : registrar condición anterior, observada, fecha y fuente (propuesta)
-  VS -> C : actualizar condición actual validada (propuesta)
-  alt nueva condición NO_HABIDO (criterio T80)
-    VS -> AS : proponer aviso interno con cliente y condición nueva
-    note right
-      Solo si se aprueba e implementa la infraestructura T48.
-      El correo electrónico quedó pospuesto.
-    end note
-  else nueva condición HABIDO
-    VS --> J : cambio registrado; política de aviso por recuperación pendiente
+== Verificación automática diaria de la cartera ==
+J -> VS : ejecutarDiario(hoy)
+VS -> PS : entero("ruc.verificacion_cada_dias", 1)
+PS --> VS : frecuencia configurable; valor inicial 1 día
+VS -> C : obtener clientes activos
+loop cada cliente activo cuando corresponde verificar
+  VS -> C : leer condición y estado SUNAT actuales
+  VS -> CR : consultar(ruc)
+  CR --> VS : Encontrado / NoEncontrado / NoDisponible
+  alt proveedor no disponible o respuesta inválida
+    VS -> VS : conservar último estado conocido
+    VS -> FE : exponer «No se pudo actualizar» (interfaz propuesta)
+    opt si Beto aprueba guardar intentos fallidos en el historial
+      VS -> H : registrar intento sin cambio confirmado
+    end
+    VS --> J : sin BAJA / NO_HABIDO inferidos; sin aviso
+  else consulta válida
+    VS -> DC : evaluar(condición anterior, respuesta)
+    DC --> VS : CAMBIO / SIN_CAMBIO (solo HABIDO / NO_HABIDO)
+    VS -> VS : comparar por separado estado SUNAT anterior y observado
+    opt si Beto aprueba el historial completo
+      VS -> H : registrar fecha, fuente, valores anteriores y observados
+    end
+    alt no hay cambio de condición ni de estado
+      VS -> CS : actualizar fecha de verificación (campo propuesto)
+      VS --> J : conservar condición y estado; sin aviso
+    else existe cambio válido
+      VS -> CS : actualizar condición / estado actual y fecha (campos propuestos)
+      alt transición a NO_HABIDO o estado SUNAT BAJA
+        VS -> AS : crear aviso interno con cliente y nuevo dato (diseño T48)
+      else cambio sin transición relevante
+        VS --> J : sin aviso
+      end
+    end
   end
 end
 
+== Respaldo manual ==
+U -> FE : abre la ficha y consulta o actualiza manualmente
+FE -> CS : PUT /api/tributario/clientes/{id} (ruta existente; comparación propuesta)
+CS -> C : leer condición y estado actuales
+CS -> CS : comparar condición y estado con valores válidos ingresados
+alt transición válida a NO_HABIDO o BAJA
+  CS -> C : actualizar estado actual (ampliación propuesta)
+  opt si Beto aprueba historial completo
+    CS -> H : registrar cambio manual y fuente
+  end
+  CS -> AS : crear aviso interno (infraestructura T48 pendiente)
+else sin cambio relevante
+  CS -> C : conservar o actualizar valores válidos; sin aviso
+end
+CS --> FE : resultado de la actualización (comportamiento propuesto)
+
+== Bandeja interna del contador ==
+U -> FE : abre bandeja de avisos
+FE -> AS : consultar avisos internos (endpoint por definir)
+AS --> FE : cliente y nuevo estado o condición
+FE --> U : muestra la alerta
+
+note over CR,FE
+  Decisiones de Beto comunicadas por Julio: verificación diaria configurable
+  (valor inicial 1); fallo sin cambio ni alerta, con respaldo manual;
+  aviso interno solo por transición válida a BAJA o NO_HABIDO.
+  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
+  No existen job, historial, bandeja ni infraestructura compartida T48.
+end note
 note over VS,H
-  Historial más estado actual: propuesta de Julio y Ricardo, pendiente de Beto.
-  Registrar historial y actualizar Cliente deberán coordinarse al implementar;
-  este diagrama no define transacción, tabla ni frecuencia definitiva.
+  Solo la persistencia del historial completo y sus datos
+  siguen pendientes de aprobación definitiva de Beto.
 end note
-note over CR,AS
-  Beto debe confirmar: historial completo, frecuencia, fallo del proveedor,
-  representación de SUSPENDIDO, datos conservados y relación con avisos internos.
-  SUSPENDIDO no está representado en Cliente ni en el detector del PR #49.
-end note
-footer Actualización propuesta T79 · Contraste: origin/develop dbe22ce y PR #49 · Sin job, historial ni avisos implementados
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio
 @enduml
