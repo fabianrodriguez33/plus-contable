@@ -209,9 +209,12 @@ CREATE INDEX IF NOT EXISTS idx_pagos_obligacion_fecha
 CREATE TABLE IF NOT EXISTS tributario_schema.incidencias (
     id              BIGSERIAL PRIMARY KEY,
     tipo            VARCHAR(40) NOT NULL
-                    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'OTRO')),
+                    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'PROBLEMA_SIRE',
+                                'PROBLEMA_SERVICIOS_EXTERNOS', 'FALLA_SISTEMA_INTERNO', 'PROBLEMA_CONEXION_INTERNET',
+                                'ERROR_PROCESO_CONTABLE', 'OTRO')),
     fecha           DATE NOT NULL,
     descripcion     VARCHAR(1000) NOT NULL CHECK (length(btrim(descripcion)) > 0),
+    observaciones   VARCHAR(1000),
     registrada_por  VARCHAR(60) NOT NULL,
     registrada_en   TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -277,6 +280,16 @@ ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS buen_contribuyen
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS quinta_categoria BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- HU-23: los tipos de incidencia de la lista de Beto y las observaciones. Se borra primero la restriccion en linea sin nombre
+-- (incidencias_tipo_check) y se recrea con nombre estable, como ck_obligaciones_tipo; las incidencias anteriores no cambian.
+ALTER TABLE tributario_schema.incidencias DROP CONSTRAINT IF EXISTS incidencias_tipo_check;
+ALTER TABLE tributario_schema.incidencias DROP CONSTRAINT IF EXISTS ck_incidencias_tipo;
+ALTER TABLE tributario_schema.incidencias ADD CONSTRAINT ck_incidencias_tipo
+    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'PROBLEMA_SIRE',
+                                'PROBLEMA_SERVICIOS_EXTERNOS', 'FALLA_SISTEMA_INTERNO', 'PROBLEMA_CONEXION_INTERNET',
+                                'ERROR_PROCESO_CONTABLE', 'OTRO'));
+ALTER TABLE tributario_schema.incidencias ADD COLUMN IF NOT EXISTS observaciones VARCHAR(1000);
 
 -- HU-02: aporte de cada socio (S/). Los socios anteriores quedan con aporte 0 hasta que se edite.
 ALTER TABLE tributario_schema.socios ADD COLUMN IF NOT EXISTS aporte NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (aporte >= 0);

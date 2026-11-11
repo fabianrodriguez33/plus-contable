@@ -140,6 +140,67 @@ class IncidenciaIntegracionTest {
     }
 
     @Test
+    void cadaTipoDeLaListaDeBetoSeRegistraYApareceEnElHistorialDelCliente() {
+        long cliente = crearCliente();
+        List<String> nuevos = List.of("PROBLEMA_SIRE", "PROBLEMA_SERVICIOS_EXTERNOS", "FALLA_SISTEMA_INTERNO",
+                "PROBLEMA_CONEXION_INTERNET", "ERROR_PROCESO_CONTABLE");
+
+        for (String tipo : nuevos) {
+            IncidenciaDto i = registrar(cuerpo(tipo, cliente, "Descripción de " + tipo), contador());
+            assertThat(i.tipo().name()).isEqualTo(tipo);
+            assertThat(i.clientesAsociados()).isEqualTo(1);
+        }
+
+        assertThat(historial(cliente)).extracting(i -> i.tipo().name()).containsExactlyInAnyOrderElementsOf(nuevos);
+        assertThat(jdbc.queryForList("SELECT tipo FROM tributario_schema.incidencias WHERE id IN (SELECT incidencia_id FROM tributario_schema.incidencias_clientes WHERE cliente_id = ?)",
+                String.class, cliente)).containsExactlyInAnyOrderElementsOf(nuevos);
+    }
+
+    @Test
+    void losTiposNuevosNoSonGeneralesYSinClienteSeRechazan() {
+        for (String tipo : List.of("PROBLEMA_SIRE", "PROBLEMA_SERVICIOS_EXTERNOS", "FALLA_SISTEMA_INTERNO", "PROBLEMA_CONEXION_INTERNET", "ERROR_PROCESO_CONTABLE")) {
+            int antes = contarIncidencias();
+            ResponseEntity<String> r = registrarTexto(cuerpo(tipo, null, "x"), contador());
+            assertThat(r.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(r.getBody()).contains("clienteId");
+            assertThat(contarIncidencias()).isEqualTo(antes);
+        }
+    }
+
+    @Test
+    void lasObservacionesSeGuardanSeDevuelvenYSonOpcionales() {
+        long cliente = crearCliente();
+        Map<String, Object> conNotas = cuerpo("OTRO", cliente, "Descripción");
+        conNotas.put("observaciones", "  Se llamó al cliente  ");
+
+        IncidenciaDto con = registrar(conNotas, contador());
+        IncidenciaDto sin = registrar(cuerpo("OTRO", cliente, "Otra"), contador());
+
+        assertThat(con.observaciones()).isEqualTo("Se llamó al cliente");
+        assertThat(sin.observaciones()).isNull();
+        assertThat(jdbc.queryForObject("SELECT observaciones FROM tributario_schema.incidencias WHERE id = ?", String.class, con.id()))
+                .isEqualTo("Se llamó al cliente");
+        assertThat(historial(cliente)).filteredOn(i -> i.id().equals(con.id())).singleElement()
+                .satisfies(i -> assertThat(i.observaciones()).isEqualTo("Se llamó al cliente"));
+        assertThat(historial(cliente)).filteredOn(i -> i.id().equals(sin.id())).singleElement()
+                .satisfies(i -> assertThat(i.observaciones()).isNull());
+    }
+
+    @Test
+    void lasObservacionesDeMasDeMilCaracteresDan400YNoSeGuarda() {
+        long cliente = crearCliente();
+        Map<String, Object> larga = cuerpo("OTRO", cliente, "Descripción");
+        larga.put("observaciones", "o".repeat(1001));
+        int antes = contarIncidencias();
+
+        ResponseEntity<String> r = registrarTexto(larga, contador());
+
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(r.getBody()).contains("observaciones (máximo 1000 caracteres)");
+        assertThat(contarIncidencias()).isEqualTo(antes);
+    }
+
+    @Test
     void criterio3LaCaidaDelPortalSolSeAsociaASoloLosClientesActivosYSeVeEnCadaHistorial() {
         long activo = crearCliente();
         long inactivo = crearCliente();
