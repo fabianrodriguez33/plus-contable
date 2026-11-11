@@ -1,95 +1,140 @@
 @startuml
 !pragma layout smetana
 skinparam classAttributeIconSize 0
-title T79 · HU-22 · Clases del aviso por cambio de condición del RUC (diseño previo)
+title T79 · HU-22 · Verificación RUC, estado actual e historial (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 
-class VerificacionRucJob <<nuevo>> {
-  +ejecutar(): void
+class VerificacionRucJob <<diseño, no implementado>> {
+  +ejecutarDiario(): void
 }
-class VerificacionRucService <<nuevo>> {
+class VerificacionRucService <<diseño, no implementado>> {
   +verificarCartera(hoy): ResumenVerificacion
   +verificarCliente(clienteId): ResultadoVerificacion
   -cambioRelevante(antes, ahora): boolean
 }
-interface ConsultaRuc <<existe>> {
+interface ConsultaRuc <<existe en develop>> {
   +consultar(ruc): ResultadoConsulta
 }
-class ConsultaRucService <<existe>> {
-  +consultar(ruc): ConsultaRucDto
+interface ResultadoConsulta <<existe en develop>> {
+  Encontrado(DatosRuc)
+  NoEncontrado
+  NoDisponible
 }
-class ClienteService <<existe, cambia>> {
+class DatosRuc <<existe en develop>> {
+  condicion: String
+  estado: String
+  fuente: String
+  fechaDatos: LocalDate
+}
+class DetectorCambioCondicionRuc <<PR #49, no integrado>> {
+  +evaluar(condicionAnterior, consulta): Resultado
+}
+enum "Detector.Resultado" as Deteccion <<PR #49>> {
+  CAMBIO
+  SIN_CAMBIO
+  CONSULTA_NO_VALIDA
+}
+class ClienteService <<existe; ampliación diseñada>> {
   +actualizar(id, dto): ClienteDto
-  +registrarCondicion(id, condicion, estadoSunat, fuente): void  <<nuevo>>
+  +registrarCondicionYEstado(id, datos): void  <<diseño>>
 }
-class AvisoService <<definido en HU-12>> {
-  +crear(tipo, periodo, diasAntes, clientes, mensaje): List<Aviso>
-}
-class ParametroSistemaService <<definido en HU-12>> {
-  +entero(clave, porDefecto): int
-}
-class Cliente <<existe, cambia>> {
+class Cliente <<existe; campos propuestos>> {
   id: Long
   ruc: String
   condicionHabido: CondicionHabido
-  estadoSunat: EstadoSunat  <<nuevo>>
-  condicionVerificadaEn: LocalDateTime  <<nuevo>>
+  regimenTributario: Regimen
+  estadoSunat: EstadoSunat  <<propuesto>>
+  condicionVerificadaEn: LocalDateTime  <<propuesto>>
   activo: boolean
 }
 enum "Cliente.CondicionHabido" as CondicionHabido <<existe>> {
   HABIDO
   NO_HABIDO
 }
-enum EstadoSunat <<nuevo>> {
+enum EstadoSunat <<propuesto, no persistido>> {
   ACTIVO
   SUSPENDIDO
   BAJA
   DESCONOCIDO
 }
-class ResultadoVerificacion <<record, nuevo>> {
+class ResultadoVerificacion <<diseño, no implementado>> {
   clienteId: Long
-  cambio: boolean
-  condicionNueva: CondicionHabido
-  estadoNuevo: EstadoSunat
-  avisado: boolean
-  disponible: boolean
+  resultadoConsulta
+  cambioCondicion: boolean
+  cambioEstado: boolean
+  avisoInterno: boolean
 }
-class ResumenVerificacion <<record, nuevo>> {
+class ResumenVerificacion <<diseño, no implementado>> {
   revisados: int
-  conCambio: int
-  noDisponibles: int
+  conCambioRelevante: int
+  noActualizados: int
 }
-interface ClienteRepository <<existe>> {
+class HistorialVerificacionRuc <<propuesta pendiente de Beto>> {
+  clienteId
+  consultadoEn
+  condicionAnterior
+  condicionObservada
+  estadoAnterior
+  estadoObservado
+  resultadoConsulta
+  fuente
+}
+interface HistorialVerificacionRucRepository <<propuesta pendiente de Beto>>
+interface ClienteRepository <<existe en develop>> {
   findByActivoTrue()
+}
+class ParametroSistemaService <<diseño T48, no implementado>> {
+  +entero(clave, valorInicial): int
+}
+class AvisoService <<diseño T48, no implementado>> {
+  +crearAvisoInterno(cliente, cambio): void
+  +bandeja(): List<AvisoDto>
 }
 
 VerificacionRucJob --> VerificacionRucService
-VerificacionRucService --> ParametroSistemaService : ruc.verificacion_cada_dias
-VerificacionRucService --> ClienteRepository
+VerificacionRucService --> ParametroSistemaService : ruc.verificacion_cada_dias = 1 inicialmente
+VerificacionRucService --> ClienteRepository : cartera activa
 VerificacionRucService --> ConsultaRuc
-VerificacionRucService --> ClienteService : registrarCondicion(...)
-VerificacionRucService --> AvisoService : crear(CAMBIO_CONDICION_RUC, ...)
-ConsultaRucService --> ConsultaRuc
+VerificacionRucService --> DetectorCambioCondicionRuc : solo HABIDO / NO_HABIDO
+VerificacionRucService --> ClienteService : estado actual válido
+VerificacionRucService ..> HistorialVerificacionRucRepository : solo si Beto aprueba
+VerificacionRucService ..> AvisoService : cambio válido a BAJA / NO_HABIDO
 VerificacionRucService ..> ResultadoVerificacion
 VerificacionRucService ..> ResumenVerificacion
-ClienteRepository ..> Cliente
+ConsultaRuc --> ResultadoConsulta
+ResultadoConsulta --> DatosRuc : Encontrado
+DetectorCambioCondicionRuc --> Deteccion
+ClienteRepository --> Cliente
 Cliente --> CondicionHabido
 Cliente --> EstadoSunat
+Cliente "1" -- "0..*" HistorialVerificacionRuc : historial propuesto
+HistorialVerificacionRucRepository ..> HistorialVerificacionRuc
 
-note bottom of VerificacionRucService
-  Repite la verificación de forma periódica (criterio 4). Si el cliente pasa a NO_HABIDO o a SUSPENDIDO, crea el aviso con el
-  cliente y su nuevo estado (criterios 1 y 2). Si la condición no cambió, no se envía alerta (criterio 3).
+note right of Cliente
+  Condición, estado SUNAT y régimen tributario son datos independientes.
+  Solo condicionHabido y regimenTributario existen hoy en Cliente.
+  estadoSunat y condicionVerificadaEn son cambios diseñados, no implementados.
+  RER pertenece al régimen y llegó con el PR #48.
 end note
 note right of VerificacionRucService
-  Supuesto (decisión de Beto, 06/11): la consulta es automática, con la interfaz ConsultaRuc que ya usa la ficha; respaldo manual:
-  si el proveedor no responde, el contador cambia la condición en la ficha y ClienteService.registrarCondicion genera el mismo aviso.
-  Supuesto: ConsultaRuc hoy usa OpenRUC (de terceros, estuvo caído): «no disponible» no es un cambio ni un error; se reintenta en la siguiente vuelta.
-  Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema. La frecuencia es el parámetro ruc.verificacion_cada_dias (7 por defecto).
-  Supuesto: el aviso del cambio de condición es inmediato, por correo y en el sistema; los avisos a 3 días, 1 día y el mismo día
-  (decisión de Beto) son para fechas límite y no aplican aquí.
-  Supuesto: se agregan estado_sunat y condicion_verificada_en a clientes.
+  Decisión de Beto comunicada por Julio: verificar diariamente la cartera;
+  parámetro configurable con valor inicial 1 día. Ante fallo, conservar
+  último estado, mostrar «No se pudo actualizar», permitir consulta o
+  actualización manual; no asumir BAJA / NO_HABIDO ni generar aviso.
+  Aviso interno solo ante cambio válido hacia BAJA o NO_HABIDO.
+  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-22, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ConsultaRuc, ConsultaRucService, ResultadoConsulta, ClienteService, model.Cliente.CondicionHabido, ClienteRepository
+note bottom of HistorialVerificacionRuc
+  Solo el historial completo y su esquema siguen pendientes de Beto.
+  Julio y Ricardo proponen conservarlo junto al estado actual.
+  No existe entidad ni tabla histórica implementada.
+end note
+note bottom of DetectorCambioCondicionRuc
+  El PR #49 detecta cambios HABIDO / NO_HABIDO; no compara estado SUNAT,
+  no persiste datos ni genera avisos. La comparación del estado BAJA
+  pertenece al servicio diseñado y aún no está implementada.
+end note
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio · Historial pendiente de Beto
 @enduml

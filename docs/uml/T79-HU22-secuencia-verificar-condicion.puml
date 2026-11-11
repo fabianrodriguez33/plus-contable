@@ -1,71 +1,91 @@
 @startuml
-title T79 · HU-22 · Secuencia: verificar la condición de los clientes y avisar el cambio (diseño previo)
+title T79 · HU-22 · Verificar cartera y avisar cambio RUC (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
-participant "Tarea periódica\n(VerificacionRucJob)" as J
-participant "VerificacionRucService" as VS
-participant "ParametroSistemaService" as PS
-participant "ConsultaRuc\n(OpenRUC, de terceros)" as CR
-participant "ClienteService" as CS
-participant "AvisoService" as AS
-participant "EnvioCorreo" as EC
-database "tributario_schema" as DB
+participant "VerificacionRucJob\n(diseño)" as J
+participant "VerificacionRucService\n(diseño)" as VS
+participant "ParametroSistemaService\n(diseño T48)" as PS
+database "Clientes\n(existe)" as C
+participant "ConsultaRuc\n(existe; OpenRUC actual)" as CR
+participant "DetectorCambioCondicionRuc\n(PR #49 abierto)" as DC
+database "Historial RUC\n(propuesta pendiente de Beto)" as H
+participant "ClienteService\n(existe; ampliación diseñada)" as CS
+participant "AvisoService\n(diseño T48)" as AS
 actor "Contador" as U
-participant "frontend-web" as FE
+participant "Ficha y bandeja\n(interfaz propuesta)" as FE
 
-== Verificación periódica ==
-J -> VS : ejecutar()
-VS -> PS : entero("ruc.verificacion_cada_dias", 7)
-alt todavía no toca verificar
-  VS --> J : nada que hacer
-end
-VS -> DB : clientes activos
-loop cada cliente activo
+== Verificación automática diaria de la cartera ==
+J -> VS : ejecutarDiario(hoy)
+VS -> PS : entero("ruc.verificacion_cada_dias", 1)
+PS --> VS : frecuencia configurable; valor inicial 1 día
+VS -> C : obtener clientes activos
+loop cada cliente activo cuando corresponde verificar
+  VS -> C : leer condición y estado SUNAT actuales
   VS -> CR : consultar(ruc)
-  alt el servicio no responde o no se puede usar (NO_DISPONIBLE)
-    VS -> VS : no cambia nada; se reintenta en la siguiente vuelta
-    note right
-      Supuesto: «no disponible» no es un cambio ni un error del cliente.
-      ConsultaRuc hoy usa OpenRUC (de terceros, estuvo caído).
-    end note
-  else respuesta con condición y estado
-    VS -> VS : compara con la condición y el estado guardados
-    alt pasó a NO_HABIDO o a SUSPENDIDO
-      VS -> CS : registrarCondicion(clienteId, condición, estado, AUTOMATICA)
-      CS -> DB : UPDATE clientes (condicion_habido, estado_sunat, condicion_verificada_en)
-      VS -> AS : crear(CAMBIO_CONDICION_RUC, cliente, mensaje con el nuevo estado)
-      AS -> DB : INSERT avisos (SISTEMA, NO_LEIDO) y avisos_clientes
-      AS -> EC : enviar(correo del estudio, asunto, cliente y nuevo estado)
-    else no cambió
-      VS -> CS : registrarCondicion(...) solo actualiza condicion_verificada_en
-      note right
-        Si la condición no cambió, no se envía alerta.
-      end note
+  CR --> VS : Encontrado / NoEncontrado / NoDisponible
+  alt proveedor no disponible o respuesta inválida
+    VS -> VS : conservar último estado conocido
+    VS -> FE : exponer «No se pudo actualizar» (interfaz propuesta)
+    opt si Beto aprueba guardar intentos fallidos en el historial
+      VS -> H : registrar intento sin cambio confirmado
+    end
+    VS --> J : sin BAJA / NO_HABIDO inferidos; sin aviso
+  else consulta válida
+    VS -> DC : evaluar(condición anterior, respuesta)
+    DC --> VS : CAMBIO / SIN_CAMBIO (solo HABIDO / NO_HABIDO)
+    VS -> VS : comparar por separado estado SUNAT anterior y observado
+    opt si Beto aprueba el historial completo
+      VS -> H : registrar fecha, fuente, valores anteriores y observados
+    end
+    alt no hay cambio de condición ni de estado
+      VS -> CS : actualizar fecha de verificación (campo propuesto)
+      VS --> J : conservar condición y estado; sin aviso
+    else existe cambio válido
+      VS -> CS : actualizar condición / estado actual y fecha (campos propuestos)
+      alt transición a NO_HABIDO o estado SUNAT BAJA
+        VS -> AS : crear aviso interno con cliente y nuevo dato (diseño T48)
+      else cambio sin transición relevante
+        VS --> J : sin aviso
+      end
     end
   end
 end
 
 == Respaldo manual ==
-U -> FE : cambia la condición del cliente en la ficha (o el servicio estuvo caído)
-FE -> CS : PUT /api/tributario/clientes/{id}\nAuthorization: Bearer <JWT>
-CS -> CS : compara con la condición guardada
-alt pasó a NO_HABIDO o a SUSPENDIDO
-  CS -> AS : crear(CAMBIO_CONDICION_RUC, ...) por correo y en el sistema
+U -> FE : abre la ficha y consulta o actualiza manualmente
+FE -> CS : PUT /api/tributario/clientes/{id} (ruta existente; comparación propuesta)
+CS -> C : leer condición y estado actuales
+CS -> CS : comparar condición y estado con valores válidos ingresados
+alt transición válida a NO_HABIDO o BAJA
+  CS -> C : actualizar estado actual (ampliación propuesta)
+  opt si Beto aprueba historial completo
+    CS -> H : registrar cambio manual y fuente
+  end
+  CS -> AS : crear aviso interno (infraestructura T48 pendiente)
+else sin cambio relevante
+  CS -> C : conservar o actualizar valores válidos; sin aviso
 end
-CS --> FE : 200 ClienteDto
+CS --> FE : resultado de la actualización (comportamiento propuesto)
 
-== El contador ve el aviso ==
-U -> FE : abre la bandeja de avisos
-FE -> AS : GET /api/tributario/avisos?soloNoLeidos=true
-AS --> FE : 200 «<cliente>: ahora <NO HABIDO / SUSPENDIDO>» con el cliente y su nuevo estado
+== Bandeja interna del contador ==
+U -> FE : abre bandeja de avisos
+FE -> AS : consultar avisos internos (endpoint por definir)
+AS --> FE : cliente y nuevo estado o condición
 FE --> U : muestra la alerta
 
-note over AS
-  Supuesto: el aviso del cambio es inmediato, por correo y en el sistema; los avisos a 3 días, 1 día y el mismo día
-  (decisión de Beto) son para fechas límite y no aplican aquí. La frecuencia sale de parametros_sistema y se edita desde el sistema.
+note over CR,FE
+  Decisiones de Beto comunicadas por Julio: verificación diaria configurable
+  (valor inicial 1); fallo sin cambio ni alerta, con respaldo manual;
+  aviso interno solo por transición válida a BAJA o NO_HABIDO.
+  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
+  No existen job, historial, bandeja ni infraestructura compartida T48.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-22, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ConsultaRuc, ResultadoConsulta, ClienteService, ClienteRepository, GlobalExceptionHandler, SecurityConfig
+note over VS,H
+  Solo la persistencia del historial completo y sus datos
+  siguen pendientes de aprobación definitiva de Beto.
+end note
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio
 @enduml
