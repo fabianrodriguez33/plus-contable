@@ -22,6 +22,7 @@ entity "auth_schema.usuarios" as usuarios <<cambia>> {
   --
   * debe_cambiar_password : BOOLEAN = false  <<nuevo>>
   temporal_usada_en : TIMESTAMP  <<nuevo>>
+  temporal_vence_en : TIMESTAMP  <<nuevo>>
   INDEX ÚNICO PARCIAL (cliente_id) WHERE cliente_id IS NOT NULL  <<nuevo>>
 }
 
@@ -70,7 +71,8 @@ note right of usuarios
   la contraseña temporal se muestra una sola vez y no se guarda en claro (solo password_hash);
   deja de valer tras usarla; el cambio en el primer ingreso es obligatorio.
   Supuesto del diseño: debe_cambiar_password = true mientras la contraseña sea la temporal;
-  temporal_usada_en se llena en el primer ingreso con ella (ya no vuelve a servir).
+  temporal_usada_en se llena cuando el cliente la CAMBIA (entrar con ella no la gasta) y
+  temporal_vence_en se llena al crear la cuenta (48 horas por defecto, configurable).
   Supuesto del diseño: el índice único parcial sobre cliente_id garantiza una cuenta por empresa
   (la restricción no puede nombrar el rol, pero cliente_id solo se llena en cuentas CLIENTE_MYPE).
   Las bases existentes lo reciben con ALTER TABLE ... ADD COLUMN IF NOT EXISTS y CREATE UNIQUE INDEX IF NOT EXISTS.

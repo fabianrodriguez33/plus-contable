@@ -56,7 +56,7 @@ end
 CS -> CS : genera la contraseña temporal aleatoria (SecureRandom, 12 caracteres)
 CS -> PE : encode(contraseña temporal)
 PE --> CS : hash
-CS -> UR : save(usuario: correo, hash, rol CLIENTE_MYPE,\ncliente_id, debe_cambiar_password = true)
+CS -> UR : save(usuario: correo, hash, rol CLIENTE_MYPE,\ncliente_id, debe_cambiar_password = true,\ntemporal_vence_en = ahora + 48 h)
 UR -> DB : INSERT usuarios y usuario_roles
 note right
   Decisión de Beto: ingreso con correo y contraseña; una sola cuenta por empresa.
@@ -89,17 +89,17 @@ CS -> PE : matches(contraseña, hash)
 alt credenciales incorrectas
   CS --> FE : 401 (con el bloqueo por intentos fallidos de hoy)
 end
-alt la temporal ya se usó antes
-  CS --> FE : 401 "la contraseña temporal ya fue usada"
+alt la temporal venció (48 h desde el alta, configurable)
+  CS --> FE : 401 "la contraseña temporal venció"
 end
-CS -> UR : save(temporal usada en = ahora)
-CS --> FE : 200 {token restringido, debeCambiarPassword = true}
+CS --> FE : 200 {token restringido (15 min, configurable), debeCambiarPassword = true}
 note right
-  Decisión de Beto: la temporal deja de ser válida tras usarla por primera vez.
+  Entrar NO gasta la temporal (corrección tras la revisión de Jeanpierre): si el cliente se
+  corta antes del cambio, vuelve a entrar con la misma hasta que venza. Esto precisa la
+  decisión de Beto («deja de valer tras usarla»): pendiente de confirmarlo con él.
   El token restringido no lleva roles y solo permite cambiar la contraseña y cerrar sesión;
-  ms-tributario le responde 403 en toda ruta (token sin rol).
-  Pendiente de confirmar con Beto: si el cliente no cambia la contraseña en esa sesión,
-  queda sin acceso (la temporal ya no sirve) y el reinicio por el contador no está en el alcance.
+  ms-tributario lo rechaza con 403 por su claim cambiarPassword (además de no tener roles).
+  Si la temporal vence sin usarse, el reinicio por el contador no está en el alcance.
 end note
 
 == Cambio obligatorio de la contraseña ==
@@ -115,7 +115,7 @@ alt no cumple
   CS --> FE : 400 con el motivo
 end
 CS -> PE : encode(passwordNueva)
-CS -> UR : save(nuevo hash, debe_cambiar_password = false)
+CS -> UR : save(nuevo hash, debe_cambiar_password = false,\ntemporal_usada_en = ahora)
 CS -> DB : revoca el token restringido (tokens_revocados)
 CS -> BR : save(CAMBIO_PASSWORD; sin contraseñas)
 CS --> FE : 200 {token normal (CLIENTE_MYPE y clienteId), debeCambiarPassword = false}

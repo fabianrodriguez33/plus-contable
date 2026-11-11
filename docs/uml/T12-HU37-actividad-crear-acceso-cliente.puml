@@ -86,18 +86,20 @@ if (¿Correo y contraseña correctos?) then (no)
   :401 (cuenta con intentos fallidos y bloqueo, como hoy);
   stop
 endif
-if (¿La temporal ya se usó antes?) then (sí)
-  :401 "la contraseña temporal ya fue usada";
+if (¿La temporal venció (48 h desde el alta, configurable)?) then (sí)
+  :401 "la contraseña temporal venció";
   stop
 endif
-:Marca la temporal como usada y entrega un token restringido:
-sin roles y solo para cambiar la contraseña (y cerrar sesión);
+:Entrega un token restringido (15 min, configurable): sin roles y solo para
+cambiar la contraseña (y cerrar sesión). Entrar NO gasta la temporal;
 note right
-  Decisión de Beto: la temporal deja de ser válida tras usarla por primera vez.
-  Supuesto del diseño: sin roles, ms-tributario le responde 403 en todo
-  y ms-auth solo deja pasar el cambio de contraseña y el cierre de sesión.
-  Pendiente de confirmar con Beto: si el cliente usa la temporal y no la cambia,
-  queda sin acceso y el reinicio por el contador no está en el alcance.
+  Corrección tras la revisión de Jeanpierre: la temporal se gasta al CAMBIAR la
+  contraseña, no al entrar. Si el cliente se corta antes del cambio, vuelve a
+  entrar con la misma hasta que venza. Esto precisa la decisión de Beto
+  («deja de valer tras usarla»): pendiente de confirmarlo con él.
+  ms-tributario rechaza con 403 todo token con el claim cambiarPassword, además de no
+  tener roles; ms-auth solo deja pasar el cambio de contraseña y el cierre de sesión.
+  Si la temporal vence sin usarse, el reinicio por el contador no está en el alcance.
 end note
 
 |frontend-web|
