@@ -1,20 +1,20 @@
 @startuml
-title T12 · HU-37 · Actividad: crear acceso de cliente (diseño previo)
+title T12 · HU-37 · Actividad: crear la cuenta de un cliente, restablecer su acceso y su primer ingreso (diseño previo)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 
 |Contador|
 start
-:Abre la ficha de un cliente registrado
-y elige "Crear acceso";
+:Abre la ficha de un cliente registrado,
+elige "Crear acceso" y escribe el correo del cliente;
 
 |frontend-web|
-:Envía la solicitud para crear el acceso
-(id del cliente);
+:Envía la solicitud para crear la cuenta
+(id del cliente y correo);
 note right
   Diseño previo. Hoy la ficha no tiene esta acción (T13).
-  Si el cliente ya tiene acceso, la pantalla no debería ofrecer la acción: pendiente de confirmar con Beto.
+  Decisión de Beto (10/11): una sola cuenta por empresa, creada solo por el contador.
 end note
 
 |ms-auth|
@@ -26,6 +26,10 @@ if (¿El usuario tiene rol CONTADOR o ADMIN?) then (no)
   :403 (solo el estudio crea accesos);
   stop
 endif
+if (¿El correo es válido (formato, hasta 60 caracteres)?) then (no)
+  :400 "Faltan o son inválidos: correo";
+  stop
+endif
 
 |ms-tributario|
 :Consulta el cliente por id
@@ -34,47 +38,141 @@ endif
 |ms-auth|
 if (¿El cliente está registrado?) then (no)
   :404 "cliente no registrado";
-  note right
-    Códigos de rechazo (401, 403, 404, 409): propuesta del diseño,
-    pendiente de confirmar con Beto.
-  end note
   stop
 endif
-if (¿El cliente ya tiene una cuenta de acceso?) then (sí)
-  :409 "el cliente ya tiene acceso"
-  (no se crea una segunda cuenta);
+if (¿La empresa ya tiene una cuenta de acceso?) then (sí)
+  :409 "la empresa ya tiene cuenta"
+  (no se crea una segunda);
   stop
 endif
-:Crea el usuario con rol CLIENTE_MYPE y
-cliente_id = id del cliente (sin FK: clientes vive
-en tributario_schema);
+if (¿El correo ya lo usa otra cuenta?) then (sí)
+  :409 "el correo ya está registrado";
+  stop
+endif
+:Genera una contraseña temporal aleatoria
+(SecureRandom, 12 caracteres);
+:Guarda el usuario: correo como usuario de ingreso,
+SOLO el hash BCrypt de la temporal, rol CLIENTE_MYPE,
+cliente_id y debe_cambiar_password = true;
 note right
-  Vínculo ya soportado por HU-38: columna usuarios.cliente_id
-  y claim clienteId en el token. ms-auth todavía no tiene el
-  endpoint que crea usuarios.
-  Dato de acceso (RUC o correo): pendiente de confirmar con Beto.
-  Más de una persona por empresa: pendiente de confirmar con Beto
-  (el diseño supone una cuenta por cliente, como pide el criterio 3).
+  Decisión de Beto: ingreso con correo y contraseña; el contador registra el correo.
+  Supuesto del diseño: el correo se guarda también como nombre de usuario (username)
+  para no cambiar el login; por eso mide hasta 60 caracteres.
+  Supuesto del diseño: índice único parcial sobre usuarios.cliente_id (donde no es nulo);
+  si dos contadores crean a la vez, el segundo recibe 409.
 end note
-:Genera la contraseña inicial y guarda solo
-su hash (BCrypt);
-:Entrega la contraseña inicial al contador;
-note right
-  Forma de entrega (se muestra una vez, la entrega el contador,
-  por correo o WhatsApp): pendiente de confirmar con Beto.
-  Cambio obligatorio en el primer ingreso: pendiente de confirmar con Beto.
-end note
-:Responde que el acceso fue creado;
+:Anota CUENTA_CLIENTE_CREADA en la bitácora de seguridad
+(quién la creó y para qué empresa; nunca la contraseña);
+:Responde 201 con la contraseña temporal
+(es la única vez que se entrega);
 
 |frontend-web|
-:Informa al contador que el acceso quedó creado;
-note right
-  Desactivar o bloquear una cuenta de cliente: fuera de este
-  diagrama; pendiente de confirmar con Beto.
-end note
+:Muestra la contraseña temporal UNA SOLA VEZ;
 
 |Contador|
+:Entrega la contraseña al cliente por su medio;
+note right
+  Decisión de Beto: no hay envío automático de correos.
+  Fuera de alcance: invitaciones por correo, recuperación de contraseña (HU-41),
+  varios usuarios por empresa y subida de archivos por el cliente.
+  Desactivar o bloquear una cuenta de cliente: pendiente de confirmar con Beto.
+end note
+
+if (¿Pasaron 48 h sin cambio, o el cliente perdió la temporal o necesita volver a entrar?) then (sí)
+  |Contador|
+  :Elige "Restablecer acceso" en la pestaña «Acceso del cliente»
+  y confirma la pregunta;
+
+  |frontend-web|
+  :Envía POST /api/auth/clientes/{id}/cuenta/restablecer;
+  note right
+    Decisión de Beto (11/11): botón «Restablecer acceso» en la ficha del cliente.
+    Genera una nueva temporal, que se muestra UNA SOLA VEZ; no hay correos.
+  end note
+
+  |ms-auth|
+  if (¿Token válido?) then (no)
+    :401;
+    stop
+  endif
+  if (¿El usuario tiene rol CONTADOR o ADMIN?) then (no)
+    :403 (solo el estudio restablece accesos);
+    stop
+  endif
+  if (¿El cliente tiene una cuenta de acceso?) then (no)
+    :404 "el cliente no tiene cuenta de acceso"
+    (se crea con «Crear acceso»);
+    stop
+  endif
+  :Genera otra contraseña temporal aleatoria y guarda SOLO su hash:
+  la anterior deja de servir, reinicia las 48 h y
+  vuelve a exigir el cambio (debe_cambiar_password = true);
+  note right
+    Decisión de Beto (11/11): la temporal vale 48 horas, sigue válida aunque el cliente
+    ingrese y queda invalidada al completar el cambio obligatorio.
+    Supuesto del diseño: se invalidan las sesiones activas de la cuenta con un número de
+    versión de sesión (usuarios.sesion_version): los tokens emitidos antes ya no pasan por ms-auth.
+    Limitación conocida: ms-tributario no consulta revocaciones y los acepta hasta su vencimiento.
+  end note
+  :Anota CUENTA_CLIENTE_RESTABLECIDA en la bitácora de seguridad
+  (quién lo hizo y para qué empresa; nunca la contraseña);
+  :Responde 200 con la contraseña temporal
+  (es la única vez que se entrega);
+
+  |frontend-web|
+  :Muestra la contraseña temporal UNA SOLA VEZ;
+
+  |Contador|
+  :Entrega la nueva contraseña al cliente por su medio;
+endif
+
+|Cliente|
+:Entra con su correo y la contraseña temporal;
+
+|ms-auth|
+if (¿Correo y contraseña correctos?) then (no)
+  :401 (cuenta con intentos fallidos y bloqueo, como hoy);
+  stop
+endif
+if (¿La temporal venció (48 h desde el alta, configurable)?) then (sí)
+  :401 "la contraseña temporal venció";
+  stop
+endif
+:Entrega un token restringido (15 min, configurable): sin roles y solo para
+cambiar la contraseña (y cerrar sesión). Entrar NO gasta la temporal;
+note right
+  Decisión de Beto (11/11): la temporal vale 48 horas y no deja de funcionar porque el
+  cliente ingrese; sigue válida hasta completar el cambio obligatorio y después queda
+  invalidada. Si pasan las 48 horas sin cambio, el contador genera otra con «Restablecer acceso».
+  ms-tributario rechaza con 403 todo token con el claim cambiarPassword, además de no
+  tener roles; ms-auth solo deja pasar el cambio de contraseña y el cierre de sesión.
+end note
+
+|frontend-web|
+:Obliga a cambiar la contraseña antes de cualquier otra opción;
+
+|Cliente|
+:Escribe la nueva contraseña;
+
+|ms-auth|
+if (¿La nueva cumple la regla y es distinta de la temporal?) then (no)
+  :400 con el motivo;
+  stop
+endif
+:Guarda el hash de la nueva, debe_cambiar_password = false
+y revoca el token restringido;
+:Anota CAMBIO_PASSWORD en la bitácora de seguridad (sin la contraseña);
+:Entrega el token normal (rol CLIENTE_MYPE y clienteId);
+note right
+  Supuesto del diseño (Beto no fijó la regla): la nueva contraseña mide de 8 a 72 caracteres.
+end note
+
+|frontend-web|
+:El cliente accede a la información de su empresa
+(solo ve lo suyo, HU-38);
+
+|Cliente|
 stop
 
-footer Diseño previo, 09/11/2026 · Base: criterios de aceptación de HU-37, el código y la base de develop (2241ab0): usuarios.cliente_id, rol CLIENTE_MYPE y claim clienteId (HU-38). Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md. Las 8 preguntas a Beto siguen sin respuesta; lo marcado «pendiente de confirmar con Beto» no está decidido
+footer Diseño previo, 10/11/2026 · Base: criterios de aceptación de HU-37, las decisiones definitivas de Beto del 10/11 y el código y la base de develop (5a891de): usuarios.cliente_id, rol CLIENTE_MYPE, claim clienteId (HU-38) y bitacora_seguridad. Fuente de las tareas del Sprint 1: tareas 85 a 90 de tareas_sprint1.csv y docs/sprint1-jeanpierre/HU-38.md
 @enduml

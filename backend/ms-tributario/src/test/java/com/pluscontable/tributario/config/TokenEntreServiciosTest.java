@@ -112,6 +112,47 @@ class TokenEntreServiciosTest {
         assertThat(estado("Bearer " + tokenAlterado)).isEqualTo(401);
     }
 
+    /** HU-37: token del primer ingreso, con la misma forma que {@code generateCambioPassword} de ms-auth (claim cambiarPassword). */
+    private String tokenRestringido(List<String> roles, Object cambiarPassword) {
+        long ahora = System.currentTimeMillis();
+        var b = Jwts.builder().id(UUID.randomUUID().toString()).subject("cliente1").claim("roles", roles);
+        if (cambiarPassword != null) b.claim("cambiarPassword", cambiarPassword);
+        return b.issuedAt(new Date(ahora)).expiration(new Date(ahora + 60_000)).signWith(clave()).compact();
+    }
+
+    private int estadoEn(String ruta, String autorizacion) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta)).GET()
+                .header("Authorization", autorizacion).build(), BodyHandlers.ofString()).statusCode();
+    }
+
+    @Test
+    void elTokenRestringidoDelPrimerIngresoSeRechazaCon403AunqueLleveUnRolDelEstudio() throws Exception {
+        // sin el chequeo del claim, este token (con rol CONTADOR) entraría: la protección no depende de que roles esté vacío
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("ADMIN"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CLIENTE_MYPE"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of(), true))).isEqualTo(403);
+    }
+
+    @Test
+    void elTokenRestringidoTambienSeRechazaEnUnaRutaAbierta() throws Exception {
+        assertThat(estadoEn("/api/tributario/health", "Bearer " + tokenRestringido(List.of(), true))).isEqualTo(403);
+    }
+
+    @Test
+    void elTokenRestringidoRecibeElMensajeDeCambiarLaContrasenia() throws Exception {
+        var r = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + RUTA_PROTEGIDA)).GET()
+                .header("Authorization", "Bearer " + tokenRestringido(List.of("CONTADOR"), true)).build(), BodyHandlers.ofString());
+        assertThat(r.statusCode()).isEqualTo(403);
+        assertThat(r.body()).contains("Debe cambiar la contraseña temporal");
+    }
+
+    @Test
+    void unTokenConElClaimEnFalsoOSinElSeAcepta() throws Exception {
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), false))).isEqualTo(200);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), null))).isEqualTo(200);
+    }
+
     @Test
     void sinTokenSeRechazaCon401() throws Exception {
         assertThat(estado(null)).isEqualTo(401);

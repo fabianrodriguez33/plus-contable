@@ -42,6 +42,7 @@ class AuthControllerTest {
     @Value("${app.jwt.secret}") String secreto;
     @MockBean AuthService authService;
     @MockBean TokenRevocadoRepository revocados;
+    @MockBean com.pluscontable.auth.repository.UsuarioRepository usuarios;
 
     private static final UserDto ANA = new UserDto(1L, "ana", "Ana Pérez", List.of("CONTADOR"));
 
@@ -107,6 +108,48 @@ class AuthControllerTest {
 
         mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + vencido))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---- HU-37: el restablecimiento del acceso cierra las sesiones activas de la cuenta (versión de sesión)
+
+    private int estadoDeMe(String token) throws Exception {
+        when(authService.me("ana")).thenReturn(ANA);
+        return mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void unTokenConUnaVersionDeSesionAnteriorALaDeLaCuentaDa401() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(2));
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 1))).isEqualTo(401);
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 0))).isEqualTo(401);
+    }
+
+    @Test
+    void unTokenConLaVersionDeSesionVigenteOMayorSeAcepta() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(2));
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 2))).isEqualTo(200);
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 3))).isEqualTo(200);
+    }
+
+    @Test
+    void unTokenSinElClaimDeVersionCuentaComoCero() throws Exception {
+        String sinClaim = io.jsonwebtoken.Jwts.builder().id("jti-viejo").subject("ana").claim("roles", List.of("CONTADOR"))
+                .issuedAt(new java.util.Date()).expiration(new java.util.Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8))).compact();
+
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(0));
+        assertThat(estadoDeMe(sinClaim)).isEqualTo(200);
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(1));
+        assertThat(estadoDeMe(sinClaim)).isEqualTo(401);
+    }
+
+    @Test
+    void siElUsuarioYaNoExisteElFiltroNoRechazaPorLaVersion() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.empty());
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 0))).isEqualTo(200);
     }
 
     @Test

@@ -29,8 +29,38 @@ class JwtProviderTest {
     }
 
     @Test
+    void elTokenLlevaLaVersionDeSesionDeLaCuentaYSinIndicarlaEsCero() {
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CLIENTE_MYPE"), 7L, 4)).get("sv", Integer.class)).isEqualTo(4);
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CLIENTE_MYPE"), 7L)).get("sv", Integer.class)).isZero();
+        assertThat(proveedor.parse(proveedor.generate("c", List.of("CONTADOR"))).get("sv", Integer.class)).isZero();
+        assertThat(proveedor.parse(proveedor.generateCambioPassword("c", 3)).get("sv", Integer.class)).isEqualTo(3);
+        assertThat(proveedor.parse(proveedor.generateCambioPassword("c")).get("sv", Integer.class)).isZero();
+    }
+
+    @Test
     void laDuracionConfiguradaEsLaQueSeExpone() {
         assertThat(proveedor.getExpiration()).isEqualTo(Duration.ofHours(8));
+    }
+
+    @Test
+    void elTokenRestringidoDelPrimerIngresoDuraQuinceMinutosPorDefectoYElNormalSigueEnOchoHoras() {
+        Claims restringido = proveedor.parse(proveedor.generateCambioPassword("cliente1"));
+
+        long minutos = Duration.between(new Date().toInstant(), restringido.getExpiration().toInstant()).toMinutes();
+        assertThat(minutos).isBetween(14L, 15L);
+        assertThat(proveedor.getCambioPasswordExpiration()).isEqualTo(Duration.ofMinutes(15));
+        assertThat(proveedor.getExpiration()).isEqualTo(Duration.ofHours(8));
+    }
+
+    @Test
+    void laVigenciaDelTokenRestringidoSeConfiguraAparteDeLaDeLaSesion() {
+        JwtProvider corto = new JwtProvider(SECRETO, 8, 5);
+
+        long minutos = Duration.between(new Date().toInstant(), corto.parse(corto.generateCambioPassword("c")).getExpiration().toInstant()).toMinutes();
+        assertThat(minutos).isBetween(4L, 5L);
+        assertThat(corto.getCambioPasswordExpiration()).isEqualTo(Duration.ofMinutes(5));
+        long horas = Duration.between(new Date().toInstant(), corto.parse(corto.generate("c", List.of("CONTADOR"))).getExpiration().toInstant()).toHours();
+        assertThat(horas).isBetween(7L, 8L);
     }
 
     @Test

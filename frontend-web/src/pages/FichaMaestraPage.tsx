@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Boxes, Building, CalendarClock, CalendarPlus, FileSignature, FolderOpen, Inbox, PieChart, TriangleAlert, Users, Wallet } from 'lucide-react'
+import { Boxes, Building, CalendarClock, CalendarPlus, FileSignature, FolderOpen, Inbox, KeyRound, PieChart, TriangleAlert, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { mensajeError, tributarioApi } from '../services/apiClient'
 import { actualizarCliente, crearCliente, obtenerCliente } from '../services/clienteService'
@@ -12,13 +12,14 @@ import ActivosTab from '../components/ficha/ActivosTab'
 import CobrosTab from '../components/ficha/CobrosTab'
 import IncidenciasTab from '../components/ficha/IncidenciasTab'
 import NotificacionesTab from '../components/ficha/NotificacionesTab'
+import AccesoClienteTab from '../components/ficha/AccesoClienteTab'
 import DocumentosPage from './DocumentosPage'
 import TrabajadoresPage from './TrabajadoresPage'
 import AcuerdoPage from './AcuerdoPage'
 import VencimientosPage from './VencimientosPage'
 import ProgramacionPage from './ProgramacionPage'
 
-type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'cobros' | 'vencimientos' | 'programacion' | 'incidencias' | 'notificaciones'
+type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'cobros' | 'vencimientos' | 'programacion' | 'incidencias' | 'notificaciones' | 'acceso'
 
 const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'general', etiqueta: 'Datos generales', icono: Building },
@@ -32,6 +33,7 @@ const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'programacion', etiqueta: 'Programación', icono: CalendarPlus },
   { id: 'incidencias', etiqueta: 'Incidencias', icono: TriangleAlert },
   { id: 'notificaciones', etiqueta: 'Buzón SOL', icono: Inbox },
+  { id: 'acceso', etiqueta: 'Acceso del cliente', icono: KeyRound },
 ]
 
 const clienteVacio: Cliente = {
@@ -128,6 +130,7 @@ export default function FichaMaestraPage() {
       {clienteId !== null && tab === 'programacion' && <ProgramacionPage />}
       {clienteId !== null && tab === 'incidencias' && <IncidenciasTab clienteId={clienteId} setError={setError} setOk={setOk} />}
       {clienteId !== null && tab === 'notificaciones' && <NotificacionesTab clienteId={clienteId} setError={setError} setOk={setOk} />}
+      {clienteId !== null && tab === 'acceso' && <AccesoClienteTab clienteId={clienteId} setError={setError} setOk={setOk} />}
     </Card>
   )
 }

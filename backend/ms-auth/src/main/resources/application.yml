@@ -25,11 +25,18 @@ app:
     # Debe ser identico en ms-tributario (minimo 32 bytes)
     secret: ${JWT_SECRET}
     expiration-hours: 8
+    # HU-37: vigencia del token restringido del primer ingreso (solo sirve para cambiar la contraseña)
+    cambio-password-minutes: 15
   security:
     max-failed-attempts: 5
     lock-minutes: 15
+    # HU-37: vigencia de la contraseña temporal desde que se crea la cuenta
+    temporal-horas: 48
   cors:
     allowed-origins: http://localhost:5173
+  tributario:
+    # HU-37: ms-tributario, para comprobar que la empresa existe antes de crearle la cuenta
+    url: ${TRIBUTARIO_URL:http://localhost:8082}
   seed:
     admin-username: ${ADMIN_USERNAME}
     admin-password: ${ADMIN_PASSWORD}

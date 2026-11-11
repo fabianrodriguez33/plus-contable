@@ -1,6 +1,7 @@
 package com.pluscontable.auth.service;
 
 import com.pluscontable.auth.config.JwtProvider;
+import com.pluscontable.auth.config.SesionToken;
 import com.pluscontable.auth.dto.LoginRequest;
 import com.pluscontable.auth.dto.LoginResponse;
 import com.pluscontable.auth.dto.UserDto;
@@ -11,11 +12,13 @@ import com.pluscontable.auth.model.TokenRevocado;
 import com.pluscontable.auth.repository.BitacoraRepository;
 import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -28,6 +31,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthService {
 
     private static final String MSG_INVALIDAS = "Usuario o contraseña incorrectos";
+    private static final String MSG_SIN_CAMBIO_PENDIENTE = "No tiene un cambio de contraseña pendiente";
+    static final int PASSWORD_MINIMO = 8;
+    static final int PASSWORD_MAXIMO = 72;
 
     private final UsuarioRepository usuarioRepository;
     private final BitacoraRepository bitacoraRepository;
@@ -56,6 +62,7 @@ public class AuthService {
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public LoginResponse login(LoginRequest request, String ip) {
         Optional<Usuario> found = usuarioRepository.findByUsername(request.username());
+        if (found.isEmpty()) found = buscarEscritoDistinto(request.username()); // un correo se puede escribir con mayúsculas
         if (found.isEmpty()) {
             log(null, request.username(), "LOGIN_FALLIDO", "Usuario inexistente", ip);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, MSG_INVALIDAS);
@@ -98,13 +105,85 @@ public class AuthService {
 
         u.setIntentosFallidos(0);
         u.setBloqueadoHasta(null);
+        if (u.isDebeCambiarPassword()) {
+            // HU-37: con la contraseña temporal se obtiene un token restringido para cambiarla. Entrar no la gasta: si el cliente
+            // se corta antes del cambio, vuelve a entrar con la misma; se gasta recién al cambiarla (ver cambiarPassword).
+            // Pero no vale para siempre: vence a las horas configuradas desde que se creó la cuenta
+            if (u.getTemporalVenceEn() != null && !now.isBefore(u.getTemporalVenceEn())) {
+                usuarioRepository.save(u);
+                log(u.getId(), u.getUsername(), "LOGIN_RECHAZADO", "Contraseña temporal vencida", ip);
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                        "La contraseña temporal venció. Comuníquese con el estudio");
+            }
+            usuarioRepository.save(u);
+            log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", "Primer ingreso con la contraseña temporal: debe cambiarla", ip);
+            return new LoginResponse(jwtProvider.generateCambioPassword(u.getUsername(), u.getSesionVersion()), "Bearer",
+                    jwtProvider.getCambioPasswordExpiration().toSeconds(), usuarioDto(u), true);
+        }
         usuarioRepository.save(u);
         log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", null, ip);
 
         List<String> roles = u.getRoles().stream().map(Rol::getNombre).sorted().toList();
-        String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId());
+        String token = jwtProvider.generate(u.getUsername(), roles, u.getClienteId(), u.getSesionVersion());
         return new LoginResponse(token, "Bearer", jwtProvider.getExpiration().toSeconds(),
                 new UserDto(u.getId(), u.getUsername(), u.getNombreCompleto(), roles));
+    }
+
+    private Optional<Usuario> buscarEscritoDistinto(String escrito) {
+        String normal = escrito == null ? null : escrito.trim().toLowerCase(Locale.ROOT);
+        return normal == null || normal.equals(escrito) ? Optional.empty() : usuarioRepository.findByUsername(normal);
+    }
+
+    private UserDto usuarioDto(Usuario u) {
+        return new UserDto(u.getId(), u.getUsername(), u.getNombreCompleto(),
+                u.getRoles().stream().map(Rol::getNombre).sorted().toList());
+    }
+
+    /**
+     * HU-37: cambio obligatorio de la contraseña temporal en el primer ingreso. Solo lo permite el token restringido del primer
+     * ingreso y mientras la cuenta tenga el cambio pendiente. Guarda solo el hash de la nueva, revoca el token restringido y
+     * entrega el token normal de la cuenta. Nunca registra las contraseñas.
+     */
+    @Transactional
+    public LoginResponse cambiarPassword(String username, SesionToken sesion, String passwordNueva, String ip) {
+        if (sesion == null || !sesion.cambiarPassword()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, MSG_SIN_CAMBIO_PENDIENTE);
+        }
+        Usuario u = usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, MSG_INVALIDAS));
+        if (!u.isDebeCambiarPassword()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, MSG_SIN_CAMBIO_PENDIENTE);
+        }
+        validarPasswordNueva(u, passwordNueva);
+        u.setPasswordHash(passwordEncoder.encode(passwordNueva));
+        u.setDebeCambiarPassword(false);
+        u.setTemporalUsadaEn(LocalDateTime.now()); // la temporal se gasta aquí; además, el hash nuevo ya no coincide con ella
+        usuarioRepository.save(u);
+        if (sesion.jti() != null && !revocados.existsById(sesion.jti())) {
+            LocalDateTime expiraEn = LocalDateTime.ofInstant(sesion.expira() == null ? Instant.now() : sesion.expira(), ZoneId.systemDefault());
+            revocados.save(new TokenRevocado(sesion.jti(), username, expiraEn));
+        }
+        log(u.getId(), u.getUsername(), "CAMBIO_PASSWORD", "Cambio obligatorio de la contraseña temporal", ip);
+        List<String> roles = u.getRoles().stream().map(Rol::getNombre).sorted().toList();
+        return new LoginResponse(jwtProvider.generate(u.getUsername(), roles, u.getClienteId(), u.getSesionVersion()), "Bearer",
+                jwtProvider.getExpiration().toSeconds(), usuarioDto(u), false);
+    }
+
+    private void validarPasswordNueva(Usuario u, String nueva) {
+        if (nueva == null || nueva.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Faltan o son inválidos: passwordNueva");
+        }
+        // BCrypt solo usa los primeros 72 bytes: se rechaza lo más largo en vez de truncarlo en silencio
+        if (nueva.length() < PASSWORD_MINIMO || nueva.getBytes(StandardCharsets.UTF_8).length > PASSWORD_MAXIMO) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "La contraseña nueva debe tener de " + PASSWORD_MINIMO + " a " + PASSWORD_MAXIMO + " caracteres");
+        }
+        if (nueva.equalsIgnoreCase(u.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La contraseña nueva no puede ser igual al correo");
+        }
+        if (passwordEncoder.matches(nueva, u.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La contraseña nueva no puede ser la temporal");
+        }
     }
 
     /**

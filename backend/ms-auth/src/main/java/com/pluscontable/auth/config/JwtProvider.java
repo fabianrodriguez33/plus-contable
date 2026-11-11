@@ -10,23 +10,44 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 import javax.crypto.SecretKey;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 public class JwtProvider {
 
+    public static final String CLAIM_CAMBIAR_PASSWORD = "cambiarPassword";
+    /** HU-37: versión de sesión de la cuenta con la que se emitió el token (ver Usuario.sesionVersion). */
+    public static final String CLAIM_SESION_VERSION = "sv";
+
     private final SecretKey key;
     private final Duration expiration;
+    private final Duration cambioPasswordExpiration;
 
+    /** Vigencia del token restringido del primer ingreso si no se configura: 15 minutos bastan para cambiar la contraseña. */
+    static final long CAMBIO_PASSWORD_MINUTOS_POR_DEFECTO = 15;
+
+    public JwtProvider(String secret, long expirationHours) {
+        this(secret, expirationHours, CAMBIO_PASSWORD_MINUTOS_POR_DEFECTO);
+    }
+
+    @Autowired
     public JwtProvider(@Value("${app.jwt.secret}") String secret,
-                       @Value("${app.jwt.expiration-hours}") long expirationHours) {
+                       @Value("${app.jwt.expiration-hours}") long expirationHours,
+                       @Value("${app.jwt.cambio-password-minutes:15}") long cambioPasswordMinutes) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expiration = Duration.ofHours(expirationHours);
+        this.cambioPasswordExpiration = Duration.ofMinutes(cambioPasswordMinutes);
     }
 
     public Duration getExpiration() {
         return expiration;
+    }
+
+    /** Vigencia del token restringido del primer ingreso (HU-37). */
+    public Duration getCambioPasswordExpiration() {
+        return cambioPasswordExpiration;
     }
 
     public String generate(String username, List<String> roles) {
@@ -38,15 +59,43 @@ public class JwtProvider {
      * HU-36 (tarea 2): todo token lleva un jti unico para poder revocarlo al cerrar sesion.
      */
     public String generate(String username, List<String> roles, Long clienteId) {
+        return generate(username, roles, clienteId, 0);
+    }
+
+    /** HU-37: el token lleva la versión de sesión de la cuenta; al restablecer el acceso sube y los anteriores dejan de valer. */
+    public String generate(String username, List<String> roles, Long clienteId, int sesionVersion) {
         Date now = new Date();
         var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(username)
-                .claim("roles", roles);
+                .claim("roles", roles)
+                .claim(CLAIM_SESION_VERSION, sesionVersion);
         if (clienteId != null) builder.claim("clienteId", clienteId);
         return builder
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expiration.toMillis()))
+                .signWith(key)
+                .compact();
+    }
+
+    /**
+     * HU-37: token del primer ingreso con la contraseña temporal. No lleva roles (ms-tributario le responde 403 en toda ruta) y
+     * ms-auth solo lo deja usar para cambiar la contraseña y cerrar sesión; se revoca al cambiarla.
+     */
+    public String generateCambioPassword(String username) {
+        return generateCambioPassword(username, 0);
+    }
+
+    public String generateCambioPassword(String username, int sesionVersion) {
+        Date now = new Date();
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(username)
+                .claim("roles", List.of())
+                .claim(CLAIM_SESION_VERSION, sesionVersion)
+                .claim(CLAIM_CAMBIAR_PASSWORD, true)
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + cambioPasswordExpiration.toMillis()))
                 .signWith(key)
                 .compact();
     }
