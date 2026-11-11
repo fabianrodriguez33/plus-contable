@@ -44,7 +44,7 @@ public class Usuario {
     @Column(name = "debe_cambiar_password", nullable = false)
     private boolean debeCambiarPassword = false;
 
-    /** HU-37: cuándo se usó la contraseña temporal para entrar; desde entonces ya no sirve para un nuevo ingreso. */
+    /** HU-37: cuándo el cliente cambió la contraseña temporal por la suya; hasta entonces la temporal sigue sirviendo para entrar. */
     @Column(name = "temporal_usada_en")
     private LocalDateTime temporalUsadaEn;
 

@@ -102,10 +102,10 @@ class PrimerIngresoServiceTest {
     }
 
     @Test
-    void elPrimerIngresoMarcaLaTemporalComoUsadaYLoAnota() {
+    void elPrimerIngresoNoGastaLaTemporalYLoAnota() {
         entrar(TEMPORAL);
 
-        assertThat(cliente.getTemporalUsadaEn()).isNotNull();
+        assertThat(cliente.getTemporalUsadaEn()).isNull();
         assertThat(cliente.isDebeCambiarPassword()).isTrue(); // sigue pendiente hasta que la cambie
         verify(usuarios).save(cliente);
         assertThat(bitacoraGuardada()).anySatisfy(b -> {
@@ -115,17 +115,26 @@ class PrimerIngresoServiceTest {
     }
 
     @Test
-    void laTemporalNoSirveUnaSegundaVezAunqueSeaLaCorrecta() {
+    void laTemporalSirveParaReingresarSiSeCortoAntesDelCambio() {
+        LoginResponse primero = entrar(TEMPORAL);
+        LoginResponse segundo = entrar(TEMPORAL); // cerró la pestaña o se cayó la red antes de cambiarla
+
+        assertThat(segundo.debeCambiarPassword()).isTrue();
+        assertThat(jwt.parse(segundo.token()).get("cambiarPassword", Boolean.class)).isTrue();
+        assertThat(jwt.parse(segundo.token()).getId()).isNotEqualTo(jwt.parse(primero.token()).getId());
+        assertThat(cliente.isDebeCambiarPassword()).isTrue();
+        assertThat(cliente.getTemporalUsadaEn()).isNull();
+    }
+
+    @Test
+    void despuesDelCambioLaTemporalNoSirveYSeAnotaCuandoSeGasto() {
         entrar(TEMPORAL);
+        service.cambiarPassword(CORREO, restringida(), NUEVA, "10.0.0.2");
 
         ResponseStatusException e = falla(() -> entrar(TEMPORAL));
 
         assertThat(e.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThat(e.getReason()).contains("ya fue usada");
-        assertThat(bitacoraGuardada()).anySatisfy(b -> {
-            assertThat(b.getEvento()).isEqualTo("LOGIN_RECHAZADO");
-            assertThat(b.getDetalle()).contains("temporal ya usada");
-        });
+        assertThat(cliente.getTemporalUsadaEn()).isNotNull();
     }
 
     @Test

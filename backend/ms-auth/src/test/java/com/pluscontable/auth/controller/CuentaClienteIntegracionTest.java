@@ -126,8 +126,11 @@ class CuentaClienteIntegracionTest {
         assertThat(estadoDe("/api/auth/me", restringido)).isEqualTo(403);
         crear("Bearer " + restringido, OTRO_CLIENTE, "itest-hu37-b@acme.pe", 403);
 
-        // la temporal no sirve una segunda vez
-        entrar(CORREO, temporal, 401);
+        // entrar no gasta la temporal: si el cliente se cortó antes del cambio, vuelve a entrar con la misma
+        assertThat(jdbc.queryForObject("SELECT temporal_usada_en FROM auth_schema.usuarios WHERE username = ?", java.sql.Timestamp.class, CORREO)).isNull();
+        JsonNode reingreso = cuerpo(entrar(CORREO, temporal, 200));
+        assertThat(reingreso.get("debeCambiarPassword").asBoolean()).isTrue();
+        assertThat(reingreso.get("token").asText()).isNotEqualTo(restringido);
 
         // cambio obligatorio: entrega el token normal y revoca el restringido
         JsonNode cambio = cuerpo(cambiar(restringido, NUEVA, 200));
@@ -140,8 +143,9 @@ class CuentaClienteIntegracionTest {
         assertThat(estadoDe("/api/auth/me", restringido)).isEqualTo(401); // revocado
         cambiar(restringido, "OtraClave123", 401);
 
-        // la temporal ya no sirve y la nueva sí
+        // la temporal ya no sirve (se gastó al cambiarla) y la nueva sí
         entrar(CORREO, temporal, 401);
+        assertThat(jdbc.queryForObject("SELECT temporal_usada_en FROM auth_schema.usuarios WHERE username = ?", java.sql.Timestamp.class, CORREO)).isNotNull();
         JsonNode despues = cuerpo(entrar(CORREO, NUEVA, 200));
         assertThat(despues.get("debeCambiarPassword").asBoolean()).isFalse();
         assertThat(jwt.parse(despues.get("token").asText()).get("clienteId", Long.class)).isEqualTo(CLIENTE);

@@ -106,14 +106,8 @@ public class AuthService {
         u.setIntentosFallidos(0);
         u.setBloqueadoHasta(null);
         if (u.isDebeCambiarPassword()) {
-            // HU-37: la contraseña temporal solo sirve una vez; con ella se obtiene un token restringido para cambiarla
-            if (u.getTemporalUsadaEn() != null) {
-                usuarioRepository.save(u);
-                log(u.getId(), u.getUsername(), "LOGIN_RECHAZADO", "Contraseña temporal ya usada", ip);
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                        "La contraseña temporal ya fue usada. Comuníquese con el estudio");
-            }
-            u.setTemporalUsadaEn(now);
+            // HU-37: con la contraseña temporal se obtiene un token restringido para cambiarla. Entrar no la gasta: si el cliente
+            // se corta antes del cambio, vuelve a entrar con la misma; se gasta recién al cambiarla (ver cambiarPassword)
             usuarioRepository.save(u);
             log(u.getId(), u.getUsername(), "LOGIN_EXITOSO", "Primer ingreso con la contraseña temporal: debe cambiarla", ip);
             return new LoginResponse(jwtProvider.generateCambioPassword(u.getUsername()), "Bearer",
@@ -156,6 +150,7 @@ public class AuthService {
         validarPasswordNueva(u, passwordNueva);
         u.setPasswordHash(passwordEncoder.encode(passwordNueva));
         u.setDebeCambiarPassword(false);
+        u.setTemporalUsadaEn(LocalDateTime.now()); // la temporal se gasta aquí; además, el hash nuevo ya no coincide con ella
         usuarioRepository.save(u);
         if (sesion.jti() != null && !revocados.existsById(sesion.jti())) {
             LocalDateTime expiraEn = LocalDateTime.ofInstant(sesion.expira() == null ? Instant.now() : sesion.expira(), ZoneId.systemDefault());
