@@ -33,6 +33,10 @@ public class Incidencia {
     @Column(nullable = false, length = 1000)
     private String descripcion;
 
+    /** Notas adicionales del contador; opcional. */
+    @Column(length = 1000)
+    private String observaciones;
+
     /** Usuario del token que la registró. */
     @Column(name = "registrada_por", nullable = false, length = 60)
     private String registradaPor;
