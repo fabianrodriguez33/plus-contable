@@ -18,12 +18,12 @@ export default function Modal({ abierto, titulo, onCerrar, children }: Props) {
 
   if (!abierto) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onCerrar}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta/40 p-4" onClick={onCerrar}>
       <div role="dialog" aria-modal="true" aria-label={titulo}
-        className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        className="vidrio w-full max-w-2xl rounded-panel p-6 md:p-8" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">{titulo}</h3>
-          <button type="button" aria-label="Cerrar" onClick={onCerrar} className="rounded p-1 text-slate-500 hover:bg-slate-100">
+          <h3 className="text-lg font-semibold text-tinta">{titulo}</h3>
+          <button type="button" aria-label="Cerrar" onClick={onCerrar} className="rounded-lg p-1 text-slate-500 hover:bg-white/70">
             <X size={18} />
           </button>
         </div>

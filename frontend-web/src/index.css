@@ -2,4 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-slate-100 text-slate-800 antialiased; }
+/*
+ * Sistema de diseño «minimalismo + vidrio líquido».
+ * Los colores son canales RGB (para poder usar opacidad: bg-acento/30) y son la única fuente: tailwind.config.js
+ * los lee de aquí y src/styles/tokens.test.ts comprueba su contraste AA.
+ */
+:root {
+  --niebla: 234 242 241;        /* #EAF2F1 fondo */
+  --tinta: 18 49 58;            /* #12313A texto principal */
+  --tinta-suave: 66 89 96;      /* #425960 texto secundario (AA sobre niebla, vidrio y el fondo más oscuro) */
+  --acento: 14 124 123;         /* #0E7C7B acción principal */
+  --acento-oscuro: 11 101 100;  /* #0B6564 texto de enlace y hover */
+  --ambar: 232 176 74;          /* #E8B04A solo acento decorativo, nunca texto */
+  --exito: 47 133 90;           /* #2F855A */
+  --exito-texto: 39 103 73;     /* #276749 solo para texto */
+  --peligro: 194 65 12;         /* #C2410C */
+  --peligro-texto: 154 52 18;   /* #9A3412 solo para texto */
+
+  --radio-campo: 0.75rem;
+  --radio-panel: 1.25rem;
+  --vidrio-fondo: rgb(255 255 255 / 0.62);
+  --vidrio-borde: rgb(255 255 255 / 0.7);
+  --vidrio-desenfoque: 16px;
+  --vidrio-sombra: 0 8px 32px rgb(18 49 58 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.8);
+  --foco: 0 0 0 3px rgb(14 124 123 / 0.35);
+}
+
+html { color-scheme: light; }
+
+body {
+  @apply text-tinta antialiased;
+  min-height: 100vh;
+  background-color: rgb(var(--niebla));
+  background-image:
+    radial-gradient(60rem 40rem at 8% -10%, rgb(var(--acento) / 0.2), transparent 60%),
+    radial-gradient(48rem 34rem at 100% 8%, rgb(var(--acento) / 0.12), transparent 55%),
+    linear-gradient(160deg, #eaf2f1 0%, #dcebea 50%, #d2e7e8 100%);
+  background-attachment: fixed;
+}
+
+/* Foco visible y consistente para teclado */
+:focus-visible { outline: 2px solid rgb(var(--acento)); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; box-shadow: var(--foco); }
+
+@layer components {
+  /* Panel de vidrio: translúcido con desenfoque, borde fino claro y brillo sutil */
+  .vidrio {
+    background: var(--vidrio-fondo);
+    border: 1px solid var(--vidrio-borde);
+    box-shadow: var(--vidrio-sombra);
+    -webkit-backdrop-filter: blur(var(--vidrio-desenfoque)) saturate(140%);
+    backdrop-filter: blur(var(--vidrio-desenfoque)) saturate(140%);
+  }
+
+  /* Variante sólida: tablas y listados largos, donde el desenfoque cuesta y resta legibilidad */
+  .panel-solido {
+    background: #fff;
+    border: 1px solid rgb(var(--tinta) / 0.12);
+    box-shadow: 0 1px 2px rgb(18 49 58 / 0.06);
+  }
+}
+
+/* Sin soporte de desenfoque: fondo casi opaco */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .vidrio { background: rgb(255 255 255 / 0.96); }
+}
+
+/* El usuario pidió menos transparencia */
+@media (prefers-reduced-transparency: reduce) {
+  .vidrio {
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* El usuario pidió menos movimiento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
