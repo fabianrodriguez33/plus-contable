@@ -26,8 +26,9 @@ export function validarCorreo(correo: string): string | null {
 }
 
 export const MENSAJE_CONFIRMAR_RESTABLECER =
-  '¿Restablecer el acceso de este cliente? La contraseña temporal anterior y las sesiones abiertas del cliente dejarán de ' +
-  'valer, y se generará una nueva que se mostrará una sola vez.'
+  '¿Restablecer el acceso de este cliente? La contraseña temporal anterior deja de valer y se cierran sus sesiones en el ' +
+  'sistema de acceso; los datos ya cargados en su pantalla pueden seguir visibles hasta 8 horas. Se generará una nueva ' +
+  'contraseña que se mostrará una sola vez.'
 
 /** «13/11/2026, 08:00»: la hora que devuelve el servidor, sin convertirla de zona. */
 export function formatearVencimiento(venceEn?: string | null): string | null {
@@ -181,8 +182,8 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
         <section aria-label="Restablecer acceso" className="max-w-xl space-y-3 border-t border-slate-200 pt-4">
           <p className="text-sm text-slate-600">
             Si el cliente perdió la contraseña temporal, no la cambió antes de que venciera o necesita volver a entrar, genere otra.
-            La anterior y las sesiones abiertas del cliente dejan de valer, y deberá cambiarla al ingresar. El sistema no envía
-            correos: usted se la entrega.
+            La anterior deja de valer y se cierran sus sesiones en el sistema de acceso (los datos ya cargados en su pantalla pueden
+            seguir visibles hasta 8 horas); deberá cambiarla al ingresar. El sistema no envía correos: usted se la entrega.
           </p>
           <Button type="button" variant="secondary" onClick={restablecer} disabled={restableciendo}>
             <RotateCcw size={16} /> {restableciendo ? 'Restableciendo…' : 'Restablecer acceso'}

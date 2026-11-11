@@ -200,6 +200,10 @@ describe('Restablecer acceso en la ficha (HU-37, decisión de Beto del 11/11)', 
     const seccion = screen.getByRole('region', { name: 'Restablecer acceso' })
     expect(seccion.textContent).toContain('perdió la contraseña temporal')
     expect(seccion.textContent).toContain('El sistema no envía correos')
+    // ms-tributario no revisa la versión de sesión: no se promete que todo se cierre al instante
+    expect(seccion.textContent).toContain('se cierran sus sesiones en el sistema de acceso')
+    expect(seccion.textContent).toContain('pueden seguir visibles hasta 8 horas')
+    expect(seccion.textContent).not.toContain('sesiones abiertas del cliente dejan de valer')
     expect(boton().disabled).toBe(false)
     expect(screen.getByRole('button', { name: /Crear acceso/ })).toBeTruthy()
   })
@@ -211,7 +215,9 @@ describe('Restablecer acceso en la ficha (HU-37, decisión de Beto del 11/11)', 
     await restablecer()
 
     expect(window.confirm).toHaveBeenCalledWith(MENSAJE_CONFIRMAR_RESTABLECER)
-    expect(MENSAJE_CONFIRMAR_RESTABLECER).toContain('sesiones abiertas del cliente dejarán de valer')
+    expect(MENSAJE_CONFIRMAR_RESTABLECER).toContain('se cierran sus sesiones en el sistema de acceso')
+    expect(MENSAJE_CONFIRMAR_RESTABLECER).toContain('pueden seguir visibles hasta 8 horas')
+    expect(MENSAJE_CONFIRMAR_RESTABLECER).not.toContain('sesiones abiertas del cliente dejarán de valer')
     expect(MENSAJE_CONFIRMAR_RESTABLECER).toContain('se mostrará una sola vez')
     expect(restablecerAccesoCliente).not.toHaveBeenCalled()
     expect(screen.queryByTestId('password-temporal')).toBeNull()
