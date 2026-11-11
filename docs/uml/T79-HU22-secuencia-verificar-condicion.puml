@@ -1,71 +1,56 @@
 @startuml
-title T79 · HU-22 · Secuencia: verificar la condición de los clientes y avisar el cambio (diseño previo)
+title T79 · HU-22 · Verificación e historial RUC (propuesta pendiente de Beto)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
-participant "Tarea periódica\n(VerificacionRucJob)" as J
-participant "VerificacionRucService" as VS
-participant "ParametroSistemaService" as PS
-participant "ConsultaRuc\n(OpenRUC, de terceros)" as CR
-participant "ClienteService" as CS
-participant "AvisoService" as AS
-participant "EnvioCorreo" as EC
-database "tributario_schema" as DB
-actor "Contador" as U
-participant "frontend-web" as FE
+participant "Inicio de verificación\n(job propuesto)" as J
+participant "VerificacionRucService\n(propuesto)" as VS
+database "Cliente\n(estado actual, existe)" as C
+participant "ConsultaRuc\n(existe; OpenRUC actual)" as CR
+participant "DetectorCambioCondicionRuc\n(PR #49, no integrado)" as DC
+database "Historial RUC\n(propuesto)" as H
+participant "AvisoService\n(diseño compartido T48)" as AS
 
-== Verificación periódica ==
-J -> VS : ejecutar()
-VS -> PS : entero("ruc.verificacion_cada_dias", 7)
-alt todavía no toca verificar
-  VS --> J : nada que hacer
-end
-VS -> DB : clientes activos
-loop cada cliente activo
-  VS -> CR : consultar(ruc)
-  alt el servicio no responde o no se puede usar (NO_DISPONIBLE)
-    VS -> VS : no cambia nada; se reintenta en la siguiente vuelta
+J -> VS : iniciar verificación de cliente
+VS -> C : leer RUC y condición HABIDO/NO_HABIDO actual
+VS -> CR : consultar(ruc)
+CR --> VS : ResultadoConsulta
+VS -> DC : evaluar(condición anterior, resultado)
+DC --> VS : CAMBIO / SIN_CAMBIO / CONSULTA_NO_VALIDA
+
+alt CONSULTA_NO_VALIDA (sin respuesta, no encontrado o datos inválidos)
+  opt si Beto aprueba registrar intentos fallidos
+    VS -> H : registrar intento y causa, sin estado observado confirmado
+  end
+  VS --> J : no actualizar condición; no generar aviso
+else respuesta válida y SIN_CAMBIO
+  VS -> H : registrar verificación sin cambio (propuesta)
+  VS --> J : conservar condición actual; no generar aviso
+else respuesta válida y CAMBIO
+  VS -> H : registrar condición anterior, observada, fecha y fuente (propuesta)
+  VS -> C : actualizar condición actual validada (propuesta)
+  alt nueva condición NO_HABIDO (criterio T80)
+    VS -> AS : proponer aviso interno con cliente y condición nueva
     note right
-      Supuesto: «no disponible» no es un cambio ni un error del cliente.
-      ConsultaRuc hoy usa OpenRUC (de terceros, estuvo caído).
+      Solo si se aprueba e implementa la infraestructura T48.
+      El correo electrónico quedó pospuesto.
     end note
-  else respuesta con condición y estado
-    VS -> VS : compara con la condición y el estado guardados
-    alt pasó a NO_HABIDO o a SUSPENDIDO
-      VS -> CS : registrarCondicion(clienteId, condición, estado, AUTOMATICA)
-      CS -> DB : UPDATE clientes (condicion_habido, estado_sunat, condicion_verificada_en)
-      VS -> AS : crear(CAMBIO_CONDICION_RUC, cliente, mensaje con el nuevo estado)
-      AS -> DB : INSERT avisos (SISTEMA, NO_LEIDO) y avisos_clientes
-      AS -> EC : enviar(correo del estudio, asunto, cliente y nuevo estado)
-    else no cambió
-      VS -> CS : registrarCondicion(...) solo actualiza condicion_verificada_en
-      note right
-        Si la condición no cambió, no se envía alerta.
-      end note
-    end
+  else nueva condición HABIDO
+    VS --> J : cambio registrado; política de aviso por recuperación pendiente
   end
 end
 
-== Respaldo manual ==
-U -> FE : cambia la condición del cliente en la ficha (o el servicio estuvo caído)
-FE -> CS : PUT /api/tributario/clientes/{id}\nAuthorization: Bearer <JWT>
-CS -> CS : compara con la condición guardada
-alt pasó a NO_HABIDO o a SUSPENDIDO
-  CS -> AS : crear(CAMBIO_CONDICION_RUC, ...) por correo y en el sistema
-end
-CS --> FE : 200 ClienteDto
-
-== El contador ve el aviso ==
-U -> FE : abre la bandeja de avisos
-FE -> AS : GET /api/tributario/avisos?soloNoLeidos=true
-AS --> FE : 200 «<cliente>: ahora <NO HABIDO / SUSPENDIDO>» con el cliente y su nuevo estado
-FE --> U : muestra la alerta
-
-note over AS
-  Supuesto: el aviso del cambio es inmediato, por correo y en el sistema; los avisos a 3 días, 1 día y el mismo día
-  (decisión de Beto) son para fechas límite y no aplican aquí. La frecuencia sale de parametros_sistema y se edita desde el sistema.
+note over VS,H
+  Historial más estado actual: propuesta de Julio y Ricardo, pendiente de Beto.
+  Registrar historial y actualizar Cliente deberán coordinarse al implementar;
+  este diagrama no define transacción, tabla ni frecuencia definitiva.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-22, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ConsultaRuc, ResultadoConsulta, ClienteService, ClienteRepository, GlobalExceptionHandler, SecurityConfig
+note over CR,AS
+  Beto debe confirmar: historial completo, frecuencia, fallo del proveedor,
+  representación de SUSPENDIDO, datos conservados y relación con avisos internos.
+  SUSPENDIDO no está representado en Cliente ni en el detector del PR #49.
+end note
+footer Actualización propuesta T79 · Contraste: origin/develop dbe22ce y PR #49 · Sin job, historial ni avisos implementados
 @enduml

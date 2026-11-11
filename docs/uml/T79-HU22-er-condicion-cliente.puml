@@ -1,52 +1,55 @@
 @startuml
 !pragma layout smetana
-title T79 · HU-22 · Modelo de datos de la condición del RUC y sus avisos (diseño previo)
+title T79 · HU-22 · Estado actual e historial de verificaciones RUC (modelo conceptual pendiente de Beto)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 hide circle
 
-entity "tributario_schema.clientes" as clientes <<existe, cambia>> {
-  * id : BIGSERIAL <<PK>>
+entity "Cliente (existente)" as cliente <<existente>> {
+  id : identificador
   --
-  * ruc : VARCHAR(11) <<UNIQUE>>
-  * razon_social : VARCHAR(200)
-  * condicion_habido : HABIDO | NO_HABIDO = HABIDO
-  * estado_sunat : ACTIVO | SUSPENDIDO | BAJA | DESCONOCIDO = DESCONOCIDO  <<nuevo>>
-    condicion_verificada_en : TIMESTAMP  <<nuevo>>
-  * activo : BOOLEAN = true
+  ruc : identificador tributario
+  condicion_habido : HABIDO / NO_HABIDO (estado actual)
+  activo : vigencia en cartera
 }
-entity "tributario_schema.avisos" as avisos <<definido en HU-12>> {
-  * id : BIGSERIAL <<PK>>
+entity "Historial de verificaciones RUC\n(nombre por definir)" as historial <<propuesta, pendiente Beto>> {
+  referencia al cliente
   --
-  * tipo : RECORDATORIO_SIRE | CAMBIO_CONDICION_RUC
-  * canal : SISTEMA | CORREO
-  * mensaje : VARCHAR(500)
-  * estado : NO_LEIDO | LEIDO | ENVIADO | FALLIDO
-  * creado_en : TIMESTAMP
+  fecha y hora de consulta
+  condición anterior
+  condición observada (si hubo respuesta válida)
+  estado observado del proveedor (si existe)
+  resultado de verificación
+  fuente de información
 }
-entity "tributario_schema.avisos_clientes" as ac <<definido en HU-12>> {
-  * aviso_id : BIGINT <<PK>> <<FK>>
-  * cliente_id : BIGINT <<PK>> <<FK>>
-}
-entity "tributario_schema.parametros_sistema" as param <<definido en HU-12>> {
-  * clave : VARCHAR(80) <<PK>>
-  --
-  * valor : VARCHAR(200)
+entity "Avisos internos (diseño T48)" as aviso <<propuesta, no implementada>> {
+  vínculo con cliente y cambio (por definir)
 }
 
-avisos ||--|{ ac : aviso_id
-clientes ||--o{ ac : cliente_id, ON DELETE CASCADE
+cliente ||--o{ historial : verificaciones propuestas
+cliente ||--o{ aviso : avisos propuestos
+historial .. aviso : vínculo por confirmar
 
-note bottom of clientes
-  Cambio: se agregan estado_sunat y condicion_verificada_en (ALTER TABLE ... ADD COLUMN IF NOT EXISTS, como el resto del esquema).
-  El aviso se crea cuando condicion_habido pasa a NO_HABIDO o estado_sunat pasa a SUSPENDIDO; si no hay cambio, no hay aviso.
+note right of cliente
+  El código actual almacena solo condicion_habido.
+  SUSPENDIDO llega como texto del proveedor, pero no hay
+  representación persistida acordada en Cliente.
+  Conservar estado actual más historial es una propuesta
+  de Julio y Ricardo, no una decisión aprobada por Beto.
 end note
-note right of param
-  Supuesto: la frecuencia de verificación es el parámetro ruc.verificacion_cada_dias (7 por defecto), editable desde el sistema (decisión de Beto, 06/11).
-  Supuesto: estado_sunat sale de la consulta automática; si no hay consulta, se llena a mano en la ficha.
-  Supuesto: ConsultaRuc usa OpenRUC (de terceros, estuvo caído); sin respuesta no se cambia nada y se reintenta.
-  Supuesto: no se guarda un historial de condiciones en esta historia; el cambio queda en el aviso.
+note bottom of historial
+  Beto debe confirmar historial completo, datos retenidos,
+  frecuencia, tratamiento de fallos del proveedor y
+  representación de SUSPENDIDO. Un intento fallido no
+  confirma condición nueva ni debe originar aviso.
+  Nombre de tabla, columnas, tipos, índices y restricciones:
+  pendientes de diseño y aprobación; no existen en la BD.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-22, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y condicion_habido), model.Cliente, ruc.ConsultaRucDto
+note right of aviso
+  Beto debe confirmar cómo relacionar cambios con avisos internos.
+  La infraestructura compartida T48 no está implementada.
+  El correo electrónico quedó pospuesto.
+end note
+footer Actualización conceptual T79 · Contraste: origin/develop dbe22ce · Sin cambios de schema.sql ni migración
 @enduml
