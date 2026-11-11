@@ -1,13 +1,18 @@
 import { tributarioApi } from './apiClient'
 
 // ---- HU-23 ----
-export type TipoIncidencia = 'CAIDA_PORTAL_SOL' | 'CLIENTE_NO_ENVIA_DOCUMENTOS' | 'RECHAZO_FRACCIONAMIENTO' | 'OTRO'
+export type TipoIncidencia =
+  | 'CAIDA_PORTAL_SOL' | 'CLIENTE_NO_ENVIA_DOCUMENTOS' | 'RECHAZO_FRACCIONAMIENTO'
+  | 'PROBLEMA_SIRE' | 'PROBLEMA_SERVICIOS_EXTERNOS' | 'FALLA_SISTEMA_INTERNO' | 'PROBLEMA_CONEXION_INTERNET'
+  | 'ERROR_PROCESO_CONTABLE' | 'OTRO'
 
 export interface Incidencia {
   id: number
   tipo: TipoIncidencia
   fecha: string
   descripcion: string
+  /** Notas adicionales; opcional. */
+  observaciones?: string | null
   registradaPor: string
   registradaEn: string
   clientesAsociados: number
@@ -19,6 +24,8 @@ export interface IncidenciaEntrada {
   clienteId?: number
   fecha: string
   descripcion: string
+  /** Opcional: si va vacía no se envía. */
+  observaciones?: string
 }
 
 export const registrarIncidencia = (entrada: IncidenciaEntrada) =>
