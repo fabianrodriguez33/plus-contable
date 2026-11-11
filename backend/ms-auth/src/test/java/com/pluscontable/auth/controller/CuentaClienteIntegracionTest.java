@@ -105,6 +105,22 @@ class CuentaClienteIntegracionTest {
         return jdbc.queryForObject("SELECT count(*) FROM auth_schema.usuarios WHERE cliente_id = ?", Integer.class, cliente);
     }
 
+    // ---- la llamada a ms-tributario va fuera de la transacción (HU-37)
+
+    @Test
+    void laConsultaAMsTributarioNoSeHaceDentroDeUnaTransaccion() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean dentro = new java.util.concurrent.atomic.AtomicBoolean(true);
+        org.mockito.Mockito.when(tributario.buscar(org.mockito.ArgumentMatchers.eq(CLIENTE), org.mockito.ArgumentMatchers.anyString())).thenAnswer(inv -> {
+            dentro.set(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            return java.util.Optional.of(new ClienteResumen(CLIENTE, "Acme SAC"));
+        });
+
+        crear(contador(), CLIENTE, CORREO, 201);
+
+        assertThat(dentro.get()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auth_schema.usuarios WHERE username = ?", Integer.class, CORREO)).isEqualTo(1);
+    }
+
     // ---- vigencias (HU-37): la temporal 48 horas y el token restringido 15 minutos, tomadas de application.yml
 
     @Test

@@ -19,6 +19,11 @@ import com.pluscontable.auth.repository.RolRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
 import com.pluscontable.auth.service.ClienteTributarioClient.ClienteResumen;
 import java.time.LocalDateTime;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,18 +50,36 @@ class CuentaClienteServiceTest {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final ClienteTributarioClient tributario = mock(ClienteTributarioClient.class);
     private final GeneradorPassword generador = mock(GeneradorPassword.class);
+    private final TransaccionDePrueba tm = new TransaccionDePrueba();
     private final CuentaClienteService service =
-            new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador);
+            new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 48, new TransactionTemplate(tm));
+    private boolean consultaDentroDeTransaccion = true;
+    private boolean guardoDentroDeTransaccion = false;
+
+    /** Administrador de transacciones que solo registra si hay una abierta y si se confirmó o se deshizo. */
+    static class TransaccionDePrueba implements PlatformTransactionManager {
+        boolean activa;
+        int confirmadas;
+        int deshechas;
+
+        @Override public TransactionStatus getTransaction(TransactionDefinition d) { activa = true; return new SimpleTransactionStatus(); }
+        @Override public void commit(TransactionStatus s) { activa = false; confirmadas++; }
+        @Override public void rollback(TransactionStatus s) { activa = false; deshechas++; }
+    }
 
     @BeforeEach
     void preparar() {
         Rol rol = new Rol();
         rol.setNombre("CLIENTE_MYPE");
         when(roles.findByNombre("CLIENTE_MYPE")).thenReturn(Optional.of(rol));
-        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.of(new ClienteResumen(CLIENTE, "Acme SAC")));
+        when(tributario.buscar(CLIENTE, TOKEN)).thenAnswer(inv -> {
+            consultaDentroDeTransaccion = tm.activa;
+            return Optional.of(new ClienteResumen(CLIENTE, "Acme SAC"));
+        });
         when(generador.generar()).thenReturn(TEMPORAL);
         when(usuarios.save(any(Usuario.class))).thenAnswer(inv -> {
             Usuario u = inv.getArgument(0);
+            guardoDentroDeTransaccion = tm.activa;
             ReflectionTestUtils.setField(u, "id", 9L);
             return u;
         });
@@ -102,6 +125,33 @@ class CuentaClienteServiceTest {
     }
 
     @Test
+    void laConsultaAMsTributarioSeHaceFueraDeLaTransaccionYElGuardadoDentro() {
+        crear("contacto@acme.pe");
+
+        assertThat(consultaDentroDeTransaccion).isFalse();
+        assertThat(guardoDentroDeTransaccion).isTrue();
+        assertThat(tm.confirmadas).isEqualTo(1);
+        assertThat(tm.deshechas).isZero();
+    }
+
+    @Test
+    void siFallaElGuardadoLaTransaccionSeDeshace() {
+        when(bitacora.save(any())).thenThrow(new IllegalStateException("la base se cayó"));
+
+        assertThatThrownBy(() -> crear("contacto@acme.pe")).isInstanceOf(IllegalStateException.class);
+        assertThat(tm.deshechas).isEqualTo(1);
+        assertThat(tm.confirmadas).isZero();
+    }
+
+    @Test
+    void siElClienteNoExisteNoSeAbreNingunaTransaccion() {
+        when(tributario.buscar(CLIENTE, TOKEN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> crear("contacto@acme.pe")).isInstanceOf(ResponseStatusException.class);
+        assertThat(tm.confirmadas + tm.deshechas).isZero();
+    }
+
+    @Test
     void laTemporalVenceALas48HorasPorDefecto() {
         LocalDateTime antes = LocalDateTime.now();
         crear("contacto@acme.pe");
@@ -112,7 +162,7 @@ class CuentaClienteServiceTest {
 
     @Test
     void laVigenciaDeLaTemporalSeConfigura() {
-        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72);
+        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm));
         LocalDateTime antes = LocalDateTime.now();
         de72.crear(CLIENTE, "contacto@acme.pe", TOKEN, "ana", "10.0.0.1");
 

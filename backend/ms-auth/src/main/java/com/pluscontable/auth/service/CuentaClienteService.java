@@ -12,13 +12,12 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -40,20 +39,14 @@ public class CuentaClienteService {
     private final ClienteTributarioClient tributario;
     private final GeneradorPassword generador;
     private final long temporalHoras;
+    private final TransactionTemplate transaccion;
 
-    /** Vigencia de la contraseña temporal si no se configura: 48 horas. */
-    static final long TEMPORAL_HORAS_POR_DEFECTO = 48;
-
-    public CuentaClienteService(UsuarioRepository usuarios, RolRepository roles, BitacoraRepository bitacora,
-                                PasswordEncoder encoder, ClienteTributarioClient tributario, GeneradorPassword generador) {
-        this(usuarios, roles, bitacora, encoder, tributario, generador, TEMPORAL_HORAS_POR_DEFECTO);
-    }
-
-    @Autowired
     public CuentaClienteService(UsuarioRepository usuarios, RolRepository roles, BitacoraRepository bitacora,
                                 PasswordEncoder encoder, ClienteTributarioClient tributario, GeneradorPassword generador,
-                                @Value("${app.security.temporal-horas:48}") long temporalHoras) {
+                                @Value("${app.security.temporal-horas:48}") long temporalHoras,
+                                TransactionTemplate transaccion) {
         this.temporalHoras = temporalHoras;
+        this.transaccion = transaccion;
         this.usuarios = usuarios;
         this.roles = roles;
         this.bitacora = bitacora;
@@ -66,11 +59,17 @@ public class CuentaClienteService {
      * @param autorizacion encabezado Authorization del contador, que se reenvía a ms-tributario para comprobar la empresa
      * @param creador      usuario del token que crea la cuenta (queda en la bitácora de seguridad)
      */
-    @Transactional
     public CuentaClienteResponse crear(Long clienteId, String correo, String autorizacion, String creador, String ip) {
         String normalizado = normalizar(correo);
+        // La llamada a ms-tributario (puede tardar hasta 8 s) va ANTES de abrir la transacción: así no se retiene una
+        // conexión a la base mientras se espera al otro servicio. Solo lo que escribe en la base va dentro de la transacción.
         ClienteTributarioClient.ClienteResumen cliente = tributario.buscar(clienteId, autorizacion)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado: " + clienteId));
+        return transaccion.execute(estado -> guardar(clienteId, normalizado, cliente, creador, ip));
+    }
+
+    private CuentaClienteResponse guardar(Long clienteId, String normalizado, ClienteTributarioClient.ClienteResumen cliente,
+                                          String creador, String ip) {
         if (usuarios.existsByClienteId(clienteId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, MSG_EMPRESA_CON_CUENTA);
         }
