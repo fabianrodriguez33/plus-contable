@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { Copy, EyeOff, KeyRound, TriangleAlert } from 'lucide-react'
+import { Copy, EyeOff, KeyRound, RotateCcw, TriangleAlert } from 'lucide-react'
 import { mensajeError } from '../../services/apiClient'
-import { crearCuentaCliente } from '../../services/cuentaClienteService'
+import { crearCuentaCliente, restablecerAccesoCliente } from '../../services/cuentaClienteService'
 import Button from '../Button'
 import Input from '../Input'
 
@@ -25,16 +25,30 @@ export function validarCorreo(correo: string): string | null {
   return null
 }
 
+export const MENSAJE_CONFIRMAR_RESTABLECER =
+  '¿Restablecer el acceso de este cliente? La contraseña temporal anterior y las sesiones abiertas del cliente dejarán de ' +
+  'valer, y se generará una nueva que se mostrará una sola vez.'
+
+/** «13/11/2026, 08:00»: la hora que devuelve el servidor, sin convertirla de zona. */
+export function formatearVencimiento(venceEn?: string | null): string | null {
+  if (!venceEn) return null
+  const f = new Date(venceEn)
+  if (Number.isNaN(f.getTime())) return null
+  return f.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 /**
- * HU-37 · Tarea 13: el contador crea el acceso del cliente con su correo. El servidor devuelve una contraseña temporal que se
+ * HU-37 · Tarea 13: el contador crea el acceso del cliente con su correo, o lo restablece si ya existe. El servidor devuelve una contraseña temporal que se
  * muestra UNA sola vez: vive solo en el estado de este componente y se borra al ocultarla, al pasar el tiempo, al cambiar de
- * cliente o al salir de la pestaña. No va al aviso de la ficha, ni al almacenamiento del navegador.
+ * cliente o al salir de la pestaña. No va al aviso de la ficha, ni al almacenamiento del navegador. Lo mismo vale para la que
+ * entrega «Restablecer acceso» (decisión de Beto del 11/11).
  */
 export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) {
   const [correo, setCorreo] = useState('')
   const [errorCorreo, setErrorCorreo] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
-  const [creada, setCreada] = useState<{ correo: string; password: string } | null>(null)
+  const [creada, setCreada] = useState<{ correo: string; password: string; venceEn: string | null; restablecida: boolean } | null>(null)
+  const [restableciendo, setRestableciendo] = useState(false)
   const [accesoCreadoPara, setAccesoCreadoPara] = useState<string | null>(null)
   const [copiada, setCopiada] = useState(false)
 
@@ -45,6 +59,7 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
     setCorreo('')
     setErrorCorreo(null)
     setCopiada(false)
+    setRestableciendo(false)
   }, [clienteId])
 
   // se oculta sola
@@ -66,7 +81,7 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
     setGuardando(true)
     try {
       const r = await crearCuentaCliente(clienteId, correo.trim())
-      setCreada({ correo: r.correo, password: r.passwordTemporal })
+      setCreada({ correo: r.correo, password: r.passwordTemporal, venceEn: formatearVencimiento(r.venceEn), restablecida: false })
       setAccesoCreadoPara(r.correo)
       setCorreo('')
       setCopiada(false)
@@ -75,6 +90,24 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
       setError(mensajeError(err))
     } finally {
       setGuardando(false)
+    }
+  }
+
+  const restablecer = async () => {
+    setError('')
+    setOk('')
+    if (!window.confirm(MENSAJE_CONFIRMAR_RESTABLECER)) return
+    setRestableciendo(true)
+    try {
+      const r = await restablecerAccesoCliente(clienteId)
+      setCreada({ correo: r.correo, password: r.passwordTemporal, venceEn: formatearVencimiento(r.venceEn), restablecida: true })
+      setAccesoCreadoPara(r.correo)
+      setCopiada(false)
+      setOk(`Acceso restablecido para ${r.correo}`) // la contraseña no va en este aviso
+    } catch (err) {
+      setError(mensajeError(err))
+    } finally {
+      setRestableciendo(false)
     }
   }
 
@@ -97,6 +130,7 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
     <div className="space-y-5">
       {creada && (
         <section aria-label="Contraseña temporal" className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+          {creada.restablecida && <p className="mb-2 text-sm font-semibold text-amber-900">Acceso restablecido: nueva contraseña temporal</p>}
           <p className="flex items-start gap-2 text-sm font-medium text-amber-900">
             <TriangleAlert size={18} className="mt-0.5 shrink-0" />
             Esta contraseña se muestra una sola vez y no se podrá volver a ver. Anótela y entréguela al cliente por su medio:
@@ -110,7 +144,8 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
             {creada.password}
           </p>
           <p className="mt-2 text-xs text-slate-600">
-            El cliente debe cambiarla en su primer ingreso y la temporal solo sirve una vez. Se oculta sola en {SEGUNDOS_VISIBLE / 60} minutos.
+            {creada.venceEn ? `Vale hasta el ${creada.venceEn} (48 horas)` : 'Vale 48 horas'} y sigue sirviendo aunque el cliente ingrese, hasta que
+            la cambie en su primer ingreso; después queda invalidada. Se oculta sola en {SEGUNDOS_VISIBLE / 60} minutos.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" variant="secondary" onClick={copiar}>
@@ -140,6 +175,19 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
             <KeyRound size={16} /> {guardando ? 'Creando…' : 'Crear acceso'}
           </Button>
         </form>
+      )}
+
+      {!creada && (
+        <section aria-label="Restablecer acceso" className="max-w-xl space-y-3 border-t border-slate-200 pt-4">
+          <p className="text-sm text-slate-600">
+            Si el cliente perdió la contraseña temporal, no la cambió antes de que venciera o necesita volver a entrar, genere otra.
+            La anterior y las sesiones abiertas del cliente dejan de valer, y deberá cambiarla al ingresar. El sistema no envía
+            correos: usted se la entrega.
+          </p>
+          <Button type="button" variant="secondary" onClick={restablecer} disabled={restableciendo}>
+            <RotateCcw size={16} /> {restableciendo ? 'Restableciendo…' : 'Restablecer acceso'}
+          </Button>
+        </section>
       )}
     </div>
   )
