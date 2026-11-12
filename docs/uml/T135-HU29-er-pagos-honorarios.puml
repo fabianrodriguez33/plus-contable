@@ -1,0 +1,68 @@
+@startuml
+!pragma layout smetana
+title T135 · HU-29 · Modelo de datos de los pagos de honorarios
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.programaciones_cobro" as prog <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>> <<UNIQUE>>
+  * periodicidad : MENSUAL | QUINCENAL
+}
+
+entity "tributario_schema.cobros_honorarios" as cobros <<existe, ampliado>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * programacion_id : BIGINT <<FK>>
+  * fecha_cobro : DATE
+  * monto : NUMERIC(12,2)  CHECK (monto > 0)
+  * estado : PENDIENTE | PAGO_PARCIAL | PAGADO  (ck_cobros_honorarios_estado)
+  * pagado : NUMERIC(12,2) = 0  (nuevo)
+  CHECK (pagado >= 0 AND pagado <= monto)  (ck_cobros_honorarios_pagado)
+  UNIQUE (cliente_id, fecha_cobro)
+}
+
+entity "tributario_schema.pagos_honorarios" as pagos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cobro_id : BIGINT <<FK>>
+  * fecha_pago : DATE
+  * monto : NUMERIC(12,2)  CHECK (monto > 0)
+  * medio_pago : EFECTIVO | TRANSFERENCIA | DEPOSITO | YAPE_PLIN | OTRO
+    medio_pago_detalle : VARCHAR(100)
+  * registrado_por : VARCHAR(60)
+  * registrado_en : TIMESTAMP = ahora
+  CHECK ((medio_pago = 'OTRO') = (detalle no vacío))  (ck_pagos_honorarios_detalle)
+  INDEX (cobro_id, fecha_pago)
+}
+
+clientes ||--o| prog : cliente_id, ON DELETE CASCADE
+prog ||--o{ cobros : programacion_id, ON DELETE CASCADE
+clientes ||--o{ cobros : cliente_id, ON DELETE CASCADE
+cobros ||--o{ pagos : cobro_id, ON DELETE CASCADE
+
+note right of pagos
+  Un cobro admite varios pagos parciales hasta saldarse.
+  cobros_honorarios.pagado = suma de los pagos del cobro; saldo = monto - pagado.
+  medio_pago_detalle solo con OTRO (decisión de Beto del 11/11).
+end note
+
+note bottom of cobros
+  Bases existentes: schema.sql agrega pagado (0 en los cobros anteriores) y recrea el CHECK de estado
+  con nombre estable (antes cobros_honorarios_estado_check, solo PENDIENTE).
+  Borrar el cliente borra sus cobros y, en cascada, sus pagos.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-29-pago-honorarios. Código: backend/ms-tributario/src/main/resources/schema.sql (cobros_honorarios, pagos_honorarios), CobroHonorario, PagoHonorario. Prueba: PagoHonorarioEsquemaPostgresTest
+@enduml
