@@ -14,6 +14,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,6 +110,36 @@ class PagoHonorarioEsquemaPostgresTest {
     }
 
     @Test
+    void dosPagosSimultaneosQueJuntosSuperanElSaldoSoloDejanPasarUno() throws Exception {
+        long[] cliente = new long[1];
+        CobroHonorarioDto cobro = clienteConCobros(cliente); // monto 450
+        CyclicBarrier largada = new CyclicBarrier(2);
+        ExecutorService hilos = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Boolean> pagar300 = () -> {
+                largada.await(5, TimeUnit.SECONDS);
+                try {
+                    pagos.registrar(cliente[0], cobro.id(), pago("300.00"), "contador1");
+                    return true;
+                } catch (ValidationException e) {
+                    return false; // el segundo ve el saldo de 150 y se rechaza
+                }
+            };
+            List<Future<Boolean>> resultados = hilos.invokeAll(List.of(pagar300, pagar300));
+
+            long exitosos = 0;
+            for (Future<Boolean> r : resultados) if (r.get()) exitosos++;
+            assertThat(exitosos).isEqualTo(1);
+        } finally {
+            hilos.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tributario_schema.pagos_honorarios WHERE cobro_id = ?",
+                Integer.class, cobro.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT pagado FROM tributario_schema.cobros_honorarios WHERE id = ?",
+                BigDecimal.class, cobro.id())).isEqualByComparingTo("300.00");
+    }
+
+    @Test
     void conUnPagoRegistradoNoSePuedeCambiarLaPeriodicidadNiSePierdeElPago() {
         long[] cliente = new long[1];
         CobroHonorarioDto cobro = clienteConCobros(cliente);
@@ -114,6 +150,22 @@ class PagoHonorarioEsquemaPostgresTest {
                 .hasMessageContaining("pagos registrados");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tributario_schema.pagos_honorarios WHERE cobro_id = ?",
                 Integer.class, cobro.id())).isEqualTo(1);
+    }
+
+    @Test
+    void unCobroYaPagadoAntesDeHoyEnEsteMesTambienImpideCambiarLaPeriodicidad() {
+        long[] cliente = new long[1];
+        clienteConCobros(cliente); // mensual: los cobros van de hoy en adelante
+        long programacion = jdbc.queryForObject("SELECT id FROM tributario_schema.programaciones_cobro WHERE cliente_id = ?",
+                Long.class, cliente[0]);
+        // el cobro del día 1 de este mes, ya pagado (si hoy es día 1, es el de hoy)
+        jdbc.update("INSERT INTO tributario_schema.cobros_honorarios (cliente_id, programacion_id, fecha_cobro, monto, estado, pagado) "
+                + "VALUES (?, ?, ?, 450.00, 'PAGADO', 450.00)", cliente[0], programacion, LocalDate.now().withDayOfMonth(1));
+
+        // si se dejara cambiar, el mes ya pagado se volvería a cobrar con las quincenas
+        assertThatThrownBy(() -> cobros.programar(cliente[0], new ProgramacionCobroEntradaDto(Periodicidad.QUINCENAL)))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("pagos registrados");
     }
 
     @Test
