@@ -30,10 +30,13 @@ class HistorialPostgresTest {
     @Autowired SolicitudEspecialService solicitudes;
 
     private final List<String> rucs = new ArrayList<>();
+    private final List<Long> incidenciasCreadas = new ArrayList<>();
     private final LocalDate hoy = LocalDate.now();
 
     @AfterEach
     void limpiar() {
+        // borrar el cliente solo quita la asociación: la incidencia quedaría suelta y molestaría a otras pruebas (como HU-23)
+        for (Long id : incidenciasCreadas) jdbc.update("DELETE FROM tributario_schema.incidencias WHERE id = ?", id);
         for (String ruc : rucs) jdbc.update("DELETE FROM tributario_schema.clientes WHERE ruc = ?", ruc);
     }
 
@@ -46,7 +49,7 @@ class HistorialPostgresTest {
     }
 
     private void incidencia(Long cliente, TipoIncidencia tipo, LocalDate fecha, String descripcion) {
-        incidencias.registrar(new IncidenciaEntradaDto(tipo, cliente, fecha, descripcion, null), "contador1");
+        incidenciasCreadas.add(incidencias.registrar(new IncidenciaEntradaDto(tipo, cliente, fecha, descripcion, null), "contador1").id());
     }
 
     @Test
