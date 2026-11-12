@@ -183,8 +183,18 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
                       </Link>
                       {' · '}{e.item.obligacion.tipoObligacion ?? 'Obligación'}
                     </span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTILO[situacionVisual(e.item)]}`}>
-                      {etiquetaSituacion(e.item)}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {e.item.obligacion.estado === 'PAGO_PARCIAL' && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Pago parcial</span>
+                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTILO[situacionVisual(e.item)]}`}>
+                        {etiquetaSituacion(e.item)}
+                      </span>
+                      {(e.item.obligacion.estado === 'DECLARADO' || e.item.obligacion.estado === 'PAGO_PARCIAL') && (
+                        <Link className="text-xs font-medium text-brand-600 hover:underline" to={`/obligaciones/${e.item.obligacion.id}/pago`}>
+                          Registrar pago
+                        </Link>
+                      )}
                     </span>
                   </li>
                 ) : (

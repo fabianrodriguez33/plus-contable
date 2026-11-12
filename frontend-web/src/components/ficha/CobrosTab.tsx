@@ -181,7 +181,7 @@ function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
   )
 }
 
-const MEDIOS: Record<MedioPago, string> = {
+export const MEDIOS: Record<MedioPago, string> = {
   EFECTIVO: 'Efectivo',
   TRANSFERENCIA: 'Transferencia bancaria',
   DEPOSITO: 'Depósito bancario',

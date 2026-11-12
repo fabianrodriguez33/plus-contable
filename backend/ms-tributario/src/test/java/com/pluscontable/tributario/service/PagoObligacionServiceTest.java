@@ -226,9 +226,99 @@ class PagoObligacionServiceTest {
                 .isInstanceOf(EntityNotFoundException.class).hasMessage("Obligación no encontrada");
     }
 
+    // ---- comprobante = número de constancia; el PDF es opcional (alcance reducido de Beto, 10/11)
+
     @Test
-    void sinFechaMontoConstanciaNiArchivoListaTodosLosErroresJuntos() throws IOException {
-        noSeGuarda(new PagoEntradaDto(null, null, null), null, "fechaPago", "montoPagado", "numeroConstancia", "archivo (el comprobante es obligatorio)");
+    void unPagoSinArchivoSeRegistraSoloConElNumeroDeConstanciaYNoGuardaNingunArchivo() throws IOException {
+        ObligacionDto r = service.registrar(OBLIGACION, pago("400.00", " C-001 "), null);
+
+        PagoObligacion p = guardado();
+        assertThat(p.getNumeroConstancia()).isEqualTo("C-001");
+        assertThat(p.getNombreArchivo()).isNull();
+        assertThat(p.getContentType()).isNull();
+        assertThat(p.getTamanoBytes()).isNull();
+        assertThat(p.getRutaAlmacenamiento()).isNull();
+        assertThat(archivosGuardados()).isZero();
+        assertThat(r.estado()).isEqualTo(Estado.PAGO_PARCIAL);
+        assertThat(r.montoAcumuladoPagado()).isEqualByComparingTo("400.00");
+        assertThat(r.saldo()).isEqualByComparingTo("600.00");
+    }
+
+    @Test
+    void unArchivoVacioCuentaComoSinArchivo() throws IOException {
+        MultipartFile vacio = new MockMultipartFile("archivo", "c.pdf", "application/pdf", new byte[0]);
+
+        ObligacionDto r = service.registrar(OBLIGACION, pago("1000.00", "C-001"), vacio);
+
+        assertThat(r.estado()).isEqualTo(Estado.PAGADO);
+        assertThat(guardado().getRutaAlmacenamiento()).isNull();
+        assertThat(archivosGuardados()).isZero();
+    }
+
+    @Test
+    void sinArchivoSiguenValiendoElSaldoLaFechaYLaConstanciaRepetida() throws IOException {
+        noSeGuarda(pago("1000.01", "C-1"), null, "montoPagado (supera el saldo pendiente de 1000.00)");
+        noSeGuarda(new PagoEntradaDto(HOY.plusDays(1), new BigDecimal("10"), "C-1"), null, "fechaPago (no puede ser futura)");
+        when(pagos.existsByObligacionIdAndNumeroConstancia(OBLIGACION, "C-001")).thenReturn(true);
+        noSeGuarda(pago("10", "C-001"), null, "numeroConstancia (ya registrado en esta obligación)");
+    }
+
+    @Test
+    void siFallaElGuardadoSinArchivoNoHayNadaQueBorrarYLaObligacionNoCambia() {
+        doThrow(new IllegalStateException("falla de base")).when(pagos).save(any(PagoObligacion.class));
+
+        assertThatThrownBy(() -> service.registrar(OBLIGACION, pago("100.00", "C-001"), null)).isInstanceOf(IllegalStateException.class);
+        verify(obligaciones, never()).save(any());
+    }
+
+    // ---- consultar los pagos de una obligación
+
+    @Test
+    void listarDevuelveLosPagosEnOrdenConSuConstanciaAcumuladoYSaldo() {
+        PagoObligacion a = pagoGuardado(1L, "C-001", "400.00", "400.00", "600.00");
+        PagoObligacion b = pagoGuardado(2L, "C-002", "100.00", "500.00", "500.00");
+        when(obligaciones.existsById(OBLIGACION)).thenReturn(true);
+        when(pagos.findByObligacionIdOrderByFechaPagoAscIdAsc(OBLIGACION)).thenReturn(java.util.List.of(a, b));
+
+        java.util.List<com.pluscontable.tributario.dto.PagoDto> lista = service.listar(OBLIGACION);
+
+        assertThat(lista).extracting(com.pluscontable.tributario.dto.PagoDto::numeroConstancia).containsExactly("C-001", "C-002");
+        assertThat(lista.get(1).montoPagado()).isEqualByComparingTo("100.00");
+        assertThat(lista.get(1).acumuladoDespues()).isEqualByComparingTo("500.00");
+        assertThat(lista.get(1).saldoDespues()).isEqualByComparingTo("500.00");
+        assertThat(lista.get(0).fechaPago()).isEqualTo(HOY.minusDays(1));
+        assertThat(lista.get(0).id()).isEqualTo(1L);
+    }
+
+    @Test
+    void listarUnaObligacionSinPagosDaListaVaciaYUnaInexistenteDa404() {
+        when(obligaciones.existsById(OBLIGACION)).thenReturn(true);
+        when(pagos.findByObligacionIdOrderByFechaPagoAscIdAsc(OBLIGACION)).thenReturn(java.util.List.of());
+        when(obligaciones.existsById(99L)).thenReturn(false);
+
+        assertThat(service.listar(OBLIGACION)).isEmpty();
+        assertThatThrownBy(() -> service.listar(99L)).isInstanceOf(EntityNotFoundException.class).hasMessage("Obligación no encontrada");
+        verify(pagos, never()).findByObligacionIdOrderByFechaPagoAscIdAsc(99L);
+    }
+
+    private static PagoObligacion pagoGuardado(long id, String constancia, String monto, String acumulado, String saldo) {
+        PagoObligacion p = new PagoObligacion();
+        org.springframework.test.util.ReflectionTestUtils.setField(p, "id", id);
+        p.setObligacionId(OBLIGACION);
+        p.setFechaPago(HOY.minusDays(1));
+        p.setMontoPagado(new BigDecimal(monto));
+        p.setNumeroConstancia(constancia);
+        p.setAcumuladoDespues(new BigDecimal(acumulado));
+        p.setSaldoDespues(new BigDecimal(saldo));
+        return p;
+    }
+
+    @Test
+    void sinFechaMontoNiConstanciaListaTodosLosErroresJuntosYNoPideArchivo() throws IOException {
+        assertThatThrownBy(() -> service.registrar(OBLIGACION, new PagoEntradaDto(null, null, null), null))
+                .isInstanceOf(ValidationException.class)
+                .hasMessage("Faltan o son inválidos: fechaPago, montoPagado, numeroConstancia");
+        verify(pagos, never()).save(any());
     }
 
     @Test
@@ -262,12 +352,10 @@ class PagoObligacionServiceTest {
     void elComprobanteDebeSerUnPdfDeVerdadYNoSuperarElMaximo() throws IOException {
         MultipartFile texto = new MockMultipartFile("archivo", "c.pdf", "application/pdf", "no soy un pdf".getBytes(StandardCharsets.US_ASCII));
         MultipartFile otroTipo = new MockMultipartFile("archivo", "c.png", "image/png", "%PDF-1.7".getBytes(StandardCharsets.US_ASCII));
-        MultipartFile vacio = new MockMultipartFile("archivo", "c.pdf", "application/pdf", new byte[0]);
         MultipartFile grande = new MockMultipartFile("archivo", "c.pdf", "application/pdf", new byte[11 * 1024 * 1024]);
 
         noSeGuarda(pago("10", "C-1"), texto, "archivo (no es un PDF)");
         noSeGuarda(pago("10", "C-1"), otroTipo, "archivo (no es un PDF)");
-        noSeGuarda(pago("10", "C-1"), vacio, "archivo (el comprobante es obligatorio)");
         noSeGuarda(pago("10", "C-1"), grande, "archivo (supera el máximo de 10 MB)");
     }
 

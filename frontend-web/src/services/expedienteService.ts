@@ -118,3 +118,46 @@ export interface PagoHonorario {
 
 export const registrarPagoHonorario = (clienteId: number, cobroId: number, p: PagoHonorario) =>
   tributarioApi.post<CobroHonorario>(`${base(clienteId)}/cobros/${cobroId}/pagos`, p).then((r) => r.data)
+
+// ---- HU-30 ----
+export interface PagoDelPeriodo {
+  id: number
+  cobroId: number
+  fechaCobro: string
+  fechaPago: string
+  monto: number
+  medioPago: MedioPago
+  medioPagoDetalle: string | null
+}
+
+/** saldo = saldoAnterior + totalCobrado - totalPagado; saldoAnterior es lo que se debía antes de desde. */
+export interface EstadoCuenta {
+  clienteId: number
+  razonSocial: string
+  desde: string
+  hasta: string
+  saldoAnterior: number
+  cobros: CobroHonorario[]
+  pagos: PagoDelPeriodo[]
+  totalCobrado: number
+  totalPagado: number
+  saldo: number
+  sinMovimientos: boolean
+}
+
+export const emitirEstadoCuenta = (clienteId: number, desde: string, hasta: string) =>
+  tributarioApi.get<EstadoCuenta>(`${base(clienteId)}/estado-cuenta`, { params: { desde, hasta } }).then((r) => r.data)
+
+// ---- HU-31 ----
+/** Un cliente con cobros vencidos sin pagar del todo; diasAtraso cuenta desde el cobro vencido más antiguo. */
+export interface Moroso {
+  clienteId: number
+  ruc: string
+  razonSocial: string
+  montoVencido: number
+  cobrosVencidos: number
+  vencidoDesde: string
+  diasAtraso: number
+}
+
+export const listarMorosos = () => tributarioApi.get<Moroso[]>('/api/tributario/morosos').then((r) => r.data)
