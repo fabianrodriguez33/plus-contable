@@ -1,0 +1,76 @@
+@startuml
+title T224 · HU-41 · Secuencia: el cliente pide restablecer su contraseña y el estudio le restablece el acceso
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Cliente MYPE" as C
+actor "Contador" as U
+participant "frontend-web" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "RestablecimientoController" as RC
+participant "RestablecimientoService" as RS
+participant "CuentaClienteController" as CC
+participant "CuentaClienteService" as CS
+participant "AuthService" as AS
+database "auth_schema" as DB
+
+== El cliente pide una nueva contraseña (sin sesión) ==
+C -> FE : en el login pulsa "¿Olvidaste tu contraseña?" y escribe su correo
+FE -> SEC : POST /api/auth/restablecimiento/solicitar {correo}
+SEC -> RC : permitAll
+RC -> RS : solicitar(correo, ip)
+alt correo vacío o de más de 60 caracteres
+  RS --> FE : 400 "Escribe el correo con el que ingresas"
+end
+RS -> DB : SELECT usuarios WHERE username = correo normalizado
+alt cuenta de cliente activa y sin solicitud pendiente
+  RS -> DB : INSERT solicitudes_restablecimiento
+  RS -> DB : INSERT bitacora_seguridad (RESTABLECIMIENTO_SOLICITADO)
+else no existe, es del estudio, está inactiva o ya tiene una pendiente
+  RS -> RS : no hace nada
+end
+RS --> FE : 200 {mensaje: MENSAJE_SOLICITUD}
+note right
+  Criterio 2: la misma respuesta exista o no la cuenta.
+  Si dos pedidos llegan a la vez, el índice único parcial
+  deja una sola pendiente y el otro se ignora.
+end note
+FE -> C : "Si el correo corresponde a una cuenta de cliente, el estudio recibirá tu solicitud..."
+
+== El estudio ve la solicitud y entrega el medio (criterio 1) ==
+U -> FE : abre la cartera de clientes
+FE -> SEC : GET /api/auth/restablecimiento/pendientes\nAuthorization: Bearer <JWT>
+alt sin token / rol CLIENTE_MYPE
+  SEC --> FE : 401 / 403 (el aviso no se muestra)
+end
+SEC -> RC : pendientes()
+RC -> RS : pendientes()
+RS -> DB : SELECT solicitudes pendientes JOIN usuarios
+RS --> FE : 200 [{clienteId, correo, solicitadaEn}]
+FE -> U : aviso "Clientes que pidieron una nueva contraseña" con enlace a la ficha
+U -> FE : en la ficha, pestaña «Acceso del cliente», pulsa "Restablecer acceso" y confirma
+FE -> CC : POST /api/auth/clientes/{clienteId}/cuenta/restablecer
+CC -> CS : restablecer(clienteId, contador, ip)
+CS -> DB : UPDATE usuarios: hash de la nueva temporal, debe cambiar, vence en 48 h, sesion_version + 1
+note right : Criterio 3: la contraseña anterior deja de servir
+CS -> RS : atender(usuarioId, contador)
+RS -> DB : UPDATE solicitudes_restablecimiento SET atendida_en, atendida_por
+CS -> DB : INSERT bitacora_seguridad (CUENTA_CLIENTE_RESTABLECIDA)
+CS --> FE : 200 {correo, passwordTemporal, venceEn} (una sola vez)
+U -> C : le entrega la contraseña temporal por su medio (el sistema no envía correos)
+
+== El cliente entra y la cambia (HU-37) ==
+C -> FE : ingresa con la temporal
+FE -> AS : POST /api/auth/login
+AS --> FE : 200 token restringido (debe cambiar la contraseña)
+C -> FE : escribe su nueva contraseña
+FE -> CC : POST /api/auth/cambiar-password
+CC -> AS : cambiarPassword(...)
+AS -> DB : UPDATE usuarios: hash nuevo; la temporal queda usada
+AS --> FE : 200 token normal
+note right : Desde aquí ni la contraseña anterior ni la temporal sirven
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: LoginPage, RestablecerPage, DashboardPage, AccesoClienteTab, cuentaClienteService.ts, SecurityConfig, RestablecimientoController, RestablecimientoService, CuentaClienteController, CuentaClienteService.restablecer, AuthService. Prueba: RestablecimientoIntegracionTest
+@enduml

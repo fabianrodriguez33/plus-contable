@@ -1,0 +1,63 @@
+@startuml
+title T224 · HU-41 · Actividad: restablecer las credenciales de acceso del cliente
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+|Cliente MYPE|
+start
+:En el login pulsa «¿Olvidaste tu contraseña?»;
+:Escribe su correo y pide una nueva contraseña;
+|Sistema (ms-auth)|
+if (¿Correo vacío o de más de 60 caracteres?) then (sí)
+  :Responde 400 «Escribe el correo con el que ingresas»;
+  |Cliente MYPE|
+  :Corrige el correo;
+  stop
+else (no)
+endif
+|Sistema (ms-auth)|
+if (¿Es una cuenta de cliente activa sin solicitud pendiente?) then (sí)
+  :Guarda la solicitud pendiente;
+  :Anota RESTABLECIMIENTO_SOLICITADO en la bitácora;
+else (no: no existe, es del estudio,\nestá inactiva o ya pidió)
+  :No guarda nada;
+endif
+:Responde siempre el mismo mensaje;
+note right
+  Criterio 2: el mensaje no confirma
+  si la cuenta existe.
+end note
+|Cliente MYPE|
+:Ve «Si el correo corresponde a una cuenta de cliente,
+el estudio recibirá tu solicitud...»;
+|Contador|
+:Abre la cartera de clientes;
+:Ve el aviso «Clientes que pidieron una nueva contraseña»;
+:Abre la ficha del cliente, pestaña «Acceso del cliente»;
+:Pulsa «Restablecer acceso» y confirma;
+|Sistema (ms-auth)|
+:Genera otra contraseña temporal (vale 48 horas);
+:Cambia el hash: la contraseña anterior deja de servir;
+note right : Criterio 3
+:Exige el cambio en el próximo ingreso y cierra las sesiones (sesion_version + 1);
+:Marca la solicitud como atendida (quién y cuándo);
+:Anota CUENTA_CLIENTE_RESTABLECIDA en la bitácora;
+:Muestra la temporal una sola vez;
+|Contador|
+:Entrega la temporal al cliente por su medio;
+note right
+  Criterio 1: el «medio» es la temporal que entrega
+  el estudio (decisión del 11/11: el sistema no envía correos).
+end note
+|Cliente MYPE|
+:Ingresa con la temporal;
+:Escribe su nueva contraseña (HU-37);
+|Sistema (ms-auth)|
+:Guarda la nueva; la temporal queda usada;
+|Cliente MYPE|
+:Entra con su nueva contraseña;
+stop
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: RestablecerPage, DashboardPage, AccesoClienteTab, RestablecimientoService, CuentaClienteService.restablecer, AuthService.cambiarPassword. Prueba: RestablecimientoIntegracionTest
+@enduml
