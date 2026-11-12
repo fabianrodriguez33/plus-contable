@@ -80,6 +80,7 @@ note bottom of EstadoCuentaService
   Cobros con fecha_cobro en [desde, hasta] y pagos con fecha_pago en [desde, hasta] (criterio 1, del cliente y periodo elegidos: criterio 2).
   saldoAnterior = cobrado antes de desde - pagado antes de desde; saldo = saldoAnterior + totalCobrado - totalPagado.
   sinMovimientos = sin cobros ni pagos en el periodo (criterio 3); el saldo anterior se conserva.
+  Un saldo negativo es a favor del cliente: un pago adelantado de un cobro posterior resta aunque su cobro no esté en el periodo.
 end note
 
 note right of PagoHonorarioDto

@@ -15,6 +15,9 @@ import Table, { Td } from '../components/Table'
 
 const ESTADO_COBRO = { PENDIENTE: 'Pendiente', PAGO_PARCIAL: 'Pago parcial', PAGADO: 'Pagado' } as const
 
+/** Un saldo negativo es plata a favor del cliente (por ejemplo, un pago adelantado). */
+const saldo = (n: number) => (Number(n) < 0 ? `${soles(-Number(n))} a favor del cliente` : soles(n))
+
 /** El mes en curso, en hora local. */
 function mesActual(): { desde: string; hasta: string } {
   const hoy = new Date()
@@ -79,17 +82,21 @@ export default function EstadoCuentaPage() {
           </p>
           <dl aria-label="Resumen" className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             {[
-              ['Saldo anterior', estado.saldoAnterior],
-              ['Cobrado en el periodo', estado.totalCobrado],
-              ['Pagado en el periodo', estado.totalPagado],
-              ['Saldo al cierre', estado.saldo],
+              ['Saldo anterior', saldo(estado.saldoAnterior)],
+              ['Honorarios del periodo', soles(estado.totalCobrado)],
+              ['Pagos recibidos', soles(estado.totalPagado)],
+              ['Saldo al cierre', saldo(estado.saldo)],
             ].map(([etiqueta, valor]) => (
-              <div key={etiqueta as string} className="rounded-lg border border-slate-200 p-3">
+              <div key={etiqueta} className="rounded-lg border border-slate-200 p-3">
                 <dt className="text-slate-500">{etiqueta}</dt>
-                <dd className="text-base font-semibold text-slate-900">{soles(valor as number)}</dd>
+                <dd className="text-base font-semibold text-slate-900">{valor}</dd>
               </div>
             ))}
           </dl>
+          <p className="text-xs text-slate-500">
+            Los honorarios son los cobros con fecha en el periodo. Los pagos entran por su fecha de pago, aunque sean de un cobro
+            de otro periodo: un pago adelantado puede dejar saldo a favor del cliente.
+          </p>
 
           {estado.sinMovimientos ? (
             <p role="status" className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
@@ -99,7 +106,7 @@ export default function EstadoCuentaPage() {
             <>
               <section aria-label="Cobros del periodo">
                 <h3 className="mb-2 font-medium">Cobros</h3>
-                <Table columnas={['Fecha de cobro', 'Monto', 'Estado actual']} hayFilas={estado.cobros.length > 0}
+                <Table columnas={['Fecha de cobro', 'Monto', 'Estado actual (hoy)']} hayFilas={estado.cobros.length > 0}
                   vacio="No hay cobros en este periodo.">
                   {estado.cobros.map((c) => (
                     <tr key={c.id}><Td>{fechaCorta(c.fechaCobro)}</Td><Td>{soles(c.monto)}</Td><Td>{ESTADO_COBRO[c.estado]}</Td></tr>

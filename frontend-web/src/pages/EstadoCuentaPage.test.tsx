@@ -58,8 +58,8 @@ describe('Estado de cuenta de honorarios (HU-30)', () => {
 
     const resumen = await screen.findByLabelText('Resumen')
     expect(within(resumen).getByText('Saldo anterior').nextSibling?.textContent).toBe(soles(300))
-    expect(within(resumen).getByText('Cobrado en el periodo').nextSibling?.textContent).toBe(soles(500))
-    expect(within(resumen).getByText('Pagado en el periodo').nextSibling?.textContent).toBe(soles(400))
+    expect(within(resumen).getByText('Honorarios del periodo').nextSibling?.textContent).toBe(soles(500))
+    expect(within(resumen).getByText('Pagos recibidos').nextSibling?.textContent).toBe(soles(400))
     expect(within(resumen).getByText('Saldo al cierre').nextSibling?.textContent).toBe(soles(400))
 
     const cobros = screen.getByLabelText('Cobros del periodo')
@@ -70,6 +70,17 @@ describe('Estado de cuenta de honorarios (HU-30)', () => {
     expect(within(pagos).getByText('Transferencia bancaria')).toBeTruthy()
     expect(within(pagos).getByText('Otro: Tarjeta')).toBeTruthy()
     expect(screen.getByText(/del 01\/11\/2026 al 30\/11\/2026/)).toBeTruthy()
+  })
+
+  it('un saldo negativo (pago adelantado) se muestra como saldo a favor del cliente y el estado es el de hoy', async () => {
+    vi.mocked(emitirEstadoCuenta).mockResolvedValue(estado({ saldoAnterior: 0, totalCobrado: 0, totalPagado: 500, saldo: -500 }))
+    render(<EstadoCuentaPage />)
+    await elegirYEmitir()
+
+    const resumen = await screen.findByLabelText('Resumen')
+    expect(within(resumen).getByText('Saldo al cierre').nextSibling?.textContent).toBe(`${soles(500)} a favor del cliente`)
+    expect(screen.getByText('Estado actual (hoy)')).toBeTruthy()
+    expect(screen.getByText(/un pago adelantado puede dejar saldo a favor del cliente/)).toBeTruthy()
   })
 
   it('criterio 3: sin movimientos en el periodo lo indica y conserva el saldo', async () => {
