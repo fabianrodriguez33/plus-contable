@@ -1,5 +1,5 @@
 @startuml
-title T182 · HU-26 · Secuencia: registrar una solicitud especial y dar seguimiento (diseño previo)
+title T182 · HU-26 · Secuencia: registrar una solicitud especial y dar seguimiento
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -14,47 +14,53 @@ participant "SolicitudEspecialRepository" as SR
 database "tributario_schema" as DB
 
 == Registrar el pedido ==
-U -> FE : elige el cliente e indica tipo, descripción y fecha de entrega
+U -> FE : en la ficha del cliente, pestaña «Solicitudes», indica tipo, fecha de entrega y descripción
+alt sin fecha de entrega
+  FE --> U : "Indique la fecha de entrega: sin ella el pedido no se guarda" (no consulta al servidor)
+end
 FE -> SC : POST /api/tributario/clientes/{clienteId}/solicitudes\n{tipo, descripcion, fechaEntrega}\nAuthorization: Bearer <JWT>
 SC -> SS : registrar(clienteId, dto, usuario del token)
-SS -> CS : buscar(clienteId)
-alt el cliente no existe
-  SS --> FE : 404 "Cliente no encontrado"
+alt sin token / CLIENTE_MYPE
+  SC --> FE : 401 / 403 (solo el estudio: CONTADOR o ADMIN)
 end
 SS -> SS : valida y reúne los errores
 note right
   Tipo: obligatorio y uno de CONSTANCIA, CERTIFICACION o TRAMITE.
-  Fecha de entrega: obligatoria; si falta no se guarda. Supuesto: no anterior a hoy.
+  Fecha de entrega: obligatoria; si falta no se guarda (criterio 2). Supuesto de T182: no anterior a hoy.
   Descripción: opcional, hasta 500 caracteres.
 end note
 alt faltan o son inválidos (por ejemplo, sin fecha de entrega)
   SS --> FE : 400 "Faltan o son inválidos: ..."
-else datos válidos
+end
+SS -> CS : buscar(clienteId)
+alt el cliente no existe
+  SS --> FE : 404 "Cliente no encontrado"
+else el cliente existe
   SS -> SR : save(solicitud PENDIENTE con el usuario)
   SR -> DB : INSERT solicitudes_especiales
   SS --> FE : 201 SolicitudEspecialDto
-  FE --> U : la solicitud queda en los pendientes en seguimiento
+  FE --> U : la solicitud queda en los pendientes en seguimiento (criterio 3)
 end
 
 == Ver los pendientes en seguimiento ==
 U -> FE : abre las solicitudes del cliente
-FE -> SC : GET /api/tributario/clientes/{clienteId}/solicitudes?estado=PENDIENTE
+FE -> SC : GET /api/tributario/clientes/{clienteId}/solicitudes
 SC -> SS : pendientes(clienteId)
 SS -> CS : buscar(clienteId)
-SS -> SR : findByClienteIdAndEstadoOrderByFechaEntregaAsc(clienteId, PENDIENTE)
+SS -> SR : findByClienteIdAndEstadoOrderByFechaEntregaAscIdAsc(clienteId, PENDIENTE)
 SR -> DB : SELECT solicitudes_especiales
 SS --> FE : 200 lista ordenada por fecha de entrega
 FE --> U : muestra los pedidos pendientes, el más próximo primero
 
 == Marcar como atendida ==
 U -> FE : marca la solicitud como atendida
-FE -> SC : PATCH /api/tributario/solicitudes/{id}/atencion
-SC -> SS : marcarAtendida(id)
+FE -> SC : POST /api/tributario/clientes/{clienteId}/solicitudes/{id}/atender
+SC -> SS : marcarAtendida(clienteId, id)
 SS -> SR : findById(id)
-alt no existe
+alt no existe o es de otro cliente
   SS --> FE : 404 "Solicitud no encontrada"
 else ya estaba atendida
-  SS --> FE : 400 "La solicitud ya fue atendida"
+  SS --> FE : 400 "La solicitud ya está atendida"
 else estaba pendiente
   SS -> SR : save(estado ATENDIDA, fecha de atención de hoy)
   SR -> DB : UPDATE solicitudes_especiales
@@ -63,8 +69,8 @@ else estaba pendiente
 end
 
 note over SS
-  Supuesto: tipos CONSTANCIA, CERTIFICACION y TRAMITE; estados PENDIENTE y ATENDIDA.
-  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas; el cliente MYPE no las ve.
+  Supuestos de T182, pendientes de confirmar con Beto: tipos CONSTANCIA, CERTIFICACION y TRAMITE; estados PENDIENTE y ATENDIDA;
+  fecha de entrega no anterior a hoy; descripción opcional de hasta 500 caracteres. Solo el estudio (CONTADOR, ADMIN) usa estas rutas.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-26, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService.buscar, GlobalExceptionHandler, SecurityConfig
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-26-solicitudes-especiales (actualiza el diseño previo del 07/11). Código: SolicitudesTab.tsx, solicitudService.ts, SolicitudEspecialController, SolicitudEspecialService, SolicitudEspecialRepository, ClienteService.buscar, SecurityConfig. Pruebas: SolicitudEspecialServiceTest, SolicitudEspecialControllerTest, SolicitudEspecialPostgresTest, SolicitudesTab.test.tsx
 @enduml

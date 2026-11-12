@@ -1,0 +1,48 @@
+@startuml
+title T189 · HU-27 · Secuencia: consultar el historial de incidencias de un cliente
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha, pestaña Historial)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "HistorialController" as HC
+participant "HistorialService" as HS
+participant "IncidenciaService" as IS
+participant "SolicitudEspecialRepository" as SR
+database "tributario_schema" as DB
+
+U -> FE : abre la ficha del cliente y la pestaña «Historial»
+FE -> SEC : GET /api/tributario/clientes/{clienteId}/historial\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403 (el mensaje se muestra en la ficha)
+  note right : Criterio 4
+end
+SEC -> HC : delCliente(clienteId)
+HC -> HS : delCliente(clienteId)
+HS -> IS : delCliente(clienteId)
+IS -> DB : SELECT clientes WHERE id = ?
+alt el cliente no existe
+  IS --> FE : 404 "Cliente no encontrado"
+end
+IS -> DB : incidencias del cliente (incidencias JOIN incidencias_clientes)
+IS --> HS : incidencias propias y generales
+HS -> SR : findByClienteId(clienteId)
+SR -> DB : SELECT solicitudes_especiales WHERE cliente_id = ?
+SR --> HS : solicitudes pendientes y atendidas
+HS -> HS : convierte cada una en HistorialItemDto y ordena\nde la más reciente a la más antigua (a igual fecha, la registrada después)
+HS --> FE : 200 [HistorialItemDto]
+alt hay registros
+  FE -> U : tabla con fecha, registro (incidencia o solicitud), tipo, descripción y detalle\n(general o de este cliente; pendiente o atendida con su fecha de entrega)
+  note right : Criterios 1 y 2
+else sin registros
+  FE -> U : "Este cliente no tiene incidencias ni solicitudes registradas."
+  note right : Criterio 3
+end
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-27-historial-incidencias. Código: HistorialTab.tsx, incidenciaService.ts, SecurityConfig, HistorialController, HistorialService, IncidenciaService.delCliente, SolicitudEspecialRepository. Pruebas: HistorialServiceTest, HistorialControllerTest, HistorialPostgresTest, HistorialTab.test.tsx
+@enduml
