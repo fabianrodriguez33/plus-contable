@@ -147,3 +147,17 @@ export interface EstadoCuenta {
 
 export const emitirEstadoCuenta = (clienteId: number, desde: string, hasta: string) =>
   tributarioApi.get<EstadoCuenta>(`${base(clienteId)}/estado-cuenta`, { params: { desde, hasta } }).then((r) => r.data)
+
+// ---- HU-31 ----
+/** Un cliente con cobros vencidos sin pagar del todo; diasAtraso cuenta desde el cobro vencido más antiguo. */
+export interface Moroso {
+  clienteId: number
+  ruc: string
+  razonSocial: string
+  montoVencido: number
+  cobrosVencidos: number
+  vencidoDesde: string
+  diasAtraso: number
+}
+
+export const listarMorosos = () => tributarioApi.get<Moroso[]>('/api/tributario/morosos').then((r) => r.data)
