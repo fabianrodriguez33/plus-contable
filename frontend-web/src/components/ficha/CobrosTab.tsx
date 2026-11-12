@@ -1,12 +1,15 @@
 import axios from 'axios'
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { CalendarPlus, FileSignature } from 'lucide-react'
+import { CalendarPlus, FileSignature, Wallet } from 'lucide-react'
 import { mensajeError } from '../../services/apiClient'
-import { CobroHonorario, listarCobrosPendientes, Periodicidad, programarCobros } from '../../services/expedienteService'
+import {
+  CobroHonorario, listarCobrosPendientes, MedioPago, Periodicidad, programarCobros, registrarPagoHonorario,
+} from '../../services/expedienteService'
 import { fechaCorta } from '../../utils/programacion'
 import { soles } from '../../utils/societario'
 import Button from '../Button'
-import { Select } from '../Input'
+import { Input, Select } from '../Input'
+import Modal from '../Modal'
 import Table, { Td } from '../Table'
 
 const SIN_ACUERDO = 'Registre primero el acuerdo de honorarios del cliente'
@@ -19,12 +22,16 @@ interface Props {
   onIrAlAcuerdo: () => void
 }
 
-/** HU-28 · Tareas 129 a 131: elegir mensual o quincenal, programar los cobros y verlos pendientes en la ficha. */
+/**
+ * HU-28 · Tareas 129 a 131: elegir mensual o quincenal, programar los cobros y verlos pendientes en la ficha.
+ * HU-29 · Tarea 141: registrar el pago de un cobro pendiente; el de pago parcial sigue en la lista con su saldo.
+ */
 export default function CobrosTab({ clienteId, setError, setOk, onIrAlAcuerdo }: Props) {
   const [cobros, setCobros] = useState<CobroHonorario[]>([])
   const [periodicidad, setPeriodicidad] = useState<Periodicidad>('MENSUAL')
   const [sinAcuerdo, setSinAcuerdo] = useState(false)
   const [programando, setProgramando] = useState(false)
+  const [pagando, setPagando] = useState<CobroHonorario | null>(null)
 
   const cargar = useCallback(() => {
     listarCobrosPendientes(clienteId).then(setCobros).catch((e) => setError(mensajeError(e)))
@@ -51,7 +58,7 @@ export default function CobrosTab({ clienteId, setError, setOk, onIrAlAcuerdo }:
     }
   }
 
-  const total = cobros.reduce((acc, c) => acc + Number(c.monto), 0)
+  const total = cobros.reduce((acc, c) => acc + Number(c.saldo), 0)
 
   return (
     <div className="space-y-5">
@@ -79,19 +86,105 @@ export default function CobrosTab({ clienteId, setError, setOk, onIrAlAcuerdo }:
         </div>
       )}
 
-      <Table columnas={['Fecha de cobro', 'Monto', 'Estado']} hayFilas={cobros.length > 0}
+      <Table columnas={['Fecha de cobro', 'Monto', 'Pagado', 'Saldo', 'Estado', '']} hayFilas={cobros.length > 0}
         vacio="El cliente no tiene cobros pendientes.">
         {cobros.map((c) => (
           <tr key={c.id}>
             <Td>{fechaCorta(c.fechaCobro)}</Td>
             <Td>{soles(c.monto)}</Td>
-            <Td>Pendiente</Td>
+            <Td>{soles(c.pagado)}</Td>
+            <Td>{soles(c.saldo)}</Td>
+            <Td>{c.estado === 'PAGO_PARCIAL' ? 'Pago parcial' : 'Pendiente'}</Td>
+            <Td>
+              <Button variant="secondary" onClick={() => { setError(''); setOk(''); setPagando(c) }}>
+                <Wallet size={16} /> Registrar pago
+              </Button>
+            </Td>
           </tr>
         ))}
       </Table>
       {cobros.length > 0 && (
-        <p className="text-sm text-slate-600">{cobros.length} cobros pendientes · total {soles(total)}</p>
+        <p className="text-sm text-slate-600">{cobros.length} cobros pendientes · saldo total {soles(total)}</p>
+      )}
+
+      {pagando && (
+        <PagoModal clienteId={clienteId} cobro={pagando} onCerrar={() => setPagando(null)}
+          onPagado={(c) => {
+            setPagando(null)
+            setOk(c.estado === 'PAGADO'
+              ? `Pago registrado: el cobro del ${fechaCorta(c.fechaCobro)} quedó pagado`
+              : `Pago parcial registrado: queda un saldo de ${soles(c.saldo)}`)
+            cargar()
+          }} />
       )}
     </div>
   )
+}
+
+const hoyLocal = () => new Date().toLocaleDateString('en-CA') // AAAA-MM-DD en la hora local, no en UTC
+
+interface PagoProps {
+  clienteId: number
+  cobro: CobroHonorario
+  onCerrar: () => void
+  onPagado: (c: CobroHonorario) => void
+}
+
+/** HU-29 · Tarea 141: registrar el pago (fecha, monto y medio) de un cobro pendiente; por defecto, el saldo completo. */
+function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
+  const [fechaPago, setFechaPago] = useState(hoyLocal())
+  const [monto, setMonto] = useState(String(cobro.saldo))
+  const [medioPago, setMedioPago] = useState<MedioPago>('TRANSFERENCIA')
+  const [detalle, setDetalle] = useState('')
+  const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState(false)
+
+  const guardar = async (e: FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setGuardando(true)
+    try {
+      onPagado(await registrarPagoHonorario(clienteId, cobro.id, {
+        fechaPago, monto: Number(monto), medioPago, medioPagoDetalle: medioPago === 'OTRO' ? detalle.trim() : null,
+      }))
+    } catch (err) {
+      setError(mensajeError(err))
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <Modal abierto titulo={`Registrar pago del cobro del ${fechaCorta(cobro.fechaCobro)}`} onCerrar={onCerrar}>
+      <form onSubmit={guardar} className="space-y-4">
+        <p className="text-sm text-slate-600">Monto del cobro {soles(cobro.monto)} · saldo pendiente {soles(cobro.saldo)}</p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Input label="Fecha del pago" type="date" required max={hoyLocal()} value={fechaPago}
+            onChange={(e) => setFechaPago(e.target.value)} />
+          <Input label="Monto pagado (S/)" type="number" required min="0.01" step="0.01" max={cobro.saldo} value={monto}
+            onChange={(e) => setMonto(e.target.value)} />
+          <Select label="Medio de pago" value={medioPago} onChange={(e) => setMedioPago(e.target.value as MedioPago)}>
+            {Object.entries(MEDIOS).map(([valor, texto]) => <option key={valor} value={valor}>{texto}</option>)}
+          </Select>
+        </div>
+        {medioPago === 'OTRO' && (
+          <Input label="Especifique el medio de pago" required maxLength={100} value={detalle}
+            onChange={(e) => setDetalle(e.target.value)} />
+        )}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCerrar}>Cancelar</Button>
+          <Button type="submit" disabled={guardando}>{guardando ? 'Guardando…' : 'Registrar pago'}</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+const MEDIOS: Record<MedioPago, string> = {
+  EFECTIVO: 'Efectivo',
+  TRANSFERENCIA: 'Transferencia bancaria',
+  DEPOSITO: 'Depósito bancario',
+  YAPE_PLIN: 'Yape / Plin',
+  OTRO: 'Otro',
 }

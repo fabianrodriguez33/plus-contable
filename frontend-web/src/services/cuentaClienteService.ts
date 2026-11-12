@@ -21,3 +21,18 @@ export const crearCuentaCliente = (clienteId: number, correo: string) =>
  */
 export const restablecerAccesoCliente = (clienteId: number) =>
   authApi.post<CuentaCreada>(`/api/auth/clientes/${clienteId}/cuenta/restablecer`).then((r) => r.data)
+
+// ---- HU-41 ----
+/** El cliente que olvidó su contraseña la pide sin sesión; el servidor responde lo mismo exista o no la cuenta. */
+export const solicitarRestablecimiento = (correo: string) =>
+  authApi.post<{ mensaje: string }>('/api/auth/restablecimiento/solicitar', { correo }).then((r) => r.data.mensaje)
+
+export interface SolicitudRestablecimiento {
+  clienteId: number
+  correo: string
+  solicitadaEn: string
+}
+
+/** Solo el estudio: las solicitudes sin atender; se atienden con «Restablecer acceso» en la ficha del cliente. */
+export const listarSolicitudesRestablecimiento = () =>
+  authApi.get<SolicitudRestablecimiento[]>('/api/auth/restablecimiento/pendientes').then((r) => r.data)
