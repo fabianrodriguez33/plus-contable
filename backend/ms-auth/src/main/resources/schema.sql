@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS auth_schema.solicitudes_restablecimiento (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_solicitudes_restablecimiento_pendiente
     ON auth_schema.solicitudes_restablecimiento(usuario_id) WHERE atendida_en IS NULL;
 
+-- HU-41 (revision de Julio): cada pedido, exista o no la cuenta, deja un intento. Sirve para limitar los pedidos por IP y por
+-- correo, y hace que la respuesta haga el mismo trabajo en los dos casos. Del correo solo se guarda su huella SHA-256 (no se
+-- guardan correos que no son de clientes). Los intentos de mas de un dia se borran solos.
+CREATE TABLE IF NOT EXISTS auth_schema.intentos_restablecimiento (
+    id             BIGSERIAL PRIMARY KEY,
+    correo_huella  CHAR(64)    NOT NULL,
+    ip             VARCHAR(60) NOT NULL,
+    fecha          TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_intentos_restablecimiento_ip ON auth_schema.intentos_restablecimiento(ip, fecha);
+CREATE INDEX IF NOT EXISTS idx_intentos_restablecimiento_correo ON auth_schema.intentos_restablecimiento(correo_huella, fecha);
+
 CREATE INDEX IF NOT EXISTS idx_bitacora_username ON auth_schema.bitacora_seguridad(username);
 CREATE INDEX IF NOT EXISTS idx_bitacora_fecha ON auth_schema.bitacora_seguridad(fecha);
 

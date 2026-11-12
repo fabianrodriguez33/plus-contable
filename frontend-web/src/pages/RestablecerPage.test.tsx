@@ -43,4 +43,16 @@ describe('¿Olvidaste tu contraseña? (HU-41)', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Escribe el correo con el que ingresas')
     expect(screen.getByLabelText('Correo')).toBeTruthy()
   })
+
+  it('con demasiados pedidos muestra el aviso del servidor (429)', async () => {
+    vi.mocked(solicitarRestablecimiento).mockRejectedValue(
+      new AxiosError('429', 'ERR_BAD_REQUEST', undefined, undefined,
+        { status: 429, data: { mensaje: 'Hiciste demasiados pedidos. Intenta de nuevo más tarde.' } } as AxiosResponse))
+    montar()
+
+    await userEvent.type(screen.getByLabelText('Correo'), 'x@acme.pe')
+    await userEvent.click(screen.getByRole('button', { name: 'Pedir nueva contraseña' }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Hiciste demasiados pedidos')
+  })
 })

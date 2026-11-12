@@ -2,6 +2,7 @@ package com.pluscontable.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pluscontable.auth.service.ClienteTributarioClient;
 import com.pluscontable.auth.service.ClienteTributarioClient.ClienteResumen;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -62,10 +64,11 @@ class RestablecimientoIntegracionTest {
         jdbc.update("DELETE FROM auth_schema.tokens_revocados WHERE username LIKE 'itest-hu41-%'");
         jdbc.update("DELETE FROM auth_schema.bitacora_seguridad WHERE username LIKE 'itest-hu41-%' OR detalle LIKE '%itest-hu41-%'");
         jdbc.update("DELETE FROM auth_schema.usuarios WHERE username LIKE 'itest-hu41-%'"); // sus solicitudes, en cascada
+        jdbc.update("DELETE FROM auth_schema.intentos_restablecimiento"); // base desechable: los límites empiezan en cero
     }
 
     private JsonNode cuerpo(MvcResult r) throws Exception {
-        return json.readTree(r.getResponse().getContentAsString());
+        return json.readTree(r.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private MvcResult entrar(String usuario, String clave, int estado) throws Exception {
@@ -94,8 +97,24 @@ class RestablecimientoIntegracionTest {
     }
 
     private MvcResult solicitar(String correo) throws Exception {
+        return solicitarDesde("127.0.0.1", correo, 200);
+    }
+
+    private MvcResult solicitarDesde(String ip, String correo, int estado) throws Exception {
         return mvc.perform(post("/api/auth/restablecimiento/solicitar").contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("correo", correo)))).andExpect(status().isOk()).andReturn();
+                        .content(json.writeValueAsString(Map.of("correo", correo)))
+                        .with(r -> { r.setRemoteAddr(ip); return r; }))
+                .andExpect(status().is(estado)).andReturn();
+    }
+
+    private int solicitudesDe(String correo) {
+        return jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento s JOIN auth_schema.usuarios u "
+                + "ON u.id = s.usuario_id WHERE u.username = ?", Integer.class, correo);
+    }
+
+    /** La cuenta se busca después de responder (en segundo plano): se espera a que se procese sin fijar un tiempo exacto. */
+    private static void esperarQue(java.util.concurrent.Callable<Boolean> condicion) {
+        await().pollDelay(Duration.ofMillis(300)).atMost(Duration.ofSeconds(5)).until(condicion);
     }
 
     private JsonNode pendientes(String contador) throws Exception {
@@ -115,12 +134,12 @@ class RestablecimientoIntegracionTest {
 
         // criterio 1: el cliente lo pide sin sesión y el estudio ve la solicitud
         solicitar(CORREO.toUpperCase());
-        JsonNode pendiente = pendienteDe(pendientes(contador));
-        assertThat(pendiente).isNotNull();
-        assertThat(pendiente.get("correo").asText()).isEqualTo(CORREO);
+        esperarQue(() -> pendienteDe(pendientes(contador)) != null);
+        assertThat(pendienteDe(pendientes(contador)).get("correo").asText()).isEqualTo(CORREO);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.bitacora_seguridad WHERE username = ? AND evento = "
+                + "'RESTABLECIMIENTO_SOLICITADO'", Integer.class, CORREO)).isEqualTo(1);
         solicitar(CORREO); // pedirlo otra vez no duplica
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento s JOIN auth_schema.usuarios u "
-                + "ON u.id = s.usuario_id WHERE u.username = ?", Integer.class, CORREO)).isEqualTo(1);
+        esperarQue(() -> solicitudesDe(CORREO) == 1);
 
         // el estudio restablece: la solicitud queda atendida y el cliente recibe el medio (otra temporal)
         MvcResult r = mvc.perform(post("/api/auth/clientes/" + CLIENTE + "/cuenta/restablecer").header(HttpHeaders.AUTHORIZATION, contador))
@@ -146,14 +165,39 @@ class RestablecimientoIntegracionTest {
         int antes = jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento", Integer.class);
 
         String sinCuenta = solicitar("itest-hu41-nadie@acme.pe").getResponse().getContentAsString();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento", Integer.class)).isEqualTo(antes);
+        // la cuenta del estudio tampoco genera solicitud
+        solicitar(admin);
+        esperarQue(() -> jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento", Integer.class) == antes);
         String conCuenta = solicitar(CORREO).getResponse().getContentAsString();
 
         assertThat(sinCuenta).isEqualTo(conCuenta).contains("Si el correo corresponde a una cuenta de cliente");
-        // la cuenta del estudio tampoco genera solicitud
-        solicitar(admin);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento WHERE atendida_en IS NULL "
-                + "AND usuario_id = (SELECT id FROM auth_schema.usuarios WHERE username = ?)", Integer.class, admin)).isZero();
+        esperarQue(() -> solicitudesDe(CORREO) == 1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.solicitudes_restablecimiento", Integer.class)).isEqualTo(antes + 1);
+        // los tres pedidos dejaron su intento; del correo solo la huella
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.intentos_restablecimiento", Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.intentos_restablecimiento WHERE correo_huella LIKE '%@%'",
+                Integer.class)).isZero();
+    }
+
+    @Test
+    void elMismoCorreoSoloPuedePedirTresVecesPorHoraExistaONoLaCuenta() throws Exception {
+        clienteConSuPropiaClave(contador());
+
+        for (String correo : new String[] {CORREO, "itest-hu41-nadie@acme.pe"}) {
+            for (int i = 1; i <= 3; i++) solicitarDesde("10.1.0." + i, correo, 200); // IP distinta: solo cuenta el correo
+            MvcResult r = solicitarDesde("10.1.0.9", correo, 429);
+            assertThat(cuerpo(r).get("mensaje").asText()).isEqualTo("Hiciste demasiados pedidos. Intenta de nuevo más tarde.");
+        }
+    }
+
+    @Test
+    void unaMismaIpSoloPuedePedirCincoVecesPorHoraAunqueCambieDeCorreo() throws Exception {
+        for (int i = 1; i <= 5; i++) solicitarDesde("10.2.0.1", "itest-hu41-falso" + i + "@acme.pe", 200);
+        solicitarDesde("10.2.0.1", "itest-hu41-falso6@acme.pe", 429);
+        solicitarDesde("10.2.0.2", "itest-hu41-falso6@acme.pe", 200); // otra IP sigue pudiendo
+        // los pedidos rechazados no dejan intento
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM auth_schema.intentos_restablecimiento WHERE ip = '10.2.0.1'",
+                Integer.class)).isEqualTo(5);
     }
 
     @Test
