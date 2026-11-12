@@ -59,8 +59,8 @@ class PagoObligacionEsquemaPostgresTest {
 
     private int insertar(long obligacionId, String monto, String constancia, String acumulado, String saldo) {
         return jdbc.update("""
-                INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, nombre_archivo, tamano_bytes, ruta_almacenamiento, acumulado_despues, saldo_despues)
-                VALUES (?, ?, ?, ?, 'c.pdf', 10, 'pagos/1/x.pdf', ?, ?)
+                INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, nombre_archivo, content_type, tamano_bytes, ruta_almacenamiento, acumulado_despues, saldo_despues)
+                VALUES (?, ?, ?, ?, 'c.pdf', 'application/pdf', 10, 'pagos/1/x.pdf', ?, ?)
                 """, obligacionId, LocalDate.of(2026, 11, 8), new BigDecimal(monto), constancia, new BigDecimal(acumulado), new BigDecimal(saldo));
     }
 
@@ -136,6 +136,73 @@ class PagoObligacionEsquemaPostgresTest {
                 obligacion, LocalDate.of(2026, 11, 9))).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT nombre_archivo FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-001' AND obligacion_id = ?", String.class, obligacion))
                 .isEqualTo("c.pdf");
+    }
+
+    // ---- el archivo del comprobante va completo o no va (CHECK ck_pagos_obligacion_archivo)
+
+    private int insertarConArchivo(String constancia, String nombre, String tipo, Long tamano, String ruta) {
+        return jdbc.update("""
+                INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, nombre_archivo, content_type, tamano_bytes, ruta_almacenamiento, acumulado_despues, saldo_despues)
+                VALUES (?, ?, 1, ?, ?, ?, ?, ?, 1, 999)
+                """, obligacion, LocalDate.of(2026, 11, 8), constancia, nombre, tipo, tamano, ruta);
+    }
+
+    private void correrSchema() {
+        new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(new org.springframework.core.io.ClassPathResource("schema.sql"))
+                .execute(jdbc.getDataSource());
+    }
+
+    @Test
+    void lasCuatroColumnasDelArchivoVanLlenasOVaciasPeroNuncaMezcladas() {
+        assertThat(insertarConArchivo("C-1", "c.pdf", "application/pdf", 10L, "pagos/1/x.pdf")).isEqualTo(1);
+        assertThat(insertarConArchivo("C-2", null, null, null, null)).isEqualTo(1);
+
+        assertThatThrownBy(() -> insertarConArchivo("C-3", "c.pdf", null, null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertarConArchivo("C-4", null, "application/pdf", null, null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertarConArchivo("C-5", null, null, 10L, null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertarConArchivo("C-6", null, null, null, "pagos/1/x.pdf")).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertarConArchivo("C-7", "c.pdf", "application/pdf", 10L, null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(filas()).isEqualTo(2);
+    }
+
+    @Test
+    void sinDefaultUnPagoInsertadoSinArchivoNoDejaContentTypeSuelto() {
+        jdbc.update("INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues) VALUES (?, ?, 1, 'C-SIN', 1, 999)",
+                obligacion, LocalDate.of(2026, 11, 8));
+
+        assertThat(jdbc.queryForObject("SELECT content_type FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-SIN' AND obligacion_id = ?", String.class, obligacion)).isNull();
+        assertThat(jdbc.queryForObject("""
+                SELECT column_default FROM information_schema.columns
+                WHERE table_schema = 'tributario_schema' AND table_name = 'pagos_obligacion' AND column_name = 'content_type'
+                """, String.class)).isNull();
+    }
+
+    @Test
+    void unaBaseAnteriorConElDefaultYUnaFilaSueltaSeActualizaSinPerderPagosYEsIdempotente() {
+        jdbc.execute("ALTER TABLE tributario_schema.pagos_obligacion DROP CONSTRAINT ck_pagos_obligacion_archivo");
+        jdbc.execute("ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN content_type SET DEFAULT 'application/pdf'");
+        insertarConArchivo("C-CON-PDF", "c.pdf", "application/pdf", 10L, "pagos/1/x.pdf");
+        // la fila que dejaba el DEFAULT: content_type lleno y las otras tres vacias
+        jdbc.update("INSERT INTO tributario_schema.pagos_obligacion (obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues) VALUES (?, ?, 1, 'C-SUELTA', 2, 998)",
+                obligacion, LocalDate.of(2026, 11, 9));
+        assertThat(jdbc.queryForObject("SELECT content_type FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-SUELTA' AND obligacion_id = ?", String.class, obligacion))
+                .isEqualTo("application/pdf");
+
+        correrSchema();
+        correrSchema();
+
+        assertThat(jdbc.queryForObject("SELECT content_type FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-SUELTA' AND obligacion_id = ?", String.class, obligacion)).isNull();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-SUELTA' AND obligacion_id = ?", Integer.class, obligacion)).isEqualTo(1);
+        // el pago con PDF queda igual
+        assertThat(jdbc.queryForObject("SELECT nombre_archivo || '|' || content_type || '|' || tamano_bytes || '|' || ruta_almacenamiento FROM tributario_schema.pagos_obligacion WHERE numero_constancia = 'C-CON-PDF' AND obligacion_id = ?", String.class, obligacion))
+                .isEqualTo("c.pdf|application/pdf|10|pagos/1/x.pdf");
+        // el CHECK volvio a quedar y el DEFAULT ya no
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_pagos_obligacion_archivo' AND conrelid = 'tributario_schema.pagos_obligacion'::regclass", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("""
+                SELECT column_default FROM information_schema.columns
+                WHERE table_schema = 'tributario_schema' AND table_name = 'pagos_obligacion' AND column_name = 'content_type'
+                """, String.class)).isNull();
+        assertThatThrownBy(() -> insertarConArchivo("C-MEZCLA", "c.pdf", null, null, null)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
