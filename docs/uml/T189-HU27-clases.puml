@@ -1,0 +1,75 @@
+@startuml
+!pragma layout smetana
+title T189 · HU-27 · Clases del historial de incidencias del cliente
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class HistorialController <<nuevo>> {
+  +delCliente(clienteId): List<HistorialItemDto>
+}
+
+class HistorialService <<nuevo>> {
+  ~MAS_RECIENTE_PRIMERO: Comparator
+  +delCliente(clienteId): List<HistorialItemDto>
+}
+
+class HistorialItemDto <<record, nuevo>> {
+  origen: Origen
+  id: Long
+  tipo: String
+  fecha: LocalDate
+  descripcion: String
+  general: boolean
+  estado: String
+  fechaEntrega: LocalDate
+  registradaEn: LocalDateTime
+  +de(IncidenciaDto): HistorialItemDto
+  +de(SolicitudEspecial): HistorialItemDto
+}
+
+enum Origen <<nuevo>> {
+  INCIDENCIA
+  SOLICITUD
+}
+
+class IncidenciaService <<existe, HU-23>> {
+  +delCliente(clienteId): List<IncidenciaDto>
+}
+
+interface SolicitudEspecialRepository <<existe, ampliado>> {
+  findByClienteId(clienteId): List<SolicitudEspecial>
+}
+
+class IncidenciaDto <<record, existe>> {
+  id, tipo, fecha, descripcion, registradaEn, ...
+}
+
+class SolicitudEspecial <<existe, HU-26>> {
+  id, clienteId, tipo, descripcion, fechaEntrega, estado, registradaEn
+}
+
+HistorialController --> HistorialService
+HistorialController ..> HistorialItemDto
+HistorialService --> IncidenciaService : delCliente(clienteId)\n(404 si el cliente no existe)
+HistorialService --> SolicitudEspecialRepository
+HistorialItemDto --> Origen
+HistorialItemDto ..> IncidenciaDto
+HistorialItemDto ..> SolicitudEspecial
+SolicitudEspecialRepository ..> SolicitudEspecial
+
+note bottom of HistorialService
+  Junta las incidencias del cliente (las propias y las generales de la cartera, HU-23) con sus solicitudes especiales
+  (pendientes y atendidas, HU-26) y las ordena de la más reciente a la más antigua (criterio 1); a igual fecha, la
+  registrada después va primero. Cada registro trae tipo, fecha y descripción (criterio 2); sin registros, lista vacía (criterio 3).
+  Fecha de una solicitud = el día en que se pidió (registradaEn); de una incidencia = su fecha.
+end note
+
+note right of HistorialController
+  Criterio 4: solo el estudio (CONTADOR, ADMIN);
+  sin token 401, CLIENTE_MYPE o token sin rol 403.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-27-historial-incidencias. Código: HistorialController, HistorialService, HistorialItemDto, IncidenciaService.delCliente, SolicitudEspecialRepository.findByClienteId, SecurityConfig
+@enduml
