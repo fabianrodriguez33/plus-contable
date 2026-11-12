@@ -20,6 +20,7 @@ import jakarta.validation.ValidationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -136,5 +137,20 @@ class SolicitudEspecialServiceTest {
         assertThatThrownBy(() -> service.marcarAtendida(8L, 5L)).isInstanceOf(EntityNotFoundException.class);
         assertThatThrownBy(() -> service.marcarAtendida(CLIENTE, 77L)).isInstanceOf(EntityNotFoundException.class);
         verify(repo, never()).save(any());
+    }
+
+    /** 20:00 del 11/11 en Lima ya es el 12/11 en UTC: «hoy» sigue siendo el 11. */
+    @Test
+    void conLaNocheDeLimaHoyEsElDiaDeLimaNoElDelServidorEnUtc() {
+        SolicitudEspecialService enLima = new SolicitudEspecialService(repo, clientes,
+                Clock.fixed(Instant.parse("2026-11-12T01:00:00Z"), SolicitudEspecialService.ZONA));
+
+        enLima.registrar(CLIENTE, new SolicitudEspecialEntradaDto(TipoSolicitud.CONSTANCIA, null, HOY), "contador1");
+        ArgumentCaptor<SolicitudEspecial> s = ArgumentCaptor.forClass(SolicitudEspecial.class);
+        verify(repo).save(s.capture());
+        assertThat(s.getValue().getRegistradaEn()).isEqualTo(LocalDateTime.of(2026, 11, 11, 20, 0));
+
+        when(repo.findById(5L)).thenReturn(Optional.of(guardada(CLIENTE, EstadoSolicitud.PENDIENTE)));
+        assertThat(enLima.marcarAtendida(CLIENTE, 5L).fechaAtencion()).isEqualTo(HOY);
     }
 }
