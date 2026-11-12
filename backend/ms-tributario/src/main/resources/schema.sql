@@ -287,6 +287,26 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
 
 CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);
 
+-- HU-12: avisos internos compartidos. Cada historia define su propia clave estable de evento.
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos (
+    id BIGSERIAL PRIMARY KEY,
+    origen VARCHAR(40) NOT NULL CHECK (length(btrim(origen)) > 0),
+    clave_evento VARCHAR(160) NOT NULL CHECK (length(btrim(clave_evento)) > 0),
+    mensaje VARCHAR(500) NOT NULL CHECK (length(btrim(mensaje)) > 0),
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido_en TIMESTAMPTZ,
+    CONSTRAINT uq_avisos_origen_evento UNIQUE (origen, clave_evento)
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos_clientes (
+    aviso_id BIGINT NOT NULL REFERENCES tributario_schema.avisos(id) ON DELETE CASCADE,
+    cliente_id BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE RESTRICT,
+    PRIMARY KEY (aviso_id, cliente_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_bandeja ON tributario_schema.avisos(creado_en DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_avisos_clientes_cliente ON tributario_schema.avisos_clientes(cliente_id);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
