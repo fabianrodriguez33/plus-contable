@@ -4,6 +4,7 @@ import com.pluscontable.tributario.dto.CobroHonorarioDto;
 import com.pluscontable.tributario.dto.PagoHonorarioEntradaDto;
 import com.pluscontable.tributario.model.CobroHonorario;
 import com.pluscontable.tributario.model.EstadoCobro;
+import com.pluscontable.tributario.model.MedioPago;
 import com.pluscontable.tributario.model.PagoHonorario;
 import com.pluscontable.tributario.repository.CobroHonorarioRepository;
 import com.pluscontable.tributario.repository.PagoHonorarioRepository;
@@ -24,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PagoHonorarioService {
+
+    static final int DETALLE_MAXIMO = 100;
 
     private final CobroHonorarioRepository cobros;
     private final PagoHonorarioRepository pagos;
@@ -59,6 +62,7 @@ public class PagoHonorarioService {
         p.setFechaPago(dto.fechaPago());
         p.setMonto(dto.monto());
         p.setMedioPago(dto.medioPago());
+        p.setMedioPagoDetalle(dto.medioPago() == MedioPago.OTRO ? dto.medioPagoDetalle().trim() : null);
         p.setRegistradoPor(usuario);
         pagos.save(p);
 
@@ -81,6 +85,11 @@ public class PagoHonorarioService {
         else if (monto.compareTo(saldo) > 0) errores.add("monto (supera el saldo pendiente de " + saldo.toPlainString() + ")");
 
         if (dto == null || dto.medioPago() == null) errores.add("medioPago");
+        else if (dto.medioPago() == MedioPago.OTRO) {
+            String detalle = dto.medioPagoDetalle() == null ? "" : dto.medioPagoDetalle().trim();
+            if (detalle.isEmpty()) errores.add("medioPagoDetalle (especifique el medio de pago)");
+            else if (detalle.length() > DETALLE_MAXIMO) errores.add("medioPagoDetalle (máximo " + DETALLE_MAXIMO + " caracteres)");
+        }
 
         if (!errores.isEmpty()) {
             throw new ValidationException("Faltan o son inválidos: " + String.join(", ", errores));

@@ -37,6 +37,10 @@ public class PagoHonorario {
     @Column(name = "medio_pago", nullable = false, length = 20)
     private MedioPago medioPago;
 
+    /** Solo con OTRO: qué medio fue (decisión de Beto del 11/11). */
+    @Column(name = "medio_pago_detalle", length = 100)
+    private String medioPagoDetalle;
+
     @Column(name = "registrado_por", nullable = false, length = 60)
     private String registradoPor;
 

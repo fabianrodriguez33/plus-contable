@@ -112,6 +112,8 @@ export interface PagoHonorario {
   fechaPago: string
   monto: number
   medioPago: MedioPago
+  /** Solo con OTRO: qué medio fue (decisión de Beto del 11/11). */
+  medioPagoDetalle: string | null
 }
 
 export const registrarPagoHonorario = (clienteId: number, cobroId: number, p: PagoHonorario) =>

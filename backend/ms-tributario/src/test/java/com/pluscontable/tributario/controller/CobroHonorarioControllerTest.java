@@ -14,7 +14,9 @@ import com.pluscontable.tributario.config.GlobalExceptionHandler;
 import com.pluscontable.tributario.config.SecurityConfig;
 import com.pluscontable.tributario.dto.CobroHonorarioDto;
 import com.pluscontable.tributario.dto.ProgramacionCobroDto;
+import com.pluscontable.tributario.dto.PagoHonorarioEntradaDto;
 import com.pluscontable.tributario.model.EstadoCobro;
+import com.pluscontable.tributario.model.MedioPago;
 import com.pluscontable.tributario.model.Periodicidad;
 import com.pluscontable.tributario.service.CobroHonorarioService;
 import com.pluscontable.tributario.service.PagoHonorarioService;
@@ -97,6 +99,18 @@ class CobroHonorarioControllerTest {
         mvc.perform(con(post("/api/tributario/clientes/7/cobros/2/pagos").contentType(MediaType.APPLICATION_JSON).content(PAGO),
                         bearer("admin", "ADMIN")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void elDetalleDeOtroLlegaAlServicio() throws Exception {
+        when(pagos.registrar(eq(7L), eq(1L), any(), any())).thenReturn(cobro());
+
+        mvc.perform(con(post(PAGAR).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fechaPago\":\"2026-11-10\",\"monto\":200,\"medioPago\":\"OTRO\",\"medioPagoDetalle\":\"Tarjeta\"}"),
+                        bearer("contador1", "CONTADOR")))
+                .andExpect(status().isCreated());
+        verify(pagos).registrar(eq(7L), eq(1L),
+                eq(new PagoHonorarioEntradaDto(LocalDate.of(2026, 11, 10), new BigDecimal("200"), MedioPago.OTRO, "Tarjeta")), eq("contador1"));
     }
 
     @Test

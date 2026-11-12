@@ -258,8 +258,12 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
     monto           NUMERIC(12,2) NOT NULL CHECK (monto > 0),
     medio_pago      VARCHAR(20) NOT NULL
                     CHECK (medio_pago IN ('EFECTIVO', 'TRANSFERENCIA', 'DEPOSITO', 'YAPE_PLIN', 'OTRO')),
+    -- Decisión de Beto (11/11): con «Otro» se especifica el medio; con los demás queda vacío.
+    medio_pago_detalle VARCHAR(100),
     registrado_por  VARCHAR(60) NOT NULL,
-    registrado_en   TIMESTAMP NOT NULL DEFAULT NOW()
+    registrado_en   TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_pagos_honorarios_detalle CHECK (
+        (medio_pago = 'OTRO') = (medio_pago_detalle IS NOT NULL AND length(btrim(medio_pago_detalle)) > 0))
 );
 
 CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);

@@ -60,12 +60,12 @@ class PagoHonorarioServiceTest {
     }
 
     private static PagoHonorarioEntradaDto pago(String monto) {
-        return new PagoHonorarioEntradaDto(HOY, new BigDecimal(monto), MedioPago.YAPE_PLIN);
+        return new PagoHonorarioEntradaDto(HOY, new BigDecimal(monto), MedioPago.YAPE_PLIN, null);
     }
 
     @Test
     void criterio1_guardaElPagoConFechaMontoMedioYQuienLoRegistro() {
-        service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY.minusDays(3), new BigDecimal("120.50"), MedioPago.EFECTIVO), "contador1");
+        service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY.minusDays(3), new BigDecimal("120.50"), MedioPago.EFECTIVO, null), "contador1");
 
         assertThat(guardados).singleElement().satisfies(p -> {
             assertThat(p.getCobroId()).isEqualTo(COBRO);
@@ -130,16 +130,41 @@ class PagoHonorarioServiceTest {
 
     @Test
     void reuneTodosLosErroresYRechazaFechaFuturaMontoCeroOConMasDeDosDecimales() {
-        assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(null, null, null), "c"))
+        assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(null, null, null, null), "c"))
                 .hasMessage("Faltan o son inválidos: fechaPago, monto, medioPago");
         assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, null, "c"))
                 .hasMessage("Faltan o son inválidos: fechaPago, monto, medioPago");
         assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO,
-                new PagoHonorarioEntradaDto(HOY.plusDays(1), BigDecimal.ZERO, MedioPago.OTRO), "c"))
+                new PagoHonorarioEntradaDto(HOY.plusDays(1), BigDecimal.ZERO, MedioPago.OTRO, "Plin empresarial"), "c"))
                 .hasMessage("Faltan o son inválidos: fechaPago (no puede ser futura), monto (debe ser mayor que cero)");
         assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, pago("10.005"), "c"))
                 .hasMessageContaining("monto (máximo 2 decimales)");
         verify(pagos, never()).save(any());
+    }
+
+    @Test
+    void conOtroSeExigeEspecificarElMedioYSeGuardaSinEspacios() {
+        assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY, BigDecimal.TEN, MedioPago.OTRO, "  "), "c"))
+                .hasMessage("Faltan o son inválidos: medioPagoDetalle (especifique el medio de pago)");
+        assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY, BigDecimal.TEN, MedioPago.OTRO, null), "c"))
+                .hasMessage("Faltan o son inválidos: medioPagoDetalle (especifique el medio de pago)");
+        assertThatThrownBy(() -> service.registrar(CLIENTE, COBRO,
+                new PagoHonorarioEntradaDto(HOY, BigDecimal.TEN, MedioPago.OTRO, "x".repeat(101)), "c"))
+                .hasMessageContaining("medioPagoDetalle (máximo 100 caracteres)");
+        verify(pagos, never()).save(any());
+
+        service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY, BigDecimal.TEN, MedioPago.OTRO, "  Tarjeta de crédito "), "c");
+        assertThat(guardados).singleElement().satisfies(p -> {
+            assertThat(p.getMedioPago()).isEqualTo(MedioPago.OTRO);
+            assertThat(p.getMedioPagoDetalle()).isEqualTo("Tarjeta de crédito");
+        });
+    }
+
+    @Test
+    void conUnMedioDeLaListaElDetalleSeIgnora() {
+        service.registrar(CLIENTE, COBRO, new PagoHonorarioEntradaDto(HOY, BigDecimal.TEN, MedioPago.TRANSFERENCIA, "BCP"), "c");
+
+        assertThat(guardados).singleElement().satisfies(p -> assertThat(p.getMedioPagoDetalle()).isNull());
     }
 
     @Test

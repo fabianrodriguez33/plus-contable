@@ -110,6 +110,39 @@ describe('Pago de honorarios en la ficha (HU-29)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('con «Otro» pide especificar el medio y lo envía; con los demás no se muestra ni se envía', async () => {
+    vi.mocked(listarCobrosPendientes).mockResolvedValue([cobro(1, '2026-11-30', 500)])
+    vi.mocked(registrarPagoHonorario).mockResolvedValue({ ...cobro(1, '2026-11-30', 500), pagado: 500, saldo: 0, estado: 'PAGADO' })
+    montar()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar pago/ }))
+    const dialogo = screen.getByRole('dialog')
+    expect(within(dialogo).getByRole('option', { name: 'Transferencia bancaria' })).toBeTruthy()
+    expect(within(dialogo).getByRole('option', { name: 'Depósito bancario' })).toBeTruthy()
+    expect(within(dialogo).queryByLabelText('Especifique el medio de pago')).toBeNull()
+
+    await userEvent.selectOptions(within(dialogo).getByLabelText('Medio de pago'), 'OTRO')
+    const detalle = within(dialogo).getByLabelText('Especifique el medio de pago') as HTMLInputElement
+    expect(detalle.required).toBe(true)
+    await userEvent.type(detalle, ' Tarjeta de crédito ')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Registrar pago' }))
+
+    expect(registrarPagoHonorario).toHaveBeenCalledWith(4, 1,
+      expect.objectContaining({ medioPago: 'OTRO', medioPagoDetalle: 'Tarjeta de crédito' }))
+  })
+
+  it('con un medio de la lista el detalle va vacío', async () => {
+    vi.mocked(listarCobrosPendientes).mockResolvedValue([cobro(1, '2026-11-30', 500)])
+    vi.mocked(registrarPagoHonorario).mockResolvedValue({ ...cobro(1, '2026-11-30', 500), pagado: 500, saldo: 0, estado: 'PAGADO' })
+    montar()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Registrar pago/ }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Registrar pago' }))
+
+    expect(registrarPagoHonorario).toHaveBeenCalledWith(4, 1,
+      expect.objectContaining({ medioPago: 'TRANSFERENCIA', medioPagoDetalle: null }))
+  })
+
   it('un pago por el total avisa que el cobro quedó pagado (criterio 2)', async () => {
     vi.mocked(listarCobrosPendientes).mockResolvedValueOnce([cobro(1, '2026-11-30', 500)]).mockResolvedValueOnce([])
     vi.mocked(registrarPagoHonorario).mockResolvedValue({ ...cobro(1, '2026-11-30', 500), pagado: 500, saldo: 0, estado: 'PAGADO' })

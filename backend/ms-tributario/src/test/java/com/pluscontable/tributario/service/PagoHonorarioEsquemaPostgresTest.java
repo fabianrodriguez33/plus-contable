@@ -55,7 +55,7 @@ class PagoHonorarioEsquemaPostgresTest {
     }
 
     private static PagoHonorarioEntradaDto pago(String monto) {
-        return new PagoHonorarioEntradaDto(LocalDate.now(), new BigDecimal(monto), MedioPago.TRANSFERENCIA);
+        return new PagoHonorarioEntradaDto(LocalDate.now(), new BigDecimal(monto), MedioPago.TRANSFERENCIA, null);
     }
 
     @Test
@@ -73,6 +73,18 @@ class PagoHonorarioEsquemaPostgresTest {
             assertThat(c.id()).isEqualTo(cobro.id());
             assertThat(c.pagado()).isEqualByComparingTo("150.00");
         });
+    }
+
+    @Test
+    void unPagoConOtroGuardaElMedioEspecificado() {
+        long[] cliente = new long[1];
+        CobroHonorarioDto cobro = clienteConCobros(cliente);
+
+        pagos.registrar(cliente[0], cobro.id(), new PagoHonorarioEntradaDto(LocalDate.now(), new BigDecimal("50.00"), MedioPago.OTRO,
+                "Tarjeta de crédito"), "contador1");
+
+        assertThat(jdbc.queryForObject("SELECT medio_pago || '|' || medio_pago_detalle FROM tributario_schema.pagos_honorarios WHERE cobro_id = ?",
+                String.class, cobro.id())).isEqualTo("OTRO|Tarjeta de crédito");
     }
 
     @Test
@@ -113,6 +125,15 @@ class PagoHonorarioEsquemaPostgresTest {
         assertThatThrownBy(() -> jdbc.update(insertar, cobro.id(), LocalDate.now(), BigDecimal.ZERO, "EFECTIVO"))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update(insertar, cobro.id(), LocalDate.now(), BigDecimal.ONE, "CHEQUE"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        // «Otro» exige el detalle y los demás medios no lo admiten
+        assertThatThrownBy(() -> jdbc.update(insertar, cobro.id(), LocalDate.now(), BigDecimal.ONE, "OTRO"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        String conDetalle = "INSERT INTO tributario_schema.pagos_honorarios (cobro_id, fecha_pago, monto, medio_pago, medio_pago_detalle, registrado_por) "
+                + "VALUES (?, ?, ?, ?, ?, 'x')";
+        assertThatThrownBy(() -> jdbc.update(conDetalle, cobro.id(), LocalDate.now(), BigDecimal.ONE, "OTRO", "  "))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(conDetalle, cobro.id(), LocalDate.now(), BigDecimal.ONE, "EFECTIVO", "algo"))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("UPDATE tributario_schema.cobros_honorarios SET pagado = monto + 1 WHERE id = ?", cobro.id()))
                 .isInstanceOf(DataIntegrityViolationException.class);

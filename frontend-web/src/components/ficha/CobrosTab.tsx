@@ -135,6 +135,7 @@ function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
   const [fechaPago, setFechaPago] = useState(hoyLocal())
   const [monto, setMonto] = useState(String(cobro.saldo))
   const [medioPago, setMedioPago] = useState<MedioPago>('TRANSFERENCIA')
+  const [detalle, setDetalle] = useState('')
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
 
@@ -143,7 +144,9 @@ function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
     setError('')
     setGuardando(true)
     try {
-      onPagado(await registrarPagoHonorario(clienteId, cobro.id, { fechaPago, monto: Number(monto), medioPago }))
+      onPagado(await registrarPagoHonorario(clienteId, cobro.id, {
+        fechaPago, monto: Number(monto), medioPago, medioPagoDetalle: medioPago === 'OTRO' ? detalle.trim() : null,
+      }))
     } catch (err) {
       setError(mensajeError(err))
     } finally {
@@ -164,6 +167,10 @@ function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
             {Object.entries(MEDIOS).map(([valor, texto]) => <option key={valor} value={valor}>{texto}</option>)}
           </Select>
         </div>
+        {medioPago === 'OTRO' && (
+          <Input label="Especifique el medio de pago" required maxLength={100} value={detalle}
+            onChange={(e) => setDetalle(e.target.value)} />
+        )}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onCerrar}>Cancelar</Button>
@@ -176,8 +183,8 @@ function PagoModal({ clienteId, cobro, onCerrar, onPagado }: PagoProps) {
 
 const MEDIOS: Record<MedioPago, string> = {
   EFECTIVO: 'Efectivo',
-  TRANSFERENCIA: 'Transferencia',
-  DEPOSITO: 'Depósito',
+  TRANSFERENCIA: 'Transferencia bancaria',
+  DEPOSITO: 'Depósito bancario',
   YAPE_PLIN: 'Yape / Plin',
   OTRO: 'Otro',
 }
