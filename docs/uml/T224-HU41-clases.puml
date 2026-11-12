@@ -13,10 +13,30 @@ class RestablecimientoController <<nuevo>> {
 
 class RestablecimientoService <<nuevo>> {
   +MENSAJE_SOLICITUD: String
+  +MENSAJE_DEMASIADOS: String
+  -maximoPorIp = 5
+  -maximoPorCorreo = 3
+  -ventanaMinutos = 60
+  -transaccion: TransactionTemplate
+  -segundoPlano: Executor (applicationTaskExecutor)
   +solicitar(correo, ip): String
+  ~registrarSiCorresponde(correo, ip)
   +pendientes(): List<SolicitudPendienteDto>
   ~atender(usuarioId, quien)
-  -registrar(usuario, ip)
+  ~huella(correo): String <<SHA-256>>
+}
+
+class IntentoRestablecimiento <<nuevo>> {
+  id: Long
+  correoHuella: String
+  ip: String
+  fecha: LocalDateTime
+}
+
+interface IntentoRestablecimientoRepository <<nuevo>> {
+  countByIpAndFechaAfter(ip, desde)
+  countByCorreoHuellaAndFechaAfter(huella, desde)
+  borrarAnterioresA(antes)
 }
 
 class CuentaClienteController <<existe>> {
@@ -82,6 +102,8 @@ RestablecimientoController ..> SolicitarRestablecimientoRequest
 RestablecimientoController ..> SolicitudPendienteDto
 RestablecimientoService --> UsuarioRepository
 RestablecimientoService --> SolicitudRestablecimientoRepository
+RestablecimientoService --> IntentoRestablecimientoRepository
+IntentoRestablecimientoRepository ..> IntentoRestablecimiento
 RestablecimientoService ..> BitacoraSeguridad
 CuentaClienteController --> CuentaClienteService
 CuentaClienteController --> AuthService
@@ -90,10 +112,17 @@ SolicitudRestablecimientoRepository ..> SolicitudRestablecimiento
 SolicitudRestablecimiento "0..*" --> "1" Usuario : usuario_id
 
 note bottom of RestablecimientoService
-  solicitar(): normaliza el correo; solo con una cuenta de cliente activa (clienteId no nulo) y sin otra solicitud
-  pendiente guarda la solicitud y la anota en la bitácora (criterio 1). Siempre devuelve MENSAJE_SOLICITUD,
-  exista o no la cuenta (criterio 2). Solo un correo vacío o de más de 60 caracteres da 400.
+  solicitar(): normaliza el correo (400 si está vacío o pasa de 60); 429 si la IP ya hizo 5 pedidos o el correo 3 en
+  los últimos 60 minutos; guarda un intento con la huella del correo y responde MENSAJE_SOLICITUD. Antes de responder
+  hace lo mismo exista o no la cuenta (criterio 2): no la busca.
+  registrarSiCorresponde() (en segundo plano): solo con una cuenta de cliente activa y sin otra pendiente guarda la
+  solicitud y su bitácora en una sola transacción (criterio 1).
   atender(): la llama CuentaClienteService.restablecer dentro de su transacción; marca quién y cuándo.
+end note
+
+note right of IntentoRestablecimiento
+  Revisión de Julio (#55): uno por pedido, exista o no la cuenta.
+  Del correo solo la huella SHA-256; se borran pasado un día.
 end note
 
 note right of CuentaClienteService
@@ -102,5 +131,5 @@ note right of CuentaClienteService
   Decisión del 11/11: el sistema no envía correos; el «medio» es la temporal que entrega el estudio.
 end note
 
-footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: RestablecimientoController, RestablecimientoService, CuentaClienteService.restablecer, SolicitudRestablecimiento, SolicitudRestablecimientoRepository, SolicitarRestablecimientoRequest, SolicitudPendienteDto, SecurityConfig
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: RestablecimientoController, RestablecimientoService, CuentaClienteService.restablecer, IntentoRestablecimiento, IntentoRestablecimientoRepository, SolicitudRestablecimiento, SolicitudRestablecimientoRepository, SolicitarRestablecimientoRequest, SolicitudPendienteDto, SecurityConfig
 @enduml

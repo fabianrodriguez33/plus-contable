@@ -41,6 +41,22 @@ entity "auth_schema.bitacora_seguridad" as bitacora <<existe>> {
   * fecha : TIMESTAMP
 }
 
+entity "auth_schema.intentos_restablecimiento" as intentos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * correo_huella : CHAR(64)  (SHA-256 del correo normalizado)
+  * ip : VARCHAR(60)
+  * fecha : TIMESTAMP = ahora
+  INDEX (ip, fecha)
+  INDEX (correo_huella, fecha)
+}
+
+note bottom of intentos
+  Revisión de Julio (#55): un intento por pedido, exista o no la cuenta (sin FK a usuarios).
+  Límite: 5 por IP y 3 por correo en 60 minutos (configurable); al pasarlo, 429.
+  No guarda el correo, solo su huella; los intentos de más de un día se borran en cada pedido.
+end note
+
 usuarios ||--o{ solicitudes : usuario_id, ON DELETE CASCADE
 usuarios ||..o{ bitacora : usuario_id (sin FK)
 
@@ -56,5 +72,5 @@ note bottom of bitacora
   Nunca guarda contraseñas.
 end note
 
-footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: backend/ms-auth/src/main/resources/schema.sql, SolicitudRestablecimiento, Usuario, BitacoraSeguridad. Prueba: RestablecimientoIntegracionTest
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: backend/ms-auth/src/main/resources/schema.sql, SolicitudRestablecimiento, IntentoRestablecimiento, Usuario, BitacoraSeguridad. Prueba: RestablecimientoIntegracionTest
 @enduml

@@ -17,20 +17,34 @@ if (¿Correo vacío o de más de 60 caracteres?) then (sí)
 else (no)
 endif
 |Sistema (ms-auth)|
-if (¿Es una cuenta de cliente activa sin solicitud pendiente?) then (sí)
-  :Guarda la solicitud pendiente;
-  :Anota RESTABLECIMIENTO_SOLICITADO en la bitácora;
-else (no: no existe, es del estudio,\nestá inactiva o ya pidió)
-  :No guarda nada;
+if (¿La IP ya hizo 5 pedidos o el correo 3\nen los últimos 60 minutos?) then (sí)
+  :Responde 429 «Hiciste demasiados pedidos»;
+  |Cliente MYPE|
+  :Espera e intenta más tarde;
+  stop
+else (no)
 endif
-:Responde siempre el mismo mensaje;
-note right
-  Criterio 2: el mensaje no confirma
-  si la cuenta existe.
-end note
-|Cliente MYPE|
-:Ve «Si el correo corresponde a una cuenta de cliente,
-el estudio recibirá tu solicitud...»;
+|Sistema (ms-auth)|
+:Guarda un intento con la huella del correo y la IP;
+fork
+  :Responde siempre el mismo mensaje;
+  note right
+    Criterio 2: el mensaje y el trabajo previo
+    no dependen de si la cuenta existe.
+  end note
+  |Cliente MYPE|
+  :Ve «Si el correo corresponde a una cuenta de cliente,
+  el estudio recibirá tu solicitud...»;
+fork again
+  |Sistema (ms-auth)|
+  :En segundo plano busca la cuenta;
+  if (¿Es una cuenta de cliente activa sin solicitud pendiente?) then (sí)
+    :Guarda la solicitud y anota RESTABLECIMIENTO_SOLICITADO
+    en una sola transacción;
+  else (no: no existe, es del estudio,\nestá inactiva o ya pidió)
+    :No guarda nada;
+  endif
+end fork
 |Contador|
 :Abre la cartera de clientes;
 :Ve el aviso «Clientes que pidieron una nueva contraseña»;

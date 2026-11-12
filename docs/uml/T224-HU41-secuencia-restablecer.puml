@@ -24,20 +24,32 @@ RC -> RS : solicitar(correo, ip)
 alt correo vacío o de más de 60 caracteres
   RS --> FE : 400 "Escribe el correo con el que ingresas"
 end
-RS -> DB : SELECT usuarios WHERE username = correo normalizado
-alt cuenta de cliente activa y sin solicitud pendiente
-  RS -> DB : INSERT solicitudes_restablecimiento
-  RS -> DB : INSERT bitacora_seguridad (RESTABLECIMIENTO_SOLICITADO)
-else no existe, es del estudio, está inactiva o ya tiene una pendiente
-  RS -> RS : no hace nada
+RS -> DB : DELETE intentos de más de un día
+RS -> DB : COUNT intentos de esta IP y de la huella del correo (últimos 60 min)
+alt la IP ya hizo 5 pedidos o el correo 3
+  RS --> FE : 429 "Hiciste demasiados pedidos. Intenta de nuevo más tarde."
+  note right : Igual exista o no la cuenta; no guarda intento
 end
+RS -> DB : INSERT intentos_restablecimiento (huella SHA-256 del correo, ip)
+RS ->> RS : registrarSiCorresponde(correo, ip) en segundo plano
 RS --> FE : 200 {mensaje: MENSAJE_SOLICITUD}
 note right
-  Criterio 2: la misma respuesta exista o no la cuenta.
-  Si dos pedidos llegan a la vez, el índice único parcial
-  deja una sola pendiente y el otro se ignora.
+  Criterio 2: misma respuesta y mismo trabajo antes de responder
+  exista o no la cuenta (validar, contar, guardar el intento).
+  La cuenta se busca recién después (revisión de Julio, #55).
 end note
 FE -> C : "Si el correo corresponde a una cuenta de cliente, el estudio recibirá tu solicitud..."
+
+group en segundo plano, en una sola transacción
+  RS -> DB : SELECT usuarios WHERE username = correo normalizado
+  alt cuenta de cliente activa y sin solicitud pendiente
+    RS -> DB : INSERT solicitudes_restablecimiento
+    RS -> DB : INSERT bitacora_seguridad (RESTABLECIMIENTO_SOLICITADO)
+    note right : Si falla una, no queda ninguna
+  else no existe, es del estudio, está inactiva o ya tiene una pendiente
+    RS -> RS : no hace nada
+  end
+end
 
 == El estudio ve la solicitud y entrega el medio (criterio 1) ==
 U -> FE : abre la cartera de clientes
