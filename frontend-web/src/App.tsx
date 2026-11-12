@@ -7,12 +7,14 @@ import FichaMaestraPage from './pages/FichaMaestraPage'
 import DeclaracionPage from './pages/DeclaracionPage'
 import CalendarioPage from './pages/CalendarioPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
+import RestablecerPage from './pages/RestablecerPage'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/cambiar-password" element={<CambiarPasswordPage />} />
+      <Route path="/restablecer" element={<RestablecerPage />} />
       <Route element={<PrivateRoute />}>
         <Route element={<Navbar />}>
           <Route path="/" element={<DashboardPage />} />
