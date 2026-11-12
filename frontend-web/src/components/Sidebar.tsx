@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Building2, CalendarDays, LayoutDashboard, UserPlus, X } from 'lucide-react'
+import { Building2, CalendarDays, FileText, LayoutDashboard, UserPlus, X } from 'lucide-react'
 
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
   { to: '/calendario', etiqueta: 'Calendario', icono: CalendarDays },
+  { to: '/estado-cuenta', etiqueta: 'Estado de cuenta', icono: FileText },
   { to: '/clientes/nuevo', etiqueta: 'Nuevo cliente', icono: UserPlus },
 ]
 
