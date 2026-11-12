@@ -287,6 +287,45 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
 
 CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);
 
+-- HU-26 (Jeanpierre): pedidos especiales del cliente (constancia, certificacion o tramite) con su fecha de entrega, en
+-- seguimiento hasta que el estudio los marca atendidos. Diseño previo T182 (supuestos pendientes de confirmar con Beto).
+CREATE TABLE IF NOT EXISTS tributario_schema.solicitudes_especiales (
+    id              BIGSERIAL PRIMARY KEY,
+    cliente_id      BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo            VARCHAR(20) NOT NULL CHECK (tipo IN ('CONSTANCIA', 'CERTIFICACION', 'TRAMITE')),
+    descripcion     VARCHAR(500),
+    fecha_entrega   DATE NOT NULL,
+    estado          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA')),
+    fecha_atencion  DATE,
+    registrada_por  VARCHAR(60) NOT NULL,
+    registrada_en   TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_solicitudes_especiales_atencion CHECK ((estado = 'ATENDIDA') = (fecha_atencion IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_solicitudes_especiales_cliente
+    ON tributario_schema.solicitudes_especiales(cliente_id, estado, fecha_entrega);
+
+-- HU-24 (Jeanpierre): documentos que el cliente debe entregar, con la fecha en que se le pidieron y su fecha limite.
+-- Se guarda PENDIENTE o ENTREGADO; SIN_RESPUESTA no se guarda: es un PENDIENTE con la fecha limite vencida (diseño previo T165).
+-- Un documento sin respuesta se puede registrar una vez como incidencia de HU-23 (incidencia_id).
+CREATE TABLE IF NOT EXISTS tributario_schema.documentos_faltantes (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    documento        VARCHAR(150) NOT NULL CHECK (length(btrim(documento)) > 0),
+    fecha_solicitud  DATE NOT NULL,
+    fecha_limite     DATE NOT NULL,
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ENTREGADO')),
+    fecha_entrega    DATE,
+    incidencia_id    BIGINT UNIQUE REFERENCES tributario_schema.incidencias(id) ON DELETE SET NULL,
+    registrado_por   VARCHAR(60) NOT NULL,
+    registrado_en    TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_documentos_faltantes_limite CHECK (fecha_limite >= fecha_solicitud),
+    CONSTRAINT ck_documentos_faltantes_entrega CHECK ((estado = 'ENTREGADO') = (fecha_entrega IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_documentos_faltantes_cliente
+    ON tributario_schema.documentos_faltantes(cliente_id, estado, fecha_limite);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
