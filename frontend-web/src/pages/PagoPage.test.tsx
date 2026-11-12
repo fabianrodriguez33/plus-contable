@@ -62,13 +62,27 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     pantalla()
 
     expect(await screen.findByText('2026-10')).toBeTruthy()
-    expect(screen.getByText(/vence 2026-11-20/)).toBeTruthy()
+    expect(screen.getByText(/vence 20\/11\/2026/)).toBeTruthy()
     expect(screen.getByTestId('estado').textContent).toBe('Declarada')
     expect(screen.getByTestId('determinado').textContent).toBe(soles(1000))
     expect(screen.getByTestId('acumulado').textContent).toBe(soles(0))
     expect(screen.getByTestId('saldo').textContent).toBe(soles(1000))
     expect(obtener).toHaveBeenCalledWith(3)
     expect(listar).toHaveBeenCalledWith(3)
+  })
+
+  it('las fechas se muestran como dd/MM/aaaa, no como AAAA-MM-DD: el vencimiento y la de cada pago', async () => {
+    obtener.mockResolvedValue(obligacion({ estado: 'PAGO_PARCIAL', fechaVencimiento: '2026-11-20' }))
+    listar.mockResolvedValue([pago(2, 'C-002', 100, 500, 500, '2026-11-08'), pago(1, 'C-001', 400, 400, 600, '2026-11-02')])
+    const { container } = pantalla()
+
+    const tabla = await screen.findByRole('table')
+    expect(within(tabla).getByText('02/11/2026')).toBeTruthy()
+    expect(within(tabla).getByText('08/11/2026')).toBeTruthy()
+    expect(screen.getByText(/vence 20\/11\/2026/)).toBeTruthy()
+    // la fecha del formulario es un campo de fecha del navegador, no un texto
+    const sinCampos = container.textContent ?? ''
+    expect(sinCampos).not.toMatch(/\d{4}-\d{2}-\d{2}/)
   })
 
   it('el comprobante es el número de constancia: hay fecha, monto y constancia, y no hay carga de archivos', async () => {

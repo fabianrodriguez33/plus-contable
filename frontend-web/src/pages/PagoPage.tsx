@@ -5,6 +5,7 @@ import { buscarObligacion, type Obligacion } from '../services/obligacionService
 import { listarPagos, registrarPago, type Pago } from '../services/pagoService'
 import type { CalendarioItem } from '../services/calendarioService'
 import { aIso, deIso, etiquetaSituacion } from '../utils/calendario'
+import { fechaCorta } from '../utils/programacion'
 import { CONSTANCIA_MAXIMO, resumenDePagos, validarPago, type ErroresPago } from '../utils/pagos'
 import { soles } from '../utils/societario'
 import Button from '../components/Button'
@@ -78,7 +79,7 @@ export default function PagoPage() {
       {obligacion && (
         <Card>
           <p>
-            {obligacion.tipoObligacion ?? 'Obligación'} · periodo <strong>{mesPeriodo(obligacion.periodo)}</strong> · vence {obligacion.fechaVencimiento}
+            {obligacion.tipoObligacion ?? 'Obligación'} · periodo <strong>{mesPeriodo(obligacion.periodo)}</strong> · vence {fechaCorta(obligacion.fechaVencimiento)}
           </p>
           <p data-testid="estado" className="mt-1 font-medium">{etiquetaEstado(obligacion, hoy)}</p>
           {obligacion.estado !== 'PENDIENTE' && (
@@ -133,7 +134,7 @@ export default function PagoPage() {
             <tbody>
               {pagos.map((p) => (
                 <tr key={p.id} className="border-b last:border-0">
-                  <td className="py-1">{p.fechaPago}</td>
+                  <td className="py-1">{fechaCorta(p.fechaPago)}</td>
                   <td>{p.numeroConstancia}</td>
                   <td className="text-right">{soles(p.montoPagado)}</td>
                   <td className="text-right">{soles(p.acumuladoDespues)}</td>
