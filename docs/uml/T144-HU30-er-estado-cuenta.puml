@@ -1,0 +1,56 @@
+@startuml
+!pragma layout smetana
+title T144 · HU-30 · Datos que lee el estado de cuenta (sin tablas nuevas)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.cobros_honorarios" as cobros <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * fecha_cobro : DATE
+  * monto : NUMERIC(12,2)
+  * estado : PENDIENTE | PAGO_PARCIAL | PAGADO
+  * pagado : NUMERIC(12,2)
+}
+
+entity "tributario_schema.pagos_honorarios" as pagos <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cobro_id : BIGINT <<FK>>
+  * fecha_pago : DATE
+  * monto : NUMERIC(12,2)
+  * medio_pago : EFECTIVO | TRANSFERENCIA | DEPOSITO | YAPE_PLIN | OTRO
+    medio_pago_detalle : VARCHAR(100)
+}
+
+clientes ||--o{ cobros : cliente_id, ON DELETE CASCADE
+cobros ||--o{ pagos : cobro_id, ON DELETE CASCADE
+
+note right of cobros
+  Cobros del periodo: fecha_cobro BETWEEN desde AND hasta.
+  Cobrado antes: SUM(monto) con fecha_cobro < desde.
+end note
+
+note right of pagos
+  Pagos del periodo: fecha_pago BETWEEN desde AND hasta,
+  de cobros del cliente (JOIN por cobro_id).
+  Pagado antes: SUM(monto) con fecha_pago < desde.
+end note
+
+note bottom of clientes
+  HU-30 no crea tablas: lee los cobros de HU-28 y los pagos de HU-29.
+  Índices que ya existen: cobros (cliente_id, estado, fecha_cobro) y pagos (cobro_id, fecha_pago).
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-30-estado-cuenta. Código: schema.sql (cobros_honorarios, pagos_honorarios), CobroHonorarioRepository, PagoHonorarioRepository. Prueba: EstadoCuentaPostgresTest
+@enduml

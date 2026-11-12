@@ -191,10 +191,10 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
     fecha_pago          DATE NOT NULL,
     monto_pagado        NUMERIC(14,2) NOT NULL CHECK (monto_pagado > 0),
     numero_constancia   VARCHAR(30) NOT NULL,
-    nombre_archivo      VARCHAR(255) NOT NULL,
-    content_type        VARCHAR(100) NOT NULL DEFAULT 'application/pdf',
-    tamano_bytes        BIGINT NOT NULL,
-    ruta_almacenamiento VARCHAR(400) NOT NULL,
+    nombre_archivo      VARCHAR(255),
+    content_type        VARCHAR(100),
+    tamano_bytes        BIGINT,
+    ruta_almacenamiento VARCHAR(400),
     acumulado_despues   NUMERIC(14,2) NOT NULL,
     saldo_despues       NUMERIC(14,2) NOT NULL CHECK (saldo_despues >= 0),
     registrado_en       TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -203,6 +203,25 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
 
 CREATE INDEX IF NOT EXISTS idx_pagos_obligacion_fecha
     ON tributario_schema.pagos_obligacion(obligacion_id, fecha_pago);
+
+-- HU-13 (alcance reducido de Beto, 10/11): el comprobante es el numero de constancia y el PDF es opcional. Bases existentes:
+-- CREATE TABLE IF NOT EXISTS no cambia una tabla ya creada, asi que se quita el NOT NULL de las columnas del archivo.
+-- Los pagos que ya tenian PDF conservan sus datos.
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN nombre_archivo DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN content_type DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN tamano_bytes DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN ruta_almacenamiento DROP NOT NULL;
+-- El archivo del comprobante va completo o no va: las cuatro columnas llenas o las cuatro vacias. Sin DEFAULT en content_type, un pago sin
+-- archivo no deja content_type='application/pdf' suelto. Bases existentes: se quita el DEFAULT y la unica fila que podria violar el CHECK es la que
+-- dejo ese DEFAULT (content_type lleno y las otras tres vacias): se vacia. Los pagos con PDF (las cuatro llenas) no se tocan; cualquier otra mezcla
+-- no la produce el codigo y hace fallar el arranque en vez de adivinar. Idempotente.
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN content_type DROP DEFAULT;
+UPDATE tributario_schema.pagos_obligacion SET content_type = NULL
+    WHERE content_type IS NOT NULL AND nombre_archivo IS NULL AND tamano_bytes IS NULL AND ruta_almacenamiento IS NULL;
+ALTER TABLE tributario_schema.pagos_obligacion DROP CONSTRAINT IF EXISTS ck_pagos_obligacion_archivo;
+ALTER TABLE tributario_schema.pagos_obligacion ADD CONSTRAINT ck_pagos_obligacion_archivo CHECK (
+    (nombre_archivo IS NULL AND content_type IS NULL AND tamano_bytes IS NULL AND ruta_almacenamiento IS NULL)
+    OR (nombre_archivo IS NOT NULL AND content_type IS NOT NULL AND tamano_bytes IS NOT NULL AND ruta_almacenamiento IS NOT NULL));
 
 -- HU-23: incidencias del servicio contable. Una incidencia se asocia a los clientes que afecta (una fila por cliente en
 -- incidencias_clientes): la de un cliente tiene una fila y una general (caida del portal SOL) una por cada cliente activo.
