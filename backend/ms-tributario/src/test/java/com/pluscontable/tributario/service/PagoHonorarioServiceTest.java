@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -170,5 +171,19 @@ class PagoHonorarioServiceTest {
     @Test
     void unMontoConCerosDeMasNoCuentaComoDecimalesDeMas() {
         assertThat(service.registrar(CLIENTE, COBRO, pago("500.000"), "c").estado()).isEqualTo(EstadoCobro.PAGADO);
+    }
+
+    /** 20:00 del 11/11 en Lima ya es el 12/11 en UTC: un pago con fecha del 12 sigue siendo futuro. */
+    @Test
+    void conLaNocheDeLimaHoyEsElDiaDeLimaYUnPagoDeMananaSeRechaza() {
+        PagoHonorarioService enLima = new PagoHonorarioService(cobros, pagos,
+                Clock.fixed(Instant.parse("2026-11-12T01:00:00Z"), PagoHonorarioService.ZONA));
+
+        assertThatThrownBy(() -> enLima.registrar(CLIENTE, COBRO,
+                new PagoHonorarioEntradaDto(HOY.plusDays(1), new BigDecimal("100"), MedioPago.EFECTIVO, null), "contador1"))
+                .isInstanceOf(ValidationException.class).hasMessageContaining("fechaPago");
+
+        enLima.registrar(CLIENTE, COBRO, pago("100"), "contador1");
+        assertThat(guardados).singleElement().satisfies(p -> assertThat(p.getRegistradoEn()).isEqualTo(LocalDateTime.of(2026, 11, 11, 20, 0)));
     }
 }
