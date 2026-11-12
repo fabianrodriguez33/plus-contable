@@ -96,6 +96,26 @@ class EstadoCuentaPostgresTest {
     }
 
     @Test
+    void unPagoAdelantadoDeUnCobroPosteriorEntraEnLosPagosYPuedeDejarSaldoAFavor() {
+        long id = cliente();
+        long diciembre = cobro(id, "2026-12-15", "500.00");          // cobro de un periodo posterior
+        pago(diciembre, "2026-11-20", "500.00", "EFECTIVO", null);    // pagado por adelantado dentro del periodo
+
+        EstadoCuentaDto r = service.emitir(id, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30));
+
+        assertThat(r.cobros()).isEmpty();                              // el cobro es de diciembre
+        assertThat(r.pagos()).singleElement().satisfies(p -> assertThat(p.fechaCobro()).isEqualTo(LocalDate.of(2026, 12, 15)));
+        assertThat(r.totalPagado()).isEqualByComparingTo("500.00");
+        assertThat(r.saldo()).isEqualByComparingTo("-500.00");         // a favor del cliente
+        assertThat(r.sinMovimientos()).isFalse();
+
+        // en diciembre ese pago ya está en el saldo anterior y el saldo vuelve a cero
+        EstadoCuentaDto dic = service.emitir(id, LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 31));
+        assertThat(dic.saldoAnterior()).isEqualByComparingTo("-500.00");
+        assertThat(dic.saldo()).isEqualByComparingTo("0");
+    }
+
+    @Test
     void criterio3_unPeriodoSinMovimientosLoIndicaYUnClienteNoVeLosDeOtro() {
         long id = cliente();
         long otro = cliente();
