@@ -7,6 +7,7 @@ import FichaMaestraPage from './pages/FichaMaestraPage'
 import DeclaracionPage from './pages/DeclaracionPage'
 import EstadoCuentaPage from './pages/EstadoCuentaPage'
 import MorososPage from './pages/MorososPage'
+import PagoPage from './pages/PagoPage'
 import CalendarioPage from './pages/CalendarioPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />
           <Route path="/clientes/:clienteId" element={<FichaMaestraPage />} />
           <Route path="/obligaciones/:obligacionId/declarar" element={<DeclaracionPage />} />
+          <Route path="/obligaciones/:obligacionId/pago" element={<PagoPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
