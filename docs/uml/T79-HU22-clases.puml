@@ -30,6 +30,7 @@ class DatosRuc <<existe en develop>> {
 }
 class DetectorCambioCondicionRuc <<PR #49, no integrado>> {
   +evaluar(condicionAnterior, consulta): Resultado
+  +evaluar(condicionAnterior, estadoAnterior, consulta): Evaluacion
 }
 enum "Detector.Resultado" as Deteccion <<PR #49>> {
   CAMBIO
@@ -97,10 +98,10 @@ VerificacionRucJob --> VerificacionRucService
 VerificacionRucService --> ParametroSistemaService : ruc.verificacion_cada_dias = 1 inicialmente
 VerificacionRucService --> ClienteRepository : cartera activa
 VerificacionRucService --> ConsultaRuc
-VerificacionRucService --> DetectorCambioCondicionRuc : solo HABIDO / NO_HABIDO
+VerificacionRucService --> DetectorCambioCondicionRuc : condición y estado SUNAT por separado
 VerificacionRucService --> ClienteService : estado actual válido
 VerificacionRucService ..> HistorialVerificacionRucRepository : solo si Beto aprueba
-VerificacionRucService ..> AvisoService : cambio válido a BAJA / NO_HABIDO
+VerificacionRucService ..> AvisoService : transición válida a BAJA / SUSPENDIDO / NO_HABIDO
 VerificacionRucService ..> ResultadoVerificacion
 VerificacionRucService ..> ResumenVerificacion
 ConsultaRuc --> ResultadoConsulta
@@ -122,9 +123,10 @@ note right of VerificacionRucService
   Decisión de Beto comunicada por Julio: verificar diariamente la cartera;
   parámetro configurable con valor inicial 1 día. Ante fallo, conservar
   último estado, mostrar «No se pudo actualizar», permitir consulta o
-  actualización manual; no asumir BAJA / NO_HABIDO ni generar aviso.
-  Aviso interno solo ante cambio válido hacia BAJA o NO_HABIDO.
-  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
+  actualización manual; no inferir BAJA, SUSPENDIDO ni NO_HABIDO
+  de una falla y no generar aviso. La transición válida hacia BAJA,
+  SUSPENDIDO o NO_HABIDO requiere aviso interno. Sin cambio, sin aviso.
+  Correo pospuesto.
 end note
 note bottom of HistorialVerificacionRuc
   Solo el historial completo y su esquema siguen pendientes de Beto.
@@ -132,9 +134,9 @@ note bottom of HistorialVerificacionRuc
   No existe entidad ni tabla histórica implementada.
 end note
 note bottom of DetectorCambioCondicionRuc
-  El PR #49 detecta cambios HABIDO / NO_HABIDO; no compara estado SUNAT,
-  no persiste datos ni genera avisos. La comparación del estado BAJA
-  pertenece al servicio diseñado y aún no está implementada.
+  El PR #49 evalúa condición y estado SUNAT, y devuelve los motivos
+  BAJA, SUSPENDIDO y NO_HABIDO cuando hay transición válida.
+  No persiste datos ni genera avisos; la integración sigue diseñada.
 end note
-footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio · Historial pendiente de Beto
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop 2f3f33b, PR #49 y decisión de Beto comunicada por Julio · Historial pendiente de Beto
 @enduml

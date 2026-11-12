@@ -52,21 +52,21 @@ note right of clientes
   Condición HABIDO / NO_HABIDO, estado SUNAT y régimen tributario
   son datos independientes. El régimen RER llegó con el PR #48.
   estado_sunat y condicion_verificada_en NO existen aún en clientes.
-  SUSPENDIDO es un estado representable, pero no dispara aviso automático.
+  Una transición válida hacia SUSPENDIDO requiere aviso interno diseñado.
 end note
 note bottom of historial
   Julio y Ricardo proponen estado actual más historial completo.
   Solo la persistencia histórica y sus datos siguen pendientes de Beto.
   Esta entidad no existe: nombre de tabla, columnas, tipos,
   índices y restricciones no quedan fijados por el diagrama.
-  Un fallo del proveedor no confirma BAJA ni NO_HABIDO.
+  Un fallo del proveedor no confirma BAJA, SUSPENDIDO ni NO_HABIDO.
 end note
 note right of avisos
-  Decisión de Beto comunicada por Julio: aviso INTERNO solo ante
-  cambio válido hacia BAJA o NO_HABIDO. Sin cambio relevante ni
+  Decisión de Beto comunicada por Julio: aviso INTERNO ante
+  transición válida hacia BAJA, SUSPENDIDO o NO_HABIDO. Sin cambio ni
   respuesta válida, no se crea aviso. Correo electrónico pospuesto.
   avisos, avisos_clientes y parametros_sistema son diseño T48,
   no tablas implementadas.
 end note
-footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio · Sin migración
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop 2f3f33b, PR #49 y decisión de Beto comunicada por Julio · Sin migración
 @enduml
