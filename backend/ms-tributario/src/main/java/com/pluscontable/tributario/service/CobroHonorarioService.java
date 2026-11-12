@@ -34,6 +34,9 @@ public class CobroHonorarioService {
 
     static final int MESES = 12;
     private static final BigDecimal MINIMO_QUINCENAL = new BigDecimal("0.02");
+    /** HU-29: un pago parcial deja el cobro pendiente de saldo; se sigue viendo entre los pendientes. */
+    static final List<EstadoCobro> CON_SALDO = List.of(EstadoCobro.PENDIENTE, EstadoCobro.PAGO_PARCIAL);
+    private static final List<EstadoCobro> CON_PAGO = List.of(EstadoCobro.PAGO_PARCIAL, EstadoCobro.PAGADO);
 
     private final ClienteRepository clientes;
     private final AcuerdoRepository acuerdos;
@@ -85,7 +88,12 @@ public class CobroHonorarioService {
                 throw new ValidationException("No se puede cambiar la periodicidad: hay un cobro vencido de este mes sin pagar. "
                         + "Cambie la periodicidad desde el mes siguiente");
             }
-            // HU-29: solo se reemplazan los PENDIENTE; los cobros con pago (total o parcial) no se deben borrar, o se pierde el pago.
+            // HU-29: un cobro con pago de este mes o posterior no se borra (se perdería el pago) y, si queda, el mes se cobraría
+            // dos veces con el nuevo esquema.
+            if (cobros.existsByClienteIdAndEstadoInAndFechaCobroGreaterThanEqual(clienteId, CON_PAGO, hoy.withDayOfMonth(1))) {
+                throw new ValidationException("No se puede cambiar la periodicidad: hay cobros de este mes o posteriores con pagos "
+                        + "registrados. Cambie la periodicidad desde el mes siguiente");
+            }
             cobros.deleteByClienteIdAndEstadoAndFechaCobroGreaterThanEqual(clienteId, EstadoCobro.PENDIENTE, hoy);
             cobros.flush(); // los borrados van antes que los nuevos: pueden caer en la misma fecha
         }
@@ -146,7 +154,7 @@ public class CobroHonorarioService {
     }
 
     private List<CobroHonorarioDto> listarPendientes(Long clienteId) {
-        return cobros.findByClienteIdAndEstadoOrderByFechaCobroAsc(clienteId, EstadoCobro.PENDIENTE).stream()
+        return cobros.findByClienteIdAndEstadoInOrderByFechaCobroAsc(clienteId, CON_SALDO).stream()
                 .map(CobroHonorarioDto::from).toList();
     }
 
