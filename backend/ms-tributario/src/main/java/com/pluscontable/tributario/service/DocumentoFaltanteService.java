@@ -106,7 +106,7 @@ public class DocumentoFaltanteService {
     }
 
     private DocumentoFaltante buscar(Long clienteId, Long documentoId) {
-        return documentos.findById(documentoId)
+        return documentos.buscarParaActualizar(documentoId)
                 .filter(d -> d.getClienteId().equals(clienteId))
                 .orElseThrow(() -> new EntityNotFoundException("Documento no encontrado"));
     }

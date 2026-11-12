@@ -123,7 +123,7 @@ class DocumentoFaltanteServiceTest {
     @Test
     void criterio3_alRecibirloGuardaLaEntregaDeHoyYPasaAEntregadoAunqueEstuvieraSinRespuesta() {
         DocumentoFaltante d = guardado("2026-11-05", DocumentoFaltante.Estado.PENDIENTE);
-        when(repo.findById(3L)).thenReturn(Optional.of(d));
+        when(repo.buscarParaActualizar(3L)).thenReturn(Optional.of(d));
 
         DocumentoFaltanteDto r = service.registrarEntrega(CLIENTE, 3L);
 
@@ -133,7 +133,7 @@ class DocumentoFaltanteServiceTest {
 
     @Test
     void entregarDosVecesDa400YUnDocumentoDeOtroClienteDa404() {
-        when(repo.findById(3L)).thenReturn(Optional.of(guardado("2026-11-20", DocumentoFaltante.Estado.ENTREGADO)));
+        when(repo.buscarParaActualizar(3L)).thenReturn(Optional.of(guardado("2026-11-20", DocumentoFaltante.Estado.ENTREGADO)));
 
         assertThatThrownBy(() -> service.registrarEntrega(CLIENTE, 3L)).isInstanceOf(ValidationException.class);
         assertThatThrownBy(() -> service.registrarEntrega(8L, 3L)).isInstanceOf(EntityNotFoundException.class);
@@ -143,7 +143,7 @@ class DocumentoFaltanteServiceTest {
     @Test
     void criterio4_unSinRespuestaSeRegistraComoIncidenciaDeHu23YQuedaEnlazado() {
         DocumentoFaltante d = guardado("2026-11-05", DocumentoFaltante.Estado.PENDIENTE);
-        when(repo.findById(3L)).thenReturn(Optional.of(d));
+        when(repo.buscarParaActualizar(3L)).thenReturn(Optional.of(d));
         when(incidencias.registrar(any(), eq("contador1"))).thenReturn(
                 new IncidenciaDto(40L, TipoIncidencia.CLIENTE_NO_ENVIA_DOCUMENTOS, HOY, "x", "contador1", LocalDateTime.now(), 1));
 
@@ -167,7 +167,7 @@ class DocumentoFaltanteServiceTest {
         yaRegistrado.setIncidenciaId(40L);
 
         for (DocumentoFaltante d : List.of(vigente, entregado, yaRegistrado)) {
-            when(repo.findById(3L)).thenReturn(Optional.of(d));
+            when(repo.buscarParaActualizar(3L)).thenReturn(Optional.of(d));
             assertThatThrownBy(() -> service.registrarComoIncidencia(CLIENTE, 3L, "c")).isInstanceOf(ValidationException.class);
         }
         verify(incidencias, never()).registrar(any(), any());

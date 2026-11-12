@@ -11,6 +11,12 @@ import jakarta.validation.ValidationException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +96,32 @@ class DocumentoFaltantePostgresTest {
             assertThat(h.descripcion()).contains("Libro de ventas");
         });
         assertThatThrownBy(() -> service.registrarComoIncidencia(id, doc, "contador1")).isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    void dosPedidosALaVezParaRegistrarLaIncidenciaCreanSoloUna() throws Exception {
+        long id = cliente();
+        long doc = vencido(id, "Libro diario");
+        CyclicBarrier largada = new CyclicBarrier(2);
+        ExecutorService hilos = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Boolean> registrar = () -> {
+                largada.await(5, TimeUnit.SECONDS);
+                try {
+                    service.registrarComoIncidencia(id, doc, "contador1");
+                    return true;
+                } catch (ValidationException e) {
+                    return false; // el segundo ya ve la incidencia enlazada
+                }
+            };
+            long exitosos = 0;
+            for (Future<Boolean> r : hilos.invokeAll(List.of(registrar, registrar))) if (r.get()) exitosos++;
+            assertThat(exitosos).isEqualTo(1);
+        } finally {
+            hilos.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tributario_schema.incidencias WHERE descripcion LIKE '%Libro diario%'",
+                Integer.class)).isEqualTo(1);
     }
 
     @Test
