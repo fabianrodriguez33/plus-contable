@@ -2,6 +2,7 @@ package com.pluscontable.tributario.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -14,10 +15,14 @@ import com.pluscontable.tributario.model.TipoIncidencia;
 import com.pluscontable.tributario.model.TipoSolicitud;
 import com.pluscontable.tributario.repository.SolicitudEspecialRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
 /** HU-27 · Tarea 194 (unitarias): junta incidencias y solicitudes, el orden, los datos de cada registro y el historial vacío. */
 class HistorialServiceTest {
@@ -103,5 +108,23 @@ class HistorialServiceTest {
         when(incidencias.delCliente(99L)).thenThrow(new EntityNotFoundException("Cliente no encontrado: 99"));
 
         assertThatThrownBy(() -> service.delCliente(99L)).isInstanceOf(EntityNotFoundException.class);
+    }
+
+    /** 20:00 del 11/11 en Lima ya es el 12/11 en UTC: la solicitud debe verse con la fecha del 11. */
+    @Test
+    void unaSolicitudRegistradaALaNocheDeLimaSeVeConLaFechaDeEseDia() {
+        SolicitudEspecialRepository repo = mock(SolicitudEspecialRepository.class);
+        ClienteService clientes = mock(ClienteService.class);
+        when(repo.save(any())).thenAnswer(a -> a.getArgument(0));
+        new SolicitudEspecialService(repo, clientes, Clock.fixed(Instant.parse("2026-11-12T01:00:00Z"), SolicitudEspecialService.ZONA))
+                .registrar(CLIENTE, new com.pluscontable.tributario.dto.SolicitudEspecialEntradaDto(
+                        TipoSolicitud.CONSTANCIA, null, LocalDate.of(2026, 11, 11)), "contador1");
+        ArgumentCaptor<SolicitudEspecial> guardada = ArgumentCaptor.forClass(SolicitudEspecial.class);
+        Mockito.verify(repo).save(guardada.capture());
+        when(incidencias.delCliente(CLIENTE)).thenReturn(List.of());
+        when(solicitudes.findByClienteId(CLIENTE)).thenReturn(List.of(guardada.getValue()));
+
+        assertThat(service.delCliente(CLIENTE)).singleElement()
+                .satisfies(h -> assertThat(h.registradaEn().toLocalDate()).isEqualTo(LocalDate.of(2026, 11, 11)));
     }
 }

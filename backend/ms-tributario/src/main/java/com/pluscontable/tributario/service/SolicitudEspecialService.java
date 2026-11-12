@@ -9,6 +9,8 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SolicitudEspecialService {
 
+    /** «Hoy» es el de Lima, aunque el servidor corra en UTC (igual que HU-31). */
+    static final ZoneId ZONA = ZoneId.of("America/Lima");
     static final int MAX_DESCRIPCION = 500;
 
     private final SolicitudEspecialRepository solicitudes;
@@ -31,7 +35,7 @@ public class SolicitudEspecialService {
 
     @Autowired
     public SolicitudEspecialService(SolicitudEspecialRepository solicitudes, ClienteService clientes) {
-        this(solicitudes, clientes, Clock.systemDefaultZone());
+        this(solicitudes, clientes, Clock.system(ZONA));
     }
 
     SolicitudEspecialService(SolicitudEspecialRepository solicitudes, ClienteService clientes, Clock clock) {
@@ -51,6 +55,7 @@ public class SolicitudEspecialService {
         s.setDescripcion(dto.descripcion() == null || dto.descripcion().isBlank() ? null : dto.descripcion().trim());
         s.setFechaEntrega(dto.fechaEntrega());
         s.setRegistradaPor(usuario);
+        s.setRegistradaEn(LocalDateTime.now(clock)); // la fecha que se muestra sale de aquí; con la hora del servidor saldría un día después
         return SolicitudEspecialDto.from(solicitudes.save(s));
     }
 
