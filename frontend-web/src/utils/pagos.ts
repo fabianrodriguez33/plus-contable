@@ -1,9 +1,8 @@
 import type { Obligacion } from '../services/obligacionService'
 import type { Pago } from '../services/pagoService'
+import { soles } from './societario'
 
 export const CONSTANCIA_MAXIMO = 30
-
-export const soles = (n: number) => `S/ ${n.toFixed(2)}`
 
 const centimos = (n: number) => Math.round(n * 100)
 

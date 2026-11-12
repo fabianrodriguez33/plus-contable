@@ -7,6 +7,7 @@ import { AxiosError } from 'axios'
 import PagoPage from './PagoPage'
 import { buscarObligacion, type Obligacion } from '../services/obligacionService'
 import { listarPagos, registrarPago, type Pago } from '../services/pagoService'
+import { soles } from '../utils/societario'
 
 vi.mock('../services/obligacionService', () => ({ buscarObligacion: vi.fn() }))
 vi.mock('../services/pagoService', () => ({ listarPagos: vi.fn(), registrarPago: vi.fn() }))
@@ -18,6 +19,9 @@ const obligacion = (over: Partial<Obligacion> = {}): Obligacion => ({
 
 const pago = (id: number, constancia: string, monto: number, acumulado: number, saldo: number, fecha = '2026-11-08'): Pago =>
   ({ id, fechaPago: fecha, montoPagado: monto, numeroConstancia: constancia, acumuladoDespues: acumulado, saldoDespues: saldo })
+
+/** Para getByText: el DOM normaliza el espacio duro que pone Intl entre «S/» y el número. */
+const txt = (n: number) => soles(n).replace(/\u00a0/g, ' ')
 
 const obtener = vi.mocked(buscarObligacion)
 const listar = vi.mocked(listarPagos)
@@ -60,9 +64,9 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     expect(await screen.findByText('2026-10')).toBeTruthy()
     expect(screen.getByText(/vence 2026-11-20/)).toBeTruthy()
     expect(screen.getByTestId('estado').textContent).toBe('Declarada')
-    expect(screen.getByTestId('determinado').textContent).toBe('S/ 1000.00')
-    expect(screen.getByTestId('acumulado').textContent).toBe('S/ 0.00')
-    expect(screen.getByTestId('saldo').textContent).toBe('S/ 1000.00')
+    expect(screen.getByTestId('determinado').textContent).toBe(soles(1000))
+    expect(screen.getByTestId('acumulado').textContent).toBe(soles(0))
+    expect(screen.getByTestId('saldo').textContent).toBe(soles(1000))
     expect(obtener).toHaveBeenCalledWith(3)
     expect(listar).toHaveBeenCalledWith(3)
   })
@@ -84,8 +88,8 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     pantalla()
 
     expect(await screen.findByTestId('saldo')).toBeTruthy()
-    expect(screen.getByTestId('acumulado').textContent).toBe('S/ 500.00')
-    expect(screen.getByTestId('saldo').textContent).toBe('S/ 500.00')
+    expect(screen.getByTestId('acumulado').textContent).toBe(soles(500))
+    expect(screen.getByTestId('saldo').textContent).toBe(soles(500))
     const tabla = screen.getByRole('table')
     expect(within(tabla).getByText('C-001')).toBeTruthy()
     expect(within(tabla).getByText('C-002')).toBeTruthy()
@@ -101,7 +105,7 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
 
     expect(registrar).toHaveBeenCalledTimes(1)
     expect(registrar).toHaveBeenCalledWith(3, { fechaPago: '2026-11-09', montoPagado: 400, numeroConstancia: 'C-001' })
-    expect((await screen.findByRole('status')).textContent).toContain('queda pago parcial con saldo de S/ 600.00')
+    expect((await screen.findByRole('status')).textContent).toContain(`queda pago parcial con saldo de ${soles(600)}`)
     expect(monto().value).toBe('')
     expect(constancia().value).toBe('')
     await waitFor(() => expect(obtener).toHaveBeenCalledTimes(2)) // se vuelve a leer la obligación y sus pagos
@@ -116,11 +120,11 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     listar.mockResolvedValue([pago(1, 'C-001', 400, 400, 600)])
 
     await pagar('400', 'C-001')
-    await waitFor(() => expect(screen.getByTestId('saldo').textContent).toBe('S/ 600.00'))
+    await waitFor(() => expect(screen.getByTestId('saldo').textContent).toBe(soles(600)))
     expect(boton()).toBeTruthy()
 
     await pagar('600.01', 'C-002')
-    expect(screen.getByText('El monto supera el saldo pendiente de S/ 600.00')).toBeTruthy()
+    expect(screen.getByText(`El monto supera el saldo pendiente de ${txt(600)}`)).toBeTruthy()
     expect(registrar).toHaveBeenCalledTimes(1)
   })
 
@@ -163,7 +167,7 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     await pagar('10.005', 'C-1')
     expect(screen.getByText('Use como máximo dos decimales')).toBeTruthy()
     await pagar('1000.01', 'C-1')
-    expect(screen.getByText('El monto supera el saldo pendiente de S/ 1000.00')).toBeTruthy()
+    expect(screen.getByText(`El monto supera el saldo pendiente de ${txt(1000)}`)).toBeTruthy()
     expect(registrar).not.toHaveBeenCalled()
 
     await pagar('1000', 'C-1')
@@ -212,7 +216,7 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
 
     expect((screen.getByRole('button', { name: /Registrando/ }) as HTMLButtonElement).disabled).toBe(true)
     await act(async () => { terminar({ ...obligacion({ estado: 'PAGO_PARCIAL' }), montoAcumuladoPagado: 100, saldo: 900, numeroPagos: 1 }) })
-    expect((await screen.findByRole('status')).textContent).toContain('S/ 900.00')
+    expect((await screen.findByRole('status')).textContent).toContain(soles(900))
   })
 
   it('una obligación sin declarar no admite pagos: no hay formulario y lleva a registrar la declaración', async () => {

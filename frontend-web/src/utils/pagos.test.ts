@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { resumenDePagos, soles, validarPago } from './pagos'
+import { resumenDePagos, validarPago } from './pagos'
+import { soles } from './societario'
 import type { Obligacion } from '../services/obligacionService'
 import type { Pago } from '../services/pagoService'
 
@@ -42,14 +43,14 @@ describe('validarPago', () => {
     expect(validarPago(datos({ montoPagado: '0' }), 1000, HOY, []).montoPagado).toBe('El monto debe ser mayor que cero')
     expect(validarPago(datos({ montoPagado: '-1' }), 1000, HOY, []).montoPagado).toBe('El monto debe ser mayor que cero')
     expect(validarPago(datos({ montoPagado: '10.123' }), 1000, HOY, []).montoPagado).toBe('Use como máximo dos decimales')
-    expect(validarPago(datos({ montoPagado: '1000.01' }), 1000, HOY, []).montoPagado).toBe('El monto supera el saldo pendiente de S/ 1000.00')
+    expect(validarPago(datos({ montoPagado: '1000.01' }), 1000, HOY, []).montoPagado).toBe(`El monto supera el saldo pendiente de ${soles(1000)}`)
     expect(validarPago(datos({ montoPagado: '1000' }), 1000, HOY, []).montoPagado).toBeUndefined()
     expect(validarPago(datos({ montoPagado: '0.01' }), 1000, HOY, []).montoPagado).toBeUndefined()
   })
 
   it('los centavos se comparan exactos: 99.90 con saldo 99.90 vale y 99.91 no', () => {
     expect(validarPago(datos({ montoPagado: '99.90' }), 99.9, HOY, []).montoPagado).toBeUndefined()
-    expect(validarPago(datos({ montoPagado: '99.91' }), 99.9, HOY, []).montoPagado).toBe('El monto supera el saldo pendiente de S/ 99.90')
+    expect(validarPago(datos({ montoPagado: '99.91' }), 99.9, HOY, []).montoPagado).toBe(`El monto supera el saldo pendiente de ${soles(99.9)}`)
   })
 
   it('la constancia es obligatoria, de hasta 30 caracteres sin contar espacios de los lados y no se repite en la obligación', () => {
@@ -64,12 +65,5 @@ describe('validarPago', () => {
   it('reúne todos los errores a la vez', () => {
     expect(Object.keys(validarPago({ fechaPago: '', montoPagado: '', numeroConstancia: '' }, 1000, HOY, [])).sort())
       .toEqual(['fechaPago', 'montoPagado', 'numeroConstancia'])
-  })
-})
-
-describe('soles', () => {
-  it('da siempre dos decimales', () => {
-    expect(soles(5)).toBe('S/ 5.00')
-    expect(soles(0.5)).toBe('S/ 0.50')
   })
 })
