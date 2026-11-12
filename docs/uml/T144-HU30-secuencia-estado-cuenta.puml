@@ -51,7 +51,9 @@ alt sinMovimientos
   FE -> U : "El cliente no tiene cobros ni pagos en este periodo." y el resumen con el saldo
   note right : Criterio 3
 else hay movimientos
-  FE -> U : resumen (saldo anterior, cobrado, pagado, saldo al cierre),\ntabla de cobros y tabla de pagos
+  FE -> U : resumen (saldo anterior, honorarios del periodo, pagos recibidos, saldo al cierre;
+un saldo negativo se muestra «a favor del cliente»), tabla de cobros con su estado de hoy
+y tabla de pagos
   note right : Criterio 1
 end
 
