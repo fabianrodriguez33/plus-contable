@@ -82,6 +82,20 @@ class EstadoCuentaPostgresTest {
     }
 
     @Test
+    void unCobroYUnPagoDelPrimerDiaEntranEnElPeriodoYNoEnElSaldoAnterior() {
+        long id = cliente();
+        long primerDia = cobro(id, "2026-11-01", "500.00");
+        pago(primerDia, "2026-11-01", "200.00", "EFECTIVO", null);
+
+        EstadoCuentaDto r = service.emitir(id, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30));
+
+        assertThat(r.saldoAnterior()).isEqualByComparingTo("0");
+        assertThat(r.cobros()).extracting(CobroHonorarioDto::id).containsExactly(primerDia);
+        assertThat(r.pagos()).hasSize(1);
+        assertThat(r.saldo()).isEqualByComparingTo("300.00"); // contado una sola vez
+    }
+
+    @Test
     void criterio3_unPeriodoSinMovimientosLoIndicaYUnClienteNoVeLosDeOtro() {
         long id = cliente();
         long otro = cliente();
