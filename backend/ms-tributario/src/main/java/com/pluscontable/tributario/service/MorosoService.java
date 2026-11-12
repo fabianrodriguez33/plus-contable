@@ -4,6 +4,7 @@ import com.pluscontable.tributario.dto.MorosoDto;
 import com.pluscontable.tributario.repository.CobroHonorarioRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -19,12 +20,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MorosoService {
 
+    /** «Hoy» es el de Lima: si el servidor corre en UTC, entre las 19:00 y las 24:00 de Lima ya sería mañana. */
+    static final ZoneId ZONA = ZoneId.of("America/Lima");
+
     private final CobroHonorarioRepository cobros;
     private final Clock clock;
 
     @Autowired
     public MorosoService(CobroHonorarioRepository cobros) {
-        this(cobros, Clock.systemDefaultZone());
+        this(cobros, Clock.system(ZONA));
+    }
+
+    Clock reloj() {
+        return clock;
     }
 
     MorosoService(CobroHonorarioRepository cobros, Clock clock) {

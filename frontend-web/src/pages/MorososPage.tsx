@@ -42,7 +42,7 @@ export default function MorososPage() {
             ))}
           </Table>
           {morosos.length > 0 && (
-            <p className="mt-3 text-sm text-slate-600">{morosos.length} clientes morosos · total vencido {soles(total)}</p>
+            <p className="mt-3 text-sm text-slate-600">{morosos.length === 1 ? '1 cliente moroso' : `${morosos.length} clientes morosos`} · total vencido {soles(total)}</p>
           )}
         </>
       )}

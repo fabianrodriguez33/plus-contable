@@ -27,7 +27,7 @@ class MorosoPostgresTest {
     @Autowired MorosoService service;
 
     private final List<String> rucs = new ArrayList<>();
-    private final LocalDate hoy = LocalDate.now();
+    private final LocalDate hoy = LocalDate.now(MorosoService.ZONA); // el mismo «hoy» que el servicio
 
     @AfterEach
     void limpiar() {

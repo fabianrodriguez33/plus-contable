@@ -33,6 +33,14 @@ describe('Clientes morosos (HU-31)', () => {
     expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === `2 clientes morosos · total vencido ${soles(850)}`)).toBeTruthy()
   })
 
+  it('con un solo moroso lo dice en singular', async () => {
+    vi.mocked(listarMorosos).mockResolvedValue([moroso(4, 'Acme SAC', 750, 27)])
+    montar()
+
+    await screen.findByRole('link', { name: 'Acme SAC' })
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === `1 cliente moroso · total vencido ${soles(750)}`)).toBeTruthy()
+  })
+
   it('criterio 2: si todos están al día lo dice y no muestra a nadie', async () => {
     vi.mocked(listarMorosos).mockResolvedValue([])
     montar()

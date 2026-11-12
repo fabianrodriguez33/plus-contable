@@ -11,7 +11,8 @@ class MorosoController <<nuevo>> {
 }
 
 class MorosoService <<nuevo>> {
-  -clock: Clock
+  ~ZONA = America/Lima
+  -clock: Clock (zona de Lima)
   +listar(): List<MorosoDto>
 }
 
@@ -63,6 +64,7 @@ note bottom of MorosoService
   Moroso = cliente con al menos un cobro vencido: fecha_cobro anterior a hoy y saldo sin pagar
   (PENDIENTE o PAGO_PARCIAL). Un cobro que vence hoy todavía no está vencido; PAGADO no cuenta.
   montoVencido = suma de (monto - pagado) de sus cobros vencidos (criterio 1); un cliente al día no aparece (criterio 2).
+  «Hoy» es el de Lima (America/Lima), aunque el servidor corra en UTC.
   Orden: más días de atraso primero; a igual atraso, mayor monto. Incluye clientes inactivos: su deuda sigue vigente.
 end note
 

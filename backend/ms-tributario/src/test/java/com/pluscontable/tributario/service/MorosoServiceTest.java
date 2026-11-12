@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,21 @@ class MorosoServiceTest {
         assertThat(service.listar()).isEmpty();
         // PAGADO no cuenta; el corte es «antes de hoy» (hoy todavía no está vencido, lo filtra la consulta con fecha < hoy)
         verify(cobros).deudasVencidas(List.of(EstadoCobro.PENDIENTE, EstadoCobro.PAGO_PARCIAL), HOY);
+    }
+
+    @Test
+    void hoyEsElDeLimaAunqueElServidorCorraEnUtc() {
+        // 12/11 02:00 en UTC = 11/11 21:00 en Lima: para Lima todavía es 11/11
+        MorosoService enLima = new MorosoService(cobros, Clock.fixed(Instant.parse("2026-11-12T02:00:00Z"), MorosoService.ZONA));
+        when(cobros.deudasVencidas(any(), any())).thenReturn(List.of(deuda(4, "10.00", 1, "2026-11-10")));
+
+        assertThat(enLima.listar().get(0).diasAtraso()).isEqualTo(1);
+        verify(cobros).deudasVencidas(any(), eq(LocalDate.of(2026, 11, 11)));
+    }
+
+    @Test
+    void elServicioQueCreaSpringUsaLaZonaDeLima() {
+        assertThat(new MorosoService(cobros).reloj().getZone()).isEqualTo(ZoneId.of("America/Lima"));
     }
 
     @Test
