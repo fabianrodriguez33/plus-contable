@@ -1,0 +1,41 @@
+@startuml
+title T150 · HU-31 · Secuencia: ver la lista de clientes morosos
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(MorososPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "MorosoController" as MC
+participant "MorosoService" as MS
+participant "CobroHonorarioRepository" as CR
+database "tributario_schema" as DB
+
+U -> FE : abre «Clientes morosos» en el menú
+FE -> SEC : GET /api/tributario/morosos\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403
+  FE -> U : muestra el mensaje y no la lista
+  note right : Criterio 3: solo el estudio
+end
+SEC -> MC : listar()
+MC -> MS : listar()
+MS -> CR : deudasVencidas([PENDIENTE, PAGO_PARCIAL], hoy)
+CR -> DB : SELECT cliente, SUM(monto - pagado), COUNT(*), MIN(fecha_cobro)\nFROM cobros_honorarios JOIN clientes\nWHERE estado IN (...) AND fecha_cobro < hoy\nGROUP BY cliente
+CR --> MS : deudas vencidas por cliente
+MS -> MS : diasAtraso = días entre el cobro vencido más antiguo y hoy;\nordena por días de atraso y luego por monto
+MS --> FE : 200 [MorosoDto]
+alt hay morosos
+  FE -> U : tabla con cliente (enlace a su ficha), RUC, monto vencido,\ndías de atraso, cobros vencidos y vencido desde; total vencido
+  note right : Criterio 1
+else lista vacía
+  FE -> U : "No hay clientes morosos: todos están al día."
+  note right : Criterio 2: los clientes al día no aparecen
+end
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-31-clientes-morosos. Código: MorososPage, expedienteService.ts, Sidebar, SecurityConfig, MorosoController, MorosoService, CobroHonorarioRepository.deudasVencidas. Pruebas: MorosoServiceTest, MorosoControllerTest, MorosoPostgresTest, MorososPage.test.tsx
+@enduml
