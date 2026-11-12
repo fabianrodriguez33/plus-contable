@@ -1,6 +1,7 @@
 package com.pluscontable.tributario.service;
 
 import com.pluscontable.tributario.dto.ObligacionDto;
+import com.pluscontable.tributario.dto.PagoDto;
 import com.pluscontable.tributario.dto.PagoEntradaDto;
 import com.pluscontable.tributario.model.Obligacion;
 import com.pluscontable.tributario.model.PagoObligacion;
@@ -24,9 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * HU-13 · Registrar el pago de una obligación declarada, con su comprobante (PDF). Una obligación admite varios pagos
- * parciales: cada pago suma al acumulado y reduce el saldo; con el acumulado igual al monto determinado pasa a PAGADO.
- * El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
+ * HU-13 · Registrar el pago de una obligación declarada. El comprobante es el número de constancia; el PDF es opcional
+ * (alcance reducido de Beto, 10/11: la pantalla no lo envía; si llega, se valida y se guarda como antes). Una obligación
+ * admite varios pagos parciales: cada pago suma al acumulado y reduce el saldo; con el acumulado igual al monto determinado
+ * pasa a PAGADO. El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
  */
 @Service
 public class PagoObligacionService {
@@ -80,24 +82,26 @@ public class PagoObligacionService {
         BigDecimal saldo = determinado.subtract(acumulado);
         int numeroPagos = (int) pagos.countByObligacionId(o.getId()) + 1;
 
-        AlmacenComprobantes.Guardado guardado = almacen.guardar(o.getClienteId(), archivo);
+        AlmacenComprobantes.Guardado guardado = hayArchivo(archivo) ? almacen.guardar(o.getClienteId(), archivo) : null;
         try {
             PagoObligacion p = new PagoObligacion();
             p.setObligacionId(o.getId());
             p.setFechaPago(dto.fechaPago());
             p.setMontoPagado(monto);
             p.setNumeroConstancia(dto.numeroConstancia().trim());
-            p.setNombreArchivo(guardado.nombreArchivo());
-            p.setContentType("application/pdf");
-            p.setTamanoBytes(guardado.tamanoBytes());
-            p.setRutaAlmacenamiento(guardado.rutaRelativa());
+            if (guardado != null) {
+                p.setNombreArchivo(guardado.nombreArchivo());
+                p.setContentType("application/pdf");
+                p.setTamanoBytes(guardado.tamanoBytes());
+                p.setRutaAlmacenamiento(guardado.rutaRelativa());
+            }
             p.setAcumuladoDespues(acumulado);
             p.setSaldoDespues(saldo);
             pagos.save(p);
             o.setEstado(saldo.signum() == 0 ? Obligacion.Estado.PAGADO : Obligacion.Estado.PAGO_PARCIAL);
             return ObligacionDto.from(obligaciones.save(o), acumulado, numeroPagos);
         } catch (RuntimeException e) {
-            almacen.borrar(guardado.destino()); // sin registro el archivo quedaría huérfano
+            if (guardado != null) almacen.borrar(guardado.destino()); // sin registro el archivo quedaría huérfano
             throw e;
         }
     }
@@ -123,13 +127,25 @@ public class PagoObligacionService {
             errores.add("numeroConstancia (ya registrado en esta obligación)");
         }
 
-        if (archivo == null || archivo.isEmpty()) errores.add("archivo (el comprobante es obligatorio)");
-        else if (archivo.getSize() > tamanoMaximoBytes) errores.add("archivo (supera el máximo de " + tamanoMaximoMb + " MB)");
-        else if (!esPdf(archivo)) errores.add("archivo (no es un PDF)");
+        if (hayArchivo(archivo)) {
+            if (archivo.getSize() > tamanoMaximoBytes) errores.add("archivo (supera el máximo de " + tamanoMaximoMb + " MB)");
+            else if (!esPdf(archivo)) errores.add("archivo (no es un PDF)");
+        }
 
         if (!errores.isEmpty()) {
             throw new ValidationException("Faltan o son inválidos: " + String.join(", ", errores));
         }
+    }
+
+    private static boolean hayArchivo(MultipartFile archivo) {
+        return archivo != null && !archivo.isEmpty();
+    }
+
+    /** HU-13: los pagos de la obligación en orden cronológico; 404 si la obligación no existe. */
+    @Transactional(readOnly = true)
+    public List<PagoDto> listar(Long obligacionId) {
+        if (!obligaciones.existsById(obligacionId)) throw new EntityNotFoundException("Obligación no encontrada");
+        return pagos.findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId).stream().map(PagoDto::from).toList();
     }
 
     /** Se exige el tipo declarado y la firma %PDF- del contenido: la extensión sola se puede falsear (igual que HU-04). */

@@ -37,16 +37,17 @@ public class PagoObligacion {
     @Column(name = "numero_constancia", nullable = false, length = 30)
     private String numeroConstancia;
 
-    @Column(name = "nombre_archivo", nullable = false)
+    // El archivo es opcional (alcance reducido de Beto, 10/11): sin comprobante en PDF estas cuatro columnas quedan en NULL
+    @Column(name = "nombre_archivo")
     private String nombreArchivo;
 
-    @Column(name = "content_type", nullable = false, length = 100)
+    @Column(name = "content_type", length = 100)
     private String contentType;
 
-    @Column(name = "tamano_bytes", nullable = false)
-    private long tamanoBytes;
+    @Column(name = "tamano_bytes")
+    private Long tamanoBytes;
 
-    @Column(name = "ruta_almacenamiento", nullable = false, length = 400)
+    @Column(name = "ruta_almacenamiento", length = 400)
     private String rutaAlmacenamiento;
 
     @Column(name = "acumulado_despues", nullable = false)
