@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FilaTablero } from '../services/tableroService'
+import { ENLACES } from '../components/Sidebar'
 import { ETIQUETA_ESTADO, hoyLima, mesActualLima, mesCorto, periodoDeMes, resumenTablero } from './tablero'
 
 const fila = (cambios: Partial<FilaTablero>): FilaTablero => ({
@@ -42,5 +43,9 @@ describe('tablero (HU-14)', () => {
     ])
 
     expect(r).toEqual({ pendientes: 1, declaradas: 2, pagoParcial: 1, pagadas: 1, vencidas: 2 })
+  })
+
+  it('el menú tiene el enlace al tablero', () => {
+    expect(ENLACES).toContainEqual(expect.objectContaining({ to: '/tablero', etiqueta: 'Tablero' }))
   })
 })
