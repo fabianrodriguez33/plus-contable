@@ -33,7 +33,7 @@ function montar() {
   render(<MemoryRouter><TableroPage /></MemoryRouter>)
 }
 
-const ultimaConsulta = () => vi.mocked(consultarTablero).mock.calls.at(-1)![0]
+const ultimaConsulta = () => vi.mocked(consultarTablero).mock.calls[vi.mocked(consultarTablero).mock.calls.length - 1][0]
 
 beforeEach(() => {
   vi.mocked(listarClientes).mockResolvedValue([ACME, BETA])
