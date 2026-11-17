@@ -11,6 +11,8 @@ import com.pluscontable.tributario.repository.IncidenciaRepository;
 import jakarta.validation.ValidationException;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class IncidenciaService {
 
+    /** «Hoy» es el de Lima, aunque el servidor corra en UTC (igual que HU-31). */
+    static final ZoneId ZONA = ZoneId.of("America/Lima");
     static final int MAX_DESCRIPCION = 1000;
     static final int MAX_USUARIO = 60;
     static final int MAX_OBSERVACIONES = 1000;
@@ -39,7 +43,7 @@ public class IncidenciaService {
     @Autowired
     public IncidenciaService(IncidenciaRepository incidencias, IncidenciaClienteRepository asociaciones,
                              ClienteRepository clientesRepo, ClienteService clientes) {
-        this(incidencias, asociaciones, clientesRepo, clientes, Clock.systemDefaultZone());
+        this(incidencias, asociaciones, clientesRepo, clientes, Clock.system(ZONA));
     }
 
     IncidenciaService(IncidenciaRepository incidencias, IncidenciaClienteRepository asociaciones,
@@ -71,6 +75,7 @@ public class IncidenciaService {
         i.setDescripcion(dto.descripcion().trim());
         i.setObservaciones(dto.observaciones() == null || dto.observaciones().isBlank() ? null : dto.observaciones().trim());
         i.setRegistradaPor(usuario.trim());
+        i.setRegistradaEn(LocalDateTime.now(clock));
         Incidencia guardada = incidencias.save(i);
 
         asociaciones.saveAll(afectados.stream().map(c -> new IncidenciaCliente(guardada.getId(), c)).toList());

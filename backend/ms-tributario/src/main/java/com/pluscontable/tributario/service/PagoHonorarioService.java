@@ -13,6 +13,8 @@ import jakarta.validation.ValidationException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PagoHonorarioService {
 
+    /** «Hoy» es el de Lima, aunque el servidor corra en UTC (igual que HU-31). */
+    static final ZoneId ZONA = ZoneId.of("America/Lima");
     static final int DETALLE_MAXIMO = 100;
 
     private final CobroHonorarioRepository cobros;
@@ -34,7 +38,7 @@ public class PagoHonorarioService {
 
     @Autowired
     public PagoHonorarioService(CobroHonorarioRepository cobros, PagoHonorarioRepository pagos) {
-        this(cobros, pagos, Clock.systemDefaultZone());
+        this(cobros, pagos, Clock.system(ZONA));
     }
 
     PagoHonorarioService(CobroHonorarioRepository cobros, PagoHonorarioRepository pagos, Clock clock) {
@@ -64,6 +68,7 @@ public class PagoHonorarioService {
         p.setMedioPago(dto.medioPago());
         p.setMedioPagoDetalle(dto.medioPago() == MedioPago.OTRO ? dto.medioPagoDetalle().trim() : null);
         p.setRegistradoPor(usuario);
+        p.setRegistradoEn(LocalDateTime.now(clock));
         pagos.save(p);
 
         cobro.setPagado(cobro.getPagado().add(dto.monto()));
