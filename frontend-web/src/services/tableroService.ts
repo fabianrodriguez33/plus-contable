@@ -1,0 +1,35 @@
+import { tributarioApi } from './apiClient'
+import type { EstadoObligacion } from './obligacionService'
+import type { TipoObligacion } from './programacionService'
+
+/** Una obligación del tablero Declarado vs. Pagado (HU-14). El servidor calcula lo pagado, el saldo y si está vencida. */
+export interface FilaTablero {
+  obligacionId: number
+  clienteId: number
+  ruc: string
+  razonSocial: string
+  tipoObligacion: TipoObligacion | null
+  /** Primer día del mes tributario (AAAA-MM-01). */
+  periodo: string
+  fechaVencimiento: string
+  estado: EstadoObligacion
+  montoDeterminado: number | null
+  montoPagado: number
+  saldo: number | null
+  /** Solo las pendientes o con pago parcial cuya fecha límite ya pasó; nunca las pagadas. */
+  vencida: boolean
+}
+
+export interface FiltroTablero {
+  clienteId?: number
+  /** Primer día del mes (AAAA-MM-01). */
+  periodo?: string
+  soloDeclaradoSinPago?: boolean
+}
+
+export const consultarTablero = (filtro: FiltroTablero = {}) =>
+  tributarioApi
+    .get<FilaTablero[]>('/api/tributario/tablero', {
+      params: { clienteId: filtro.clienteId, periodo: filtro.periodo, soloDeclaradoSinPago: filtro.soloDeclaradoSinPago ? true : undefined },
+    })
+    .then((r) => r.data)
