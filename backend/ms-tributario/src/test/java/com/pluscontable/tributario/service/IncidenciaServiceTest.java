@@ -23,6 +23,7 @@ import jakarta.validation.ValidationException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -355,5 +356,20 @@ class IncidenciaServiceTest {
                     .hasMessage("No se pudo identificar al usuario que registra la incidencia");
         }
         verify(incidencias, never()).save(any());
+    }
+
+    /** 20:00 del 09/11 en Lima ya es el 10/11 en UTC: una incidencia con fecha del 10 sigue siendo futura. */
+    @Test
+    void conLaNocheDeLimaHoyEsElDiaDeLimaYUnaIncidenciaDeMananaSeRechaza() {
+        IncidenciaService enLima = new IncidenciaService(incidencias, asociaciones, clientesRepo, clientes,
+                Clock.fixed(Instant.parse("2026-11-10T01:00:00Z"), IncidenciaService.ZONA));
+
+        assertThatThrownBy(() -> enLima.registrar(propia(TipoIncidencia.OTRO, CLIENTE, HOY.plusDays(1), "Algo"), "contador1"))
+                .isInstanceOf(ValidationException.class);
+
+        enLima.registrar(propia(TipoIncidencia.OTRO, CLIENTE, HOY, "Algo"), "contador1");
+        ArgumentCaptor<Incidencia> g = ArgumentCaptor.forClass(Incidencia.class);
+        verify(incidencias).save(g.capture());
+        assertThat(g.getValue().getRegistradaEn()).isEqualTo(LocalDateTime.of(2026, 11, 9, 20, 0));
     }
 }
