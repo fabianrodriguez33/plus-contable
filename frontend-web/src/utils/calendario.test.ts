@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { CalendarioItem } from '../services/calendarioService'
+import type { CuotaCalendario } from '../services/fraccionamientoService'
+import type { EstadoObligacion } from '../services/obligacionService'
 import {
-  agruparPorDia, aIso, deIso, etiquetaSituacion, mapConLimite, rangoDeLaSemana, rangoDelMes, situacionVisual,
+  agruparEntradasPorDia, agruparPorDia, aIso, deIso, entradaDeCuota, entradaDeObligacion, etiquetaSituacion,
+  etiquetaCuota, mapConLimite, rangoDeLaSemana, rangoDelMes, situacionCuota, situacionVisual,
 } from './calendario'
 
 function item(id: number, clienteId: number, fecha: string, over: Partial<CalendarioItem> = {},
-              estado: 'PENDIENTE' | 'DECLARADO' = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
+              estado: 'PENDIENTE' | EstadoObligacion = 'PENDIENTE', tipo = 'IGV'): CalendarioItem {
   return {
     obligacion: { id, clienteId, tipoObligacion: tipo, periodo: '2026-10-01', fechaVencimiento: fecha, estado },
     diasRestantes: 3, vencimientoPasado: false, ...over,
@@ -61,11 +64,41 @@ describe('agruparPorDia', () => {
   })
 })
 
+describe('agruparEntradasPorDia', () => {
+  const nombres: Record<number, string> = { 1: 'Zeta SAC', 2: 'Alfa SAC' }
+  const nombre = (id: number) => nombres[id]
+  const q = (id: number, numero: number, fecha: string): CuotaCalendario => ({
+    cuota: { id, numero, fechaVencimiento: fecha, monto: 100, estado: 'PENDIENTE', fechaPago: null, enRiesgo: false },
+    fraccionamientoId: 1, diasRestantes: 3, vencida: false,
+  })
+
+  it('mezcla cuotas y obligaciones por día: por cliente, obligaciones antes que cuotas y cuotas por número', () => {
+    const grupos = agruparEntradasPorDia([
+      entradaDeCuota(1, q(12, 2, '2026-11-10')), entradaDeCuota(1, q(11, 1, '2026-11-10')),
+      entradaDeObligacion(item(5, 1, '2026-11-10')), entradaDeCuota(2, q(20, 1, '2026-11-03')),
+      entradaDeObligacion(item(6, 2, '2026-11-10')),
+    ], nombre)
+    expect(grupos.map((g) => g.fecha)).toEqual(['2026-11-03', '2026-11-10'])
+    expect(grupos[1].entradas.map((e) => `${e.tipo}${e.clienteId}`))
+      .toEqual(['OBLIGACION2', 'OBLIGACION1', 'CUOTA1', 'CUOTA1'])
+    expect(grupos[1].entradas.slice(2).map((e) => (e.tipo === 'CUOTA' ? e.item.cuota.numero : 0))).toEqual([1, 2])
+  })
+})
+
 describe('situación visual', () => {
   it('una obligación declarada se muestra como declarada aunque su fecha haya pasado', () => {
     const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'DECLARADO')
     expect(situacionVisual(it)).toBe('DECLARADA')
     expect(etiquetaSituacion(it)).toBe('Declarada')
+  })
+  it('una obligación pagada se muestra como pagada aunque su fecha haya pasado, y no como vencida', () => {
+    const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGADO')
+    expect(situacionVisual(it)).toBe('PAGADA')
+    expect(etiquetaSituacion(it)).toBe('Pagada')
+  })
+  it('con pago parcial todavía se debe saldo: pasada su fecha sigue vencida', () => {
+    const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGO_PARCIAL')
+    expect(situacionVisual(it)).toBe('VENCIDA')
   })
   it('una pendiente con fecha pasada está vencida', () => {
     expect(etiquetaSituacion(item(1, 1, '2026-11-01', { diasRestantes: -1, vencimientoPasado: true })))
@@ -77,6 +110,31 @@ describe('situación visual', () => {
     expect(etiquetaSituacion(item(1, 1, '2026-11-04', { diasRestantes: 0 }))).toBe('Vence hoy')
     expect(etiquetaSituacion(item(1, 1, '2026-11-05', { diasRestantes: 1 }))).toBe('Vence mañana')
     expect(etiquetaSituacion(item(1, 1, '2026-11-09', { diasRestantes: 5 }))).toBe('Vence en 5 días')
+  })
+})
+
+describe('situación de una cuota de fraccionamiento (T22)', () => {
+  const cuota = (over: Partial<CuotaCalendario['cuota']>, dias: number): CuotaCalendario => ({
+    cuota: { id: 1, numero: 2, fechaVencimiento: '2026-10-20', monto: 100, estado: 'PENDIENTE', fechaPago: null, enRiesgo: false, ...over },
+    fraccionamientoId: 1, diasRestantes: dias, vencida: dias < 0,
+  })
+
+  it('una cuota pendiente con fecha pasada está en riesgo de perder el fraccionamiento', () => {
+    const c = cuota({ enRiesgo: true }, -3)
+    expect(situacionCuota(c)).toBe('RIESGO')
+    expect(etiquetaCuota(c)).toBe('En riesgo: vencida hace 3 días')
+    expect(etiquetaCuota(cuota({ enRiesgo: true }, -1))).toBe('En riesgo: vencida hace 1 día')
+  })
+  it('una cuota pagada con fecha pasada sale pagada: ni vencida ni en riesgo', () => {
+    const c = cuota({ estado: 'PAGADA', fechaPago: '2026-10-19' }, -3)
+    expect(situacionCuota(c)).toBe('PAGADA')
+    expect(etiquetaCuota(c)).toBe('Pagada')
+  })
+  it('una pendiente al día: hoy, mañana y días restantes', () => {
+    expect(etiquetaCuota(cuota({}, 0))).toBe('Vence hoy')
+    expect(etiquetaCuota(cuota({}, 1))).toBe('Vence mañana')
+    expect(etiquetaCuota(cuota({}, 9))).toBe('Vence en 9 días')
+    expect(situacionCuota(cuota({}, 9))).toBe('PROXIMA')
   })
 })
 

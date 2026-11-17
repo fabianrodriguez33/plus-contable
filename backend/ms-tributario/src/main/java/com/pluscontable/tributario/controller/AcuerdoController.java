@@ -1,5 +1,6 @@
 package com.pluscontable.tributario.controller;
 
+import com.pluscontable.tributario.config.AccesoCliente;
 import com.pluscontable.tributario.dto.AcuerdoDto;
 import com.pluscontable.tributario.service.AcuerdoService;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ public class AcuerdoController {
 
     @GetMapping
     public AcuerdoDto vigente(@PathVariable Long clienteId) {
+        AccesoCliente.exigir(clienteId);
         return service.vigente(clienteId);
     }
 

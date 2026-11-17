@@ -1,0 +1,58 @@
+@startuml
+title HU-05 · Secuencia: guardar el acuerdo de servicio y cambiar el honorario (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(AcuerdoPage,\nexpedienteService)" as FE
+participant "AcuerdoController" as AC
+participant "AcuerdoService" as AS
+participant "ClienteRepository" as CR
+participant "AcuerdoRepository" as AR
+participant "HonorarioHistorialRepository" as HR
+database "tributario_schema" as DB
+
+U -> FE : indica servicios, honorario mensual y fechas, y pulsa Guardar
+FE -> AC : expedienteService.guardarAcuerdo(): PUT /api/tributario/clientes/{id}/acuerdo\nAuthorization: Bearer <JWT>
+AC -> AS : AcuerdoService.guardar(clienteId, dto)
+AS -> CR : ClienteRepository.existsById(clienteId)
+alt el cliente no existe
+  AS --> FE : 404 "Cliente no encontrado"
+end
+AS -> AS : validar(dto): honorario mensual mayor que cero y fecha de inicio
+alt faltan o son inválidos
+  AS --> FE : 400 "Faltan o son inválidos: ..."
+end
+AS -> AR : AcuerdoRepository.findByClienteId(clienteId)
+alt el cliente aún no tiene acuerdo
+  AS -> AS : crea el acuerdo con el honorario desde la fecha de inicio
+else ya tiene acuerdo y el honorario cambia
+  AS -> AS : honorarioDesde (o hoy) debe ser posterior al inicio del honorario actual
+  alt la fecha no es posterior
+    AS --> FE : 400 "honorarioDesde debe ser posterior a ..."
+  else
+    AS -> HR : save(honorario anterior, vigente hasta el día previo)
+    HR -> DB : INSERT honorarios_historial
+    AS -> AS : aplica el honorario nuevo y su fecha
+  end
+end
+AS -> AR : save(acuerdo)
+AR -> DB : INSERT o UPDATE acuerdos_servicio
+AS -> HR : HonorarioHistorialRepository.findByAcuerdoIdOrderByVigenteDesdeDesc(acuerdoId)
+AS --> AC : AcuerdoDto con el historial de honorarios
+AC --> FE : 200
+FE --> U : muestra el acuerdo vigente y el historial
+
+== Consulta del acuerdo vigente ==
+FE -> AC : expedienteService.obtenerAcuerdo(): GET /api/tributario/clientes/{id}/acuerdo
+AC -> AC : AccesoCliente.exigir(clienteId)
+AC -> AS : AcuerdoService.vigente(clienteId)
+alt el cliente no tiene acuerdo
+  AS --> FE : 404 "El cliente no tiene acuerdo de servicio"
+else
+  AS --> AC : AcuerdoDto
+  AC --> FE : 200
+end
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: AcuerdoController, AcuerdoService, AcuerdoRepository, HonorarioHistorialRepository, AcuerdoPage y expedienteService.ts
+@enduml

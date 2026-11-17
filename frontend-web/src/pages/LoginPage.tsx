@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Building2, Loader2, Lock, User } from 'lucide-react'
 import { isAuthenticated, login } from '../services/authService'
 import { mensajeError } from '../services/apiClient'
@@ -62,6 +62,9 @@ export default function LoginPage() {
           {cargando && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
           {cargando ? 'Ingresando...' : 'Ingresar'}
         </Button>
+        <Link to="/restablecer" className="mt-4 block text-center text-sm font-medium text-acento-oscuro hover:underline">
+          ¿Olvidaste tu contraseña?
+        </Link>
       </form>
     </main>
   )

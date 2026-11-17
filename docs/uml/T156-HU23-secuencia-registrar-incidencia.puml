@@ -1,0 +1,73 @@
+@startuml
+title T156 · HU-23 · Secuencia: registrar una incidencia del servicio contable (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(pantalla de incidencias)" as FE
+participant "IncidenciaController" as IC
+participant "IncidenciaService" as IS
+participant "ClienteService" as CS
+participant "ClienteRepository" as CR
+participant "IncidenciaRepository" as IR
+participant "IncidenciaClienteRepository" as ICR
+database "tributario_schema" as DB
+
+== Registrar la incidencia ==
+U -> FE : indica tipo, cliente (si no es general), fecha y descripción
+FE -> IC : POST /api/tributario/incidencias\n{tipo, clienteId, fecha, descripcion}\nAuthorization: Bearer <JWT>
+IC -> IS : registrar(dto, usuario del token)
+IS -> IS : valida y reúne los errores
+note right
+  Tipo: obligatorio y uno de la lista.
+  Fecha: obligatoria y no futura. Descripción: obligatoria, hasta 1000 caracteres.
+  Cliente: obligatorio salvo en CAIDA_PORTAL_SOL (general).
+  Supuesto: lista de tipos CAIDA_PORTAL_SOL, CLIENTE_NO_ENVIA_DOCUMENTOS, RECHAZO_FRACCIONAMIENTO y OTRO.
+end note
+alt faltan o son inválidos
+  IS --> FE : 400 "Faltan o son inválidos: ..."
+end
+alt la incidencia es de un cliente
+  IS -> CS : buscar(clienteId)
+  alt el cliente no existe
+    IS --> FE : 404 "Cliente no encontrado"
+  end
+  IS -> IR : save(incidencia con registradaPor = usuario)
+  IR -> DB : INSERT incidencias
+  IS -> ICR : save(incidencia, cliente)
+  ICR -> DB : INSERT incidencias_clientes (1 fila)
+else la incidencia es general (por ejemplo, caída del portal SOL)
+  IS -> CR : findByActivoTrue()
+  CR -> DB : SELECT clientes WHERE activo
+  IS -> IR : save(incidencia con registradaPor = usuario)
+  IR -> DB : INSERT incidencias
+  IS -> ICR : saveAll(incidencia, cada cliente de la cartera activa)
+  ICR -> DB : INSERT incidencias_clientes (una fila por cliente activo)
+  note right
+    Supuesto: cartera activa = clientes con activo = true al registrar.
+    Los clientes que ingresen después no quedan asociados.
+  end note
+end
+IS --> IC : IncidenciaDto {clientes asociados}
+IC --> FE : 201
+FE --> U : confirma el registro y cuántos clientes quedaron asociados
+
+== Ver la incidencia en el historial del cliente ==
+U -> FE : abre el historial de un cliente
+FE -> IC : GET /api/tributario/clientes/{clienteId}/incidencias
+IC -> IS : delCliente(clienteId)
+IS -> CS : buscar(clienteId)
+IS -> IR : findByClienteOrderByFechaDesc(clienteId)
+IR -> DB : SELECT incidencias JOIN incidencias_clientes
+IS --> FE : 200 lista de IncidenciaDto, la más reciente primero
+FE --> U : muestra las incidencias del cliente, también las generales
+
+note over IS
+  Criterio 4: solo el contador autenticado registra (CONTADOR o ADMIN; el cliente MYPE recibe 403 y sin token, 401).
+  La pantalla completa del historial es HU-27; aquí la consulta por cliente sirve para comprobar que quedó guardada.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-23 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, ClienteRepository, GlobalExceptionHandler, SecurityConfig (rutas no listadas son del estudio)
+@enduml

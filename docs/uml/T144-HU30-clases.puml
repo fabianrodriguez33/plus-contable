@@ -1,0 +1,93 @@
+@startuml
+!pragma layout smetana
+title T144 · HU-30 · Clases del estado de cuenta de honorarios
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class EstadoCuentaController <<nuevo>> {
+  +emitir(clienteId, desde, hasta): EstadoCuentaDto
+}
+
+class EstadoCuentaService <<nuevo>> {
+  +emitir(clienteId, desde, hasta): EstadoCuentaDto
+}
+
+class EstadoCuentaDto <<record, nuevo>> {
+  clienteId: Long
+  razonSocial: String
+  desde: LocalDate
+  hasta: LocalDate
+  saldoAnterior: BigDecimal
+  cobros: List<CobroHonorarioDto>
+  pagos: List<PagoHonorarioDto>
+  totalCobrado: BigDecimal
+  totalPagado: BigDecimal
+  saldo: BigDecimal
+  sinMovimientos: boolean
+}
+
+class PagoHonorarioDto <<record, nuevo>> {
+  id: Long
+  cobroId: Long
+  fechaCobro: LocalDate
+  fechaPago: LocalDate
+  monto: BigDecimal
+  medioPago: MedioPago
+  medioPagoDetalle: String
+}
+
+class CobroHonorarioDto <<record, existe>> {
+  id, fechaCobro, monto, pagado, saldo, estado
+}
+
+interface ClienteRepository <<existe>> {
+  findById(clienteId)
+}
+
+interface CobroHonorarioRepository <<existe, ampliado>> {
+  findByClienteIdAndFechaCobroBetweenOrderByFechaCobroAscIdAsc(clienteId, desde, hasta)
+  cobradoAntesDe(clienteId, antes): BigDecimal
+}
+
+interface PagoHonorarioRepository <<existe, ampliado>> {
+  delPeriodo(clienteId, desde, hasta): List<PagoHonorarioDto>
+  pagadoAntesDe(clienteId, antes): BigDecimal
+}
+
+class CobroHonorario <<existe>> {
+  clienteId, fechaCobro, monto, pagado, estado
+}
+
+class PagoHonorario <<existe>> {
+  cobroId, fechaPago, monto, medioPago, medioPagoDetalle
+}
+
+EstadoCuentaController --> EstadoCuentaService
+EstadoCuentaController ..> EstadoCuentaDto
+EstadoCuentaService --> ClienteRepository
+EstadoCuentaService --> CobroHonorarioRepository
+EstadoCuentaService --> PagoHonorarioRepository
+EstadoCuentaDto o-- CobroHonorarioDto
+EstadoCuentaDto o-- PagoHonorarioDto
+CobroHonorarioRepository ..> CobroHonorario
+PagoHonorarioRepository ..> PagoHonorario
+PagoHonorario "0..*" --> "1" CobroHonorario : cobro_id
+
+note bottom of EstadoCuentaService
+  emitir(): 400 si falta desde o hasta, o si desde es posterior a hasta (todos los errores juntos); 404 si el cliente no existe.
+  Cobros con fecha_cobro en [desde, hasta] y pagos con fecha_pago en [desde, hasta] (criterio 1, del cliente y periodo elegidos: criterio 2).
+  saldoAnterior = cobrado antes de desde - pagado antes de desde; saldo = saldoAnterior + totalCobrado - totalPagado.
+  sinMovimientos = sin cobros ni pagos en el periodo (criterio 3); el saldo anterior se conserva.
+  Un saldo negativo es a favor del cliente: un pago adelantado de un cobro posterior resta aunque su cobro no esté en el periodo.
+end note
+
+note right of PagoHonorarioDto
+  Un pago entra por su fecha de pago, aunque
+  el cobro al que se aplicó sea de otro periodo
+  (por eso lleva fechaCobro).
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-30-estado-cuenta. Código: EstadoCuentaController, EstadoCuentaService, EstadoCuentaDto, PagoHonorarioDto, CobroHonorarioRepository, PagoHonorarioRepository
+@enduml

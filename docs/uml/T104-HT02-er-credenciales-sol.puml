@@ -1,0 +1,39 @@
+@startuml
+!pragma layout smetana
+title T104 · HT-02 · Modelo de datos de la Clave SOL cifrada (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.credenciales_sol" as cred <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>> <<UNIQUE>>
+  * usuario_sol_cifrado : VARCHAR(300)
+  * clave_sol_cifrada : VARCHAR(300)
+  * actualizado_en : TIMESTAMP = ahora
+}
+
+clientes ||--o| cred : cliente_id, ON DELETE CASCADE
+
+note bottom of cred
+  Solo texto cifrado: "v2:" + Base64(IV + cifrado AES-256/GCM + etiqueta). Un valor sin ese prefijo es del esquema
+  anterior (CBC) y CredencialSolMigrador lo convierte. Nunca se guarda la Clave SOL en claro.
+end note
+
+note right of cred
+  Criterio 4: la llave NO está en esta base. Vive en la variable de entorno AES_SECRET_KEY del servicio ms-tributario.
+  Supuesto: sin cambios de columnas ni tablas para HT-02; el diseño nuevo es de configuración y de pruebas.
+  Supuesto: VARCHAR(300) basta para el texto cifrado de un usuario o una clave SOL (hasta unas decenas de caracteres).
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HT-02 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y credenciales_sol), model.CredencialSol
+@enduml

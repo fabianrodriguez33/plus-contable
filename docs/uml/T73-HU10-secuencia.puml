@@ -4,7 +4,7 @@ skinparam shadowing false
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\nVencimientosPage" as FE
+participant "frontend-web\n(VencimientosPage,\nobligacionService)" as FE
 participant "ObligacionController" as OC
 participant "ObligacionService" as OS
 participant "ObligacionRepository" as OR
@@ -12,8 +12,8 @@ participant "VencimientoHistorialRepository" as HR
 database "tributario_schema" as DB
 
 U -> FE : marca obligaciones y elige la nueva fecha
-FE -> OC : PATCH /api/tributario/obligaciones/vencimiento\n{obligacionIds, nuevaFecha}
-OC -> OS : cambiarVencimiento(dto)
+FE -> OC : obligacionService.cambiarVencimiento(): PATCH /api/tributario/obligaciones/vencimiento\n{obligacionIds, nuevaFecha}
+OC -> OS : ObligacionService.cambiarVencimiento(dto)
 OS -> OS : exige al menos un id y la nueva fecha
 alt faltan datos
   OS --> FE : 400 "Faltan o son inválidos: ..."
@@ -39,5 +39,5 @@ else sin rechazos
   FE --> U : muestra los nuevos vencimientos
 end
 
-footer Fuente: ObligacionService.cambiarVencimiento, ObligacionController, VencimientosPage.tsx (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ObligacionService.cambiarVencimiento, ObligacionController, VencimientosPage y obligacionService.ts
 @enduml

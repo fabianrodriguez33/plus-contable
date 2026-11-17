@@ -2,6 +2,8 @@ package com.pluscontable.auth.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +16,7 @@ import com.pluscontable.auth.config.JwtProvider;
 import com.pluscontable.auth.config.SecurityConfig;
 import com.pluscontable.auth.dto.LoginResponse;
 import com.pluscontable.auth.dto.UserDto;
+import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import com.pluscontable.auth.service.AuthService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -38,6 +41,8 @@ class AuthControllerTest {
     @Autowired JwtProvider jwt;
     @Value("${app.jwt.secret}") String secreto;
     @MockBean AuthService authService;
+    @MockBean TokenRevocadoRepository revocados;
+    @MockBean com.pluscontable.auth.repository.UsuarioRepository usuarios;
 
     private static final UserDto ANA = new UserDto(1L, "ana", "Ana Pérez", List.of("CONTADOR"));
 
@@ -105,6 +110,48 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // ---- HU-37: el restablecimiento del acceso cierra las sesiones activas de la cuenta (versión de sesión)
+
+    private int estadoDeMe(String token) throws Exception {
+        when(authService.me("ana")).thenReturn(ANA);
+        return mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token)).andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void unTokenConUnaVersionDeSesionAnteriorALaDeLaCuentaDa401() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(2));
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 1))).isEqualTo(401);
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 0))).isEqualTo(401);
+    }
+
+    @Test
+    void unTokenConLaVersionDeSesionVigenteOMayorSeAcepta() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(2));
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 2))).isEqualTo(200);
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 3))).isEqualTo(200);
+    }
+
+    @Test
+    void unTokenSinElClaimDeVersionCuentaComoCero() throws Exception {
+        String sinClaim = io.jsonwebtoken.Jwts.builder().id("jti-viejo").subject("ana").claim("roles", List.of("CONTADOR"))
+                .issuedAt(new java.util.Date()).expiration(new java.util.Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8))).compact();
+
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(0));
+        assertThat(estadoDeMe(sinClaim)).isEqualTo(200);
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.of(1));
+        assertThat(estadoDeMe(sinClaim)).isEqualTo(401);
+    }
+
+    @Test
+    void siElUsuarioYaNoExisteElFiltroNoRechazaPorLaVersion() throws Exception {
+        when(usuarios.sesionVersionDe("ana")).thenReturn(java.util.Optional.empty());
+
+        assertThat(estadoDeMe(jwt.generate("ana", List.of("CONTADOR"), null, 0))).isEqualTo(200);
+    }
+
     @Test
     void meConTokenAlteradoOFirmadoPorOtroDa401() throws Exception {
         String ajeno = new JwtProvider("clave-ajena-que-no-es-la-del-estudio-32-bytes", 8)
@@ -117,5 +164,92 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + alterado))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---- HU-36 (tarea 2): POST /api/auth/logout
+
+    @Test
+    void logoutConTokenVigenteDa204YPasaElJtiYElVencimientoAlServicio() throws Exception {
+        String token = jwt.generate("ana", List.of("CONTADOR"));
+        var claims = jwt.parse(token);
+
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout(eq("ana"), eq(claims.getId()), eq(claims.getExpiration().toInstant()), any());
+    }
+
+    @Test
+    void logoutSinTokenDa401YNoLlamaAlServicio() throws Exception {
+        mvc.perform(post("/api/auth/logout")).andExpect(status().isUnauthorized());
+
+        verify(authService, never()).logout(any(), any(), any(), any());
+    }
+
+    @Test
+    void logoutConTokenVencidoOAjenoDa401() throws Exception {
+        String vencido = new JwtProvider(secreto, -1).generate("ana", List.of("CONTADOR"));
+        String ajeno = new JwtProvider("clave-ajena-que-no-es-la-del-estudio-32-bytes", 8).generate("ana", List.of("ADMIN"));
+
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + vencido))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + ajeno))
+                .andExpect(status().isUnauthorized());
+        verify(authService, never()).logout(any(), any(), any(), any());
+    }
+
+    @Test
+    void unTokenRevocadoSeRechazaCon401EnLogoutYEnMe() throws Exception {
+        String token = jwt.generate("ana", List.of("CONTADOR"));
+        when(revocados.existsById(jwt.parse(token).getId())).thenReturn(true);
+
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+        verify(authService, never()).me(any());
+        verify(authService, never()).logout(any(), any(), any(), any());
+    }
+
+    @Test
+    void otroTokenDelMismoUsuarioSigueFuncionandoAunqueUnoEsteRevocado() throws Exception {
+        String revocado = jwt.generate("ana", List.of("CONTADOR"));
+        String vigente = jwt.generate("ana", List.of("CONTADOR"));
+        when(revocados.existsById(jwt.parse(revocado).getId())).thenReturn(true);
+        when(authService.me("ana")).thenReturn(ANA);
+
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + revocado))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + vigente))
+                .andExpect(status().isOk());
+    }
+
+    /** Token emitido antes de este cambio (sin jti): sigue valido y el logout llega al servicio sin jti. */
+    @Test
+    void unTokenSinJtiSigueSiendoValidoYElLogoutLlegaSinJti() throws Exception {
+        String sinJti = io.jsonwebtoken.Jwts.builder().subject("ana").claim("roles", List.of("CONTADOR"))
+                .expiration(new java.util.Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8)))
+                .compact();
+
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer " + sinJti))
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout(eq("ana"), isNull(), any(), any());
+        verify(revocados, never()).existsById(any());
+    }
+
+    /** Un token firmado sin el claim roles autentica al usuario pero sin ninguna autoridad. */
+    @Test
+    void unTokenSinRolesAutenticaSinAutoridades() throws Exception {
+        String sinRoles = io.jsonwebtoken.Jwts.builder().subject("ana").id("jti-sin-roles")
+                .expiration(new java.util.Date(System.currentTimeMillis() + 60_000))
+                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8)))
+                .compact();
+        when(authService.me("ana")).thenReturn(new UserDto(1L, "ana", "Ana Pérez", List.of()));
+
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + sinRoles))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").isEmpty());
     }
 }

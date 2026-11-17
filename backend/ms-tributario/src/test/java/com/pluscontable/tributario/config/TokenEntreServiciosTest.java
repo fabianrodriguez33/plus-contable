@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,11 +53,19 @@ class TokenEntreServiciosTest {
         return Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Token con la misma forma que emite ms-auth. */
+    /** Token con la misma forma que emite ms-auth (HU-36: incluye el claim jti). */
     private String tokenDeMsAuth(String usuario, List<String> roles, long msHastaExpirar) {
         long ahora = System.currentTimeMillis();
-        return Jwts.builder().subject(usuario).claim("roles", roles)
+        return Jwts.builder().id(UUID.randomUUID().toString()).subject(usuario).claim("roles", roles)
                 .issuedAt(new Date(ahora)).expiration(new Date(ahora + msHastaExpirar))
+                .signWith(clave()).compact();
+    }
+
+    /** Token emitido antes de HU-36: sin jti. */
+    private String tokenAnteriorSinJti(String usuario, List<String> roles) {
+        long ahora = System.currentTimeMillis();
+        return Jwts.builder().subject(usuario).claim("roles", roles)
+                .issuedAt(new Date(ahora)).expiration(new Date(ahora + 60_000))
                 .signWith(clave()).compact();
     }
 
@@ -103,6 +112,47 @@ class TokenEntreServiciosTest {
         assertThat(estado("Bearer " + tokenAlterado)).isEqualTo(401);
     }
 
+    /** HU-37: token del primer ingreso, con la misma forma que {@code generateCambioPassword} de ms-auth (claim cambiarPassword). */
+    private String tokenRestringido(List<String> roles, Object cambiarPassword) {
+        long ahora = System.currentTimeMillis();
+        var b = Jwts.builder().id(UUID.randomUUID().toString()).subject("cliente1").claim("roles", roles);
+        if (cambiarPassword != null) b.claim("cambiarPassword", cambiarPassword);
+        return b.issuedAt(new Date(ahora)).expiration(new Date(ahora + 60_000)).signWith(clave()).compact();
+    }
+
+    private int estadoEn(String ruta, String autorizacion) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta)).GET()
+                .header("Authorization", autorizacion).build(), BodyHandlers.ofString()).statusCode();
+    }
+
+    @Test
+    void elTokenRestringidoDelPrimerIngresoSeRechazaCon403AunqueLleveUnRolDelEstudio() throws Exception {
+        // sin el chequeo del claim, este token (con rol CONTADOR) entraría: la protección no depende de que roles esté vacío
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("ADMIN"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CLIENTE_MYPE"), true))).isEqualTo(403);
+        assertThat(estado("Bearer " + tokenRestringido(List.of(), true))).isEqualTo(403);
+    }
+
+    @Test
+    void elTokenRestringidoTambienSeRechazaEnUnaRutaAbierta() throws Exception {
+        assertThat(estadoEn("/api/tributario/health", "Bearer " + tokenRestringido(List.of(), true))).isEqualTo(403);
+    }
+
+    @Test
+    void elTokenRestringidoRecibeElMensajeDeCambiarLaContrasenia() throws Exception {
+        var r = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + RUTA_PROTEGIDA)).GET()
+                .header("Authorization", "Bearer " + tokenRestringido(List.of("CONTADOR"), true)).build(), BodyHandlers.ofString());
+        assertThat(r.statusCode()).isEqualTo(403);
+        assertThat(r.body()).contains("Debe cambiar la contraseña temporal");
+    }
+
+    @Test
+    void unTokenConElClaimEnFalsoOSinElSeAcepta() throws Exception {
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), false))).isEqualTo(200);
+        assertThat(estado("Bearer " + tokenRestringido(List.of("CONTADOR"), null))).isEqualTo(200);
+    }
+
     @Test
     void sinTokenSeRechazaCon401() throws Exception {
         assertThat(estado(null)).isEqualTo(401);
@@ -113,5 +163,26 @@ class TokenEntreServiciosTest {
         assertThat(estado("Bearer esto-no-es-un-jwt")).isEqualTo(401);
         assertThat(estado("Bearer ")).isEqualTo(401);
         assertThat(estado("Basic " + tokenDeMsAuth("contador1", List.of("CONTADOR"), 60_000))).isEqualTo(401);
+    }
+
+    /** HU-36 (tarea 2): el nuevo claim jti no rompe la validacion de ms-tributario; el token sin jti tambien sigue valiendo. */
+    @Test
+    void tokenConJtiYTokenAnteriorSinJtiSeAceptan() throws Exception {
+        assertThat(tokenDeMsAuth("contador1", List.of("CONTADOR"), 60_000)).contains(".");
+        assertThat(estado("Bearer " + tokenDeMsAuth("contador1", List.of("CONTADOR"), 60_000))).isEqualTo(200);
+        assertThat(estado("Bearer " + tokenAnteriorSinJti("contador1", List.of("CONTADOR")))).isEqualTo(200);
+    }
+
+    /**
+     * RIESGO RESIDUAL conocido (HU-36, opcion B): ms-auth revoca el jti al cerrar sesion, pero ms-tributario
+     * solo verifica firma y vencimiento y no consulta la revocacion. Esta prueba deja constancia: el token con
+     * ese jti se sigue aceptando aqui hasta su exp. Si se cierra el riesgo (consulta a ms-auth u opcion D),
+     * esta prueba debe cambiar a 401.
+     */
+    @Test
+    void elTokenRevocadoEnMsAuthSigueAceptandoseEnMsTributarioHastaQueVence() throws Exception {
+        String revocadoEnMsAuth = tokenDeMsAuth("contador1", List.of("CONTADOR"), 60_000);
+
+        assertThat(estado("Bearer " + revocadoEnMsAuth)).isEqualTo(200);
     }
 }

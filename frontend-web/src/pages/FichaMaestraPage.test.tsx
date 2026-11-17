@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import FichaMaestraPage from './FichaMaestraPage'
 import { obtenerCliente } from '../services/clienteService'
@@ -86,5 +87,21 @@ describe('Ficha maestra · diseño responsivo (HU-01)', () => {
 
     const rejilla = document.querySelector('form .grid') as HTMLElement
     expect(rejilla.className).toContain('md:grid-cols-2')
+  })
+})
+
+describe('Ficha maestra · acceso del cliente (HU-37, T13)', () => {
+  it('la pestaña «Acceso del cliente» abre la creación del acceso y no está disponible en un cliente nuevo', async () => {
+    ficha()
+    await screen.findByDisplayValue('20100070970')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Acceso del cliente/ }))
+    expect(screen.getByLabelText('Correo del cliente')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Crear acceso/ })).toBeTruthy()
+    cleanup()
+
+    ficha('/clientes/nuevo')
+    await screen.findByLabelText('Razón social')
+    expect((screen.getByRole('tab', { name: /Acceso del cliente/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 })

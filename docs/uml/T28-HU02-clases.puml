@@ -21,6 +21,13 @@ package "service" {
     +resumen(clienteId): ResumenSocietarioDto
     +reemplazar(clienteId, socios): ResumenSocietarioDto
     +actualizarAporte(clienteId, socioId, aporte): ResumenSocietarioDto
+    -exigirAportePositivo(socio, aporte): BigDecimal
+    -calcularYVerificar(aportes): List<BigDecimal>
+    -resumenDe(socios): ResumenSocietarioDto
+    -sumaPorcentajes(porcentajes): BigDecimal
+  }
+  class PorcentajesSocietarios {
+    +{static} calcular(aportes): List<BigDecimal>
   }
   class ClienteService {
     +buscar(id): Cliente
@@ -28,16 +35,32 @@ package "service" {
 }
 
 package "dto" {
-  class SocioDto
-  class ResumenSocietarioDto {
-    socios: List<SocioDto>
-    capitalSocialTotal
-    porcentajeTotal
-    diferencia
-    completo: boolean
+  class SocioEntradaDto {
+    nombreCompleto: String
+    tipoDocumento: String
+    numeroDocumento: String
+    aporte: BigDecimal
+    cargo: String
+  }
+  class SocioDto {
+    id: Long
+    nombreCompleto: String
+    tipoDocumento: String
+    numeroDocumento: String
+    aporte: BigDecimal
+    porcentaje: BigDecimal
+    cargo: String
   }
   class AporteDto {
-    aporte
+    aporte: BigDecimal
+  }
+  class ResumenSocietarioDto {
+    socios: List<SocioDto>
+    capitalSocialTotal: BigDecimal
+    porcentajeTotal: BigDecimal
+    diferencia: BigDecimal
+    completo: boolean
+    sociosSinAporte: int
   }
 }
 
@@ -56,24 +79,40 @@ package "model" {
 }
 
 interface SocioRepository {
-  findByClienteIdOrderById()
-  findByIdAndClienteId()
-  deleteByClienteId()
+  findByClienteIdOrderById(clienteId)
+  findByIdAndClienteId(id, clienteId)
+  deleteByClienteId(clienteId)
 }
 
 SocioController --> SocioService
-SocioController ..> SocioDto
+SocioController ..> SocioEntradaDto : recibe aporte, sin porcentaje
 SocioController ..> AporteDto
+SocioController ..> SocioDto
 SocioService --> ClienteService : exige que el cliente exista
 SocioService --> SocioRepository
-SocioService ..> ResumenSocietarioDto : calcula capital, % y diferencia
+SocioService ..> PorcentajesSocietarios : calcula el porcentaje de cada socio
+SocioService ..> ResumenSocietarioDto : capital, porcentaje total y diferencia
 ResumenSocietarioDto o-- "0..*" SocioDto
 SocioRepository ..> Socio
 Cliente "1" <-- "0..*" Socio : cliente_id
 
-note bottom of SocioService
-  reemplazar(): la suma de porcentajes debe ser exactamente 100.00;
-  si no, ValidationException con "faltan" o "sobran" X%.
-  Capital social total = suma de aportes.
+note bottom of PorcentajesSocietarios
+  Regla del mayor resto, con 2 decimales: cada porcentaje es aporte / capital total
+  truncado a la centésima; las centésimas que faltan para 100.00 van a los mayores
+  restos y, si empatan, al socio dado de alta antes. La suma es siempre 100.00.
 end note
+
+note bottom of SocioService
+  reemplazar(): el porcentaje no se recibe, se calcula; cada aporte debe ser mayor a 0
+  (si no, ValidationException). actualizarAporte(): guarda el aporte y recalcula el
+  porcentaje de todos los socios; si otro socio tiene aporte 0 (registro anterior),
+  guarda solo el aporte y el resumen queda incompleto (sociosSinAporte).
+end note
+
+note right of SocioController
+  También atiende las rutas /activos (PatrimonioLaboralService),
+  que no forman parte de esta historia.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: SocioController, SocioService, PorcentajesSocietarios, dto/ y model/Socio
 @enduml

@@ -1,0 +1,67 @@
+@startuml
+title T104 · HT-02 · Secuencia: guardar y leer la Clave SOL cifrada (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha del cliente)" as FE
+participant "ClienteController" as CC
+participant "ClienteService" as CS
+participant "AesUtil" as AES
+participant "CredencialSolRepository" as CR
+database "tributario_schema" as DB
+collections "Variable de entorno\nAES_SECRET_KEY" as KEY
+
+== Guardar la Clave SOL ==
+U -> FE : indica usuario SOL y clave SOL del cliente
+FE -> CC : PUT /api/tributario/clientes/{id}/sol {usuarioSol, claveSol}\nAuthorization: Bearer <JWT>
+CC -> CS : guardarCredencialSol(clienteId, dto)
+CS -> CS : buscar(clienteId)
+alt el cliente no existe
+  CS --> FE : 404 "Cliente no encontrado"
+end
+CS -> AES : encrypt(usuarioSol) y encrypt(claveSol)
+AES -> KEY : toma la llave de 32 bytes (AES-256)
+AES --> CS : "v2:" + Base64(IV aleatorio + cifrado + etiqueta)
+CS -> CR : save(credencial con usuarioSolCifrado y claveSolCifrada)
+CR -> DB : INSERT o UPDATE credenciales_sol (solo texto cifrado)
+CC --> FE : 200
+note right of DB
+  La base solo recibe el texto cifrado.
+  La llave no está en la base (criterio 4).
+end note
+
+== Leer la Clave SOL ==
+U -> FE : pide ver la Clave SOL del cliente
+FE -> CC : GET /api/tributario/clientes/{id}/sol
+CC -> CS : obtenerCredencialSol(clienteId)
+CS -> CR : findByClienteId(clienteId)
+CR -> DB : SELECT credenciales_sol
+alt el cliente no tiene Clave SOL
+  CS --> FE : 404 "El cliente no tiene Clave SOL registrada"
+end
+CS -> AES : decrypt(usuarioSolCifrado) y decrypt(claveSolCifrada)
+AES -> KEY : toma la llave
+alt llave incorrecta o dato alterado (criterio 3)
+  AES --> CS : IllegalStateException("Error al descifrar"), sin el contenido
+  CS --> FE : 500 sin detalle
+  note right
+    Supuesto: respuesta 500 genérica, sin texto del error
+    (comportamiento por defecto del servicio).
+  end note
+else llave correcta
+  AES --> CS : texto en claro, solo en memoria
+  CS --> CC : CredencialSolDto
+  CC --> FE : 200 {usuarioSol, claveSol}
+end
+
+note over AES
+  Criterio 2: sin la llave no se puede leer lo almacenado.
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas; el cliente MYPE no tiene acceso.
+  Los valores anteriores en CBC (sin prefijo) se leen igual y los convierte CredencialSolMigrador.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HT-02 y el código y la base de develop (de04c4f). Código existente: ClienteController, ClienteService.guardarCredencialSol y obtenerCredencialSol, AesUtil, SecurityConfig
+@enduml

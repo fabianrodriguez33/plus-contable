@@ -1,0 +1,64 @@
+@startuml
+!pragma layout smetana
+title T127 · HU-28 · Modelo de datos de la programación y los cobros de honorarios (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.acuerdos_servicio" as acuerdos <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>> <<UNIQUE>>
+    servicios_contratados : VARCHAR(1000)
+  * honorario_mensual : NUMERIC(12,2)  CHECK (> 0)
+  * honorario_desde : DATE
+  * fecha_inicio : DATE
+}
+
+entity "tributario_schema.programaciones_cobro" as prog <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>> <<UNIQUE>>
+  * periodicidad : MENSUAL | QUINCENAL
+  * creada_en : TIMESTAMP = ahora
+}
+
+entity "tributario_schema.cobros_honorarios" as cobros <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * programacion_id : BIGINT <<FK>>
+  * fecha_cobro : DATE
+  * monto : NUMERIC(12,2)  CHECK (monto > 0)
+  * estado : PENDIENTE = PENDIENTE
+  UNIQUE (cliente_id, fecha_cobro)
+  INDEX (cliente_id, estado, fecha_cobro)
+}
+
+clientes ||--o| acuerdos : cliente_id, ON DELETE CASCADE
+clientes ||--o| prog : cliente_id, ON DELETE CASCADE
+prog ||--o{ cobros : programacion_id, ON DELETE CASCADE
+clientes ||--o{ cobros : cliente_id, ON DELETE CASCADE
+
+note bottom of cobros
+  Los cobros pendientes de un cliente se consultan por (cliente_id, estado = PENDIENTE) (criterio 4).
+  UNIQUE (cliente_id, fecha_cobro) evita duplicar fechas al volver a programar.
+end note
+
+note right of prog
+  Supuesto: la periodicidad se guarda en una tabla propia; no se altera acuerdos_servicio (HU-05).
+  Supuesto: MENSUAL = un cobro por mes en el día de fecha_inicio; QUINCENAL = días 15 y último; monto quincenal = honorario / 2.
+  Supuesto: HU-28 solo crea cobros PENDIENTE; HU-29 amplía el CHECK de estado con PAGADO y el pago parcial.
+  Supuesto: el acuerdo es requisito (criterio 3): sin fila en acuerdos_servicio no se programa.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-28 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes, acuerdos_servicio y honorarios_historial)
+@enduml

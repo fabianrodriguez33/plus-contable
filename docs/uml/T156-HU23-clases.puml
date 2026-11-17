@@ -1,0 +1,103 @@
+@startuml
+!pragma layout smetana
+title T156 · HU-23 · Clases del registro de incidencias del servicio contable (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class IncidenciaController <<nuevo>> {
+  +registrar(dto): IncidenciaDto
+  +delCliente(clienteId): List<IncidenciaDto>
+}
+
+class IncidenciaService <<nuevo>> {
+  +registrar(dto, usuario): IncidenciaDto
+  +delCliente(clienteId): List<IncidenciaDto>
+  -validar(dto): void
+}
+
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+
+interface ClienteRepository <<existe, se amplía>> {
+  existsById(id)
+  findByActivoTrue()  <<nuevo>>
+}
+
+class Incidencia <<nuevo>> {
+  id: Long
+  tipo: TipoIncidencia
+  fecha: LocalDate
+  descripcion: String
+  registradaPor: String
+  registradaEn: LocalDateTime
+}
+
+class IncidenciaCliente <<nuevo>> {
+  incidenciaId: Long
+  clienteId: Long
+}
+
+enum TipoIncidencia <<nuevo>> {
+  CAIDA_PORTAL_SOL
+  CLIENTE_NO_ENVIA_DOCUMENTOS
+  RECHAZO_FRACCIONAMIENTO
+  OTRO
+}
+
+class IncidenciaEntradaDto <<record, nuevo>> {
+  tipo: TipoIncidencia
+  clienteId: Long
+  fecha: LocalDate
+  descripcion: String
+}
+
+class IncidenciaDto <<record, nuevo>> {
+  id: Long
+  tipo: TipoIncidencia
+  fecha: LocalDate
+  descripcion: String
+  registradaPor: String
+  clientesAsociados: int
+  +{static} from(i, clientes): IncidenciaDto
+}
+
+interface IncidenciaRepository <<nuevo>> {
+  findByClienteOrderByFechaDesc(clienteId)
+}
+
+interface IncidenciaClienteRepository <<nuevo>> {
+  saveAll(asociaciones)
+}
+
+IncidenciaController --> IncidenciaService
+IncidenciaController ..> IncidenciaEntradaDto
+IncidenciaController ..> IncidenciaDto
+IncidenciaService --> ClienteService : buscar(clienteId)
+IncidenciaService --> ClienteRepository : findByActivoTrue()
+IncidenciaService --> IncidenciaRepository
+IncidenciaService --> IncidenciaClienteRepository
+IncidenciaRepository ..> Incidencia
+IncidenciaClienteRepository ..> IncidenciaCliente
+Incidencia --> TipoIncidencia
+IncidenciaCliente "0..*" --> "1" Incidencia : incidencia_id
+IncidenciaCliente "0..*" --> "1" Cliente : cliente_id
+
+note bottom of IncidenciaService
+  registrar(): guarda tipo, cliente, fecha y descripción (criterio 1) y la asocia al historial del cliente (criterio 2).
+  Si es general (CAIDA_PORTAL_SOL) la asocia a todos los clientes de la cartera activa (criterio 3).
+  Solo el estudio autenticado registra: el usuario sale del token (criterio 4).
+end note
+
+note right of TipoIncidencia
+  Supuesto: los tipos son CAIDA_PORTAL_SOL, CLIENTE_NO_ENVIA_DOCUMENTOS, RECHAZO_FRACCIONAMIENTO y OTRO,
+  tomados de los ejemplos de la historia; la lista definitiva «definida con el cliente» no está en el repositorio.
+  Supuesto: CAIDA_PORTAL_SOL es general (sin clienteId) y se asocia a la cartera activa; los demás exigen clienteId.
+  Supuesto: «cartera activa» = clientes con activo = true al momento de registrar (no se asocian los que ingresen después).
+  Supuesto: la fecha no es futura; la descripción es obligatoria (hasta 1000 caracteres).
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-23 y el código y la base de develop (de04c4f). Código existente: ClienteService.buscar, ClienteRepository, model.Cliente.activo, GlobalExceptionHandler, SecurityConfig
+@enduml

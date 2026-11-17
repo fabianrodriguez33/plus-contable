@@ -1,0 +1,76 @@
+@startuml
+!pragma layout smetana
+title T224 · HU-41 · Modelo de datos de las solicitudes de restablecimiento
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "auth_schema.usuarios" as usuarios <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * username : VARCHAR(60) <<UNIQUE>>  (el correo en las cuentas de cliente)
+  * password_hash : VARCHAR(100)
+  * activo : BOOLEAN = TRUE
+    cliente_id : BIGINT  (solo cuentas CLIENTE_MYPE; índice único parcial)
+  * debe_cambiar_password : BOOLEAN
+    temporal_vence_en : TIMESTAMP
+  * sesion_version : INTEGER
+}
+
+entity "auth_schema.solicitudes_restablecimiento" as solicitudes <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * usuario_id : BIGINT <<FK>>
+  * solicitada_en : TIMESTAMP = ahora
+    ip : VARCHAR(60)
+    atendida_en : TIMESTAMP
+    atendida_por : VARCHAR(60)
+  CHECK ((atendida_en IS NULL) = (atendida_por IS NULL))  (ck_solicitudes_atendida)
+  UNIQUE (usuario_id) WHERE atendida_en IS NULL  (ux_solicitudes_restablecimiento_pendiente)
+}
+
+entity "auth_schema.bitacora_seguridad" as bitacora <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+    usuario_id : BIGINT
+    username : VARCHAR(60)
+  * evento : VARCHAR(40)
+    detalle : VARCHAR(300)
+    ip : VARCHAR(60)
+  * fecha : TIMESTAMP
+}
+
+entity "auth_schema.intentos_restablecimiento" as intentos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * correo_huella : CHAR(64)  (SHA-256 del correo normalizado)
+  * ip : VARCHAR(60)
+  * fecha : TIMESTAMP = ahora
+  INDEX (ip, fecha)
+  INDEX (correo_huella, fecha)
+}
+
+note bottom of intentos
+  Revisión de Julio (#55): un intento por pedido, exista o no la cuenta (sin FK a usuarios).
+  Límite: 5 por IP y 3 por correo en 60 minutos (configurable); al pasarlo, 429.
+  No guarda el correo, solo su huella; los intentos de más de un día se borran en cada pedido.
+end note
+
+usuarios ||--o{ solicitudes : usuario_id, ON DELETE CASCADE
+usuarios ||..o{ bitacora : usuario_id (sin FK)
+
+note right of solicitudes
+  A lo sumo una pendiente por cuenta; atendida la anterior, se puede pedir otra.
+  Solo se crea para cuentas de cliente activas: un correo sin cuenta no deja fila
+  (y la respuesta al cliente es la misma, criterio 2).
+  «Restablecer acceso» (HU-37) la marca atendida con quién y cuándo.
+end note
+
+note bottom of bitacora
+  Eventos de HU-41: RESTABLECIMIENTO_SOLICITADO (al pedir) y CUENTA_CLIENTE_RESTABLECIDA (al atender, de HU-37).
+  Nunca guarda contraseñas.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: backend/ms-auth/src/main/resources/schema.sql, SolicitudRestablecimiento, IntentoRestablecimiento, Usuario, BitacoraSeguridad. Prueba: RestablecimientoIntegracionTest
+@enduml

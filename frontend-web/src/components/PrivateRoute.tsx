@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { isAuthenticated, logout } from '../services/authService'
+import { debeCambiarPassword, isAuthenticated, logout } from '../services/authService'
 import { TOKEN_KEY } from '../services/apiClient'
 import { jwtExpirationMs } from '../services/jwtSession'
 
@@ -29,5 +29,7 @@ export default function PrivateRoute() {
     }
   }, [authenticated])
 
-  return authenticated ? <Outlet /> : <Navigate to="/login" replace />
+  if (!authenticated) return <Navigate to="/login" replace />
+  // HU-37: con la contraseña temporal no se puede entrar a nada más hasta cambiarla
+  return debeCambiarPassword() ? <Navigate to="/cambiar-password" replace /> : <Outlet />
 }

@@ -1,5 +1,7 @@
 # Puntos abiertos (sección 6 de la guía)
 
+> Numeración: las tareas 82, 83, 84 y 85 de HU-38 son las 91, 92, 93 y 94 del Sprint Backlog.
+
 ## Dependencias de otros integrantes
 
 | Depende de | Estado en el repo (2026-10-21) | Solución provisional |

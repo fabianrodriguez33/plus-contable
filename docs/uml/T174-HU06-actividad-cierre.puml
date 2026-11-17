@@ -1,0 +1,50 @@
+@startuml
+title T174 · HU-06 · Actividad: cierre del expediente de un cliente que se retira (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+|Contador|
+start
+:Elige "Cerrar expediente" en la ficha del cliente;
+
+|Sistema|
+if (¿El cliente existe y sigue abierto?) then (no)
+  :Rechaza: cliente no encontrado / expediente ya cerrado;
+  stop
+endif
+:Revisa los pendientes del cliente;
+if (¿Tiene obligaciones sin declarar, notificaciones\no documentos faltantes pendientes?) then (sí)
+  :Muestra la lista y no permite cerrar;
+  note right
+    Supuesto: estos son los pendientes que impiden el cierre.
+  end note
+  stop
+endif
+if (¿Tiene honorarios por cobrar?) then (sí)
+  :Advierte el monto por cobrar y pide confirmación;
+else (no)
+  :Pide confirmar el cierre (motivo opcional);
+endif
+
+|Contador|
+if (¿Confirma el cierre?) then (no)
+  :Cancela el cierre;
+  stop
+endif
+
+|Sistema|
+:Guarda el cierre con fecha, motivo y usuario del token;
+:Pone el cliente como inactivo: sale de la cartera activa;
+:Conserva todo el historial del cliente (solo lectura);
+
+|Contador|
+:Consulta el historial del cliente cerrado cuando lo necesite;
+stop
+
+note right
+  Criterio 4: solo el contador autenticado puede cerrar un expediente.
+  Supuesto: reabrir un expediente queda fuera de esta historia.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-06, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService, model.Cliente.activo; cobros de HU-28, notificaciones de HU-18 y documentos de HU-24 (diseños previos)
+@enduml

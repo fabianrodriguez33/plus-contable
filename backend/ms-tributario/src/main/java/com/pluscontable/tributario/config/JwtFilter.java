@@ -23,6 +23,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
+    /** Mismo claim que pone ms-auth en el token del primer ingreso. */
+    static final String CLAIM_CAMBIAR_PASSWORD = "cambiarPassword";
+
     private final SecretKey key;
 
     public JwtFilter(@Value("${app.jwt.secret}") String secret) {
@@ -37,11 +40,23 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 Claims claims = Jwts.parser().verifyWith(key).build()
                         .parseSignedClaims(header.substring(7)).getPayload();
+                // HU-37: el token restringido del primer ingreso (contraseña temporal) solo sirve en ms-auth para cambiarla.
+                // Aquí se rechaza por su claim, sin depender de que no tenga roles: una ruta futura con authenticated() no lo deja pasar
+                if (Boolean.TRUE.equals(claims.get(CLAIM_CAMBIAR_PASSWORD, Boolean.class))) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setCharacterEncoding("UTF-8");
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"mensaje\":\"Debe cambiar la contraseña temporal antes de usar el sistema\"}");
+                    return;
+                }
                 List<?> roles = claims.get("roles", List.class);
                 var authorities = (roles == null ? List.<SimpleGrantedAuthority>of()
                         : roles.stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r)).toList());
-                SecurityContextHolder.getContext().setAuthentication(
-                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities));
+                var auth = new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                // HU-38: empresa de la cuenta de cliente; el token del estudio no lo trae
+                Number clienteId = claims.get("clienteId", Number.class);
+                auth.setDetails(new DatosToken(clienteId == null ? null : clienteId.longValue()));
+                SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (JwtException | IllegalArgumentException ignored) {
                 // token invalido/expirado: el request queda sin autenticar y recibe 401
             }

@@ -1,0 +1,64 @@
+@startuml
+!pragma layout smetana
+title T6 · HU-13 · Modelo de datos de los pagos con número de constancia, saldo y acumulado (diseño actualizado)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+entity "tributario_schema.obligaciones" as obligaciones <<cambia>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+    tipo_obligacion : VARCHAR(30)
+  * periodo : DATE
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO | PAGO_PARCIAL | PAGADO = PENDIENTE
+    fecha_declaracion : DATE
+    numero_formulario : VARCHAR(30)
+    monto_determinado : NUMERIC(14,2)
+  UNIQUE (cliente_id, tipo_obligacion, periodo)
+}
+entity "tributario_schema.pagos_obligacion" as pagos <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * fecha_pago : DATE
+  * monto_pagado : NUMERIC(14,2)  CHECK (monto_pagado > 0)
+  * numero_constancia : VARCHAR(30)
+  * acumulado_despues : NUMERIC(14,2)
+  * saldo_despues : NUMERIC(14,2)  CHECK (saldo_despues >= 0)
+  * registrado_en : TIMESTAMP = ahora
+    nombre_archivo : VARCHAR(255)  <<opcional>>
+    content_type : VARCHAR(100)  <<opcional>>
+    tamano_bytes : BIGINT  <<opcional>>
+    ruta_almacenamiento : VARCHAR(400)  <<opcional>>
+  UNIQUE (obligacion_id, numero_constancia)
+  INDEX (obligacion_id, fecha_pago)
+}
+
+clientes ||--o{ obligaciones : cliente_id, ON DELETE CASCADE
+obligaciones ||--o{ pagos : obligacion_id, ON DELETE CASCADE
+
+note bottom of obligaciones
+  Cambio: el CHECK de estado admite PAGO_PARCIAL y PAGADO, con nombre estable ck_obligaciones_estado (se borra antes el que PostgreSQL le puso en línea).
+  El estado depende del acumulado de pagos frente a monto_determinado.
+end note
+note bottom of pagos
+  Varios pagos parciales por obligación (decisión de Beto, 06/11). Cada fila guarda el acumulado y el saldo que quedaron después de ese pago;
+  el acumulado de la obligación es la suma de monto_pagado y no se duplica en obligaciones.
+end note
+note right of pagos
+  Decisión de Beto (10/11, alcance reducido): el comprobante es el número de constancia; no hay carga de archivos ni almacenamiento adicional.
+  Las cuatro columnas del archivo quedaron opcionales: bases existentes reciben ALTER COLUMN ... DROP NOT NULL (los pagos con PDF conservan sus datos)
+  y un pago sin archivo las deja en NULL.
+  Supuesto: el mismo número de constancia no se repite dentro de una obligación; ON DELETE CASCADE como el resto de las tablas hijas.
+end note
+footer Diseño actualizado tras decisión de Beto del 10/11 · Base: criterios de aceptación de HU-13, el código de develop y el PR #56 (comprobante = número de constancia, sin carga de archivos; consulta GET .../pagos)
+@enduml

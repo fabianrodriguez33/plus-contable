@@ -12,8 +12,13 @@ class TrabajadorController {
 class TrabajadorService {
   +listar(clienteId): List<TrabajadorDto>
   +registrar(clienteId, dto): TrabajadorDto
-  -validar(dto)
-  -exigirCliente(clienteId)
+  -validar(dto): void
+  -vacio(s): boolean
+  -exigirCliente(clienteId): void
+}
+
+class AccesoCliente {
+  +{static} exigir(clienteIdPedido): void
 }
 
 class Trabajador {
@@ -45,7 +50,22 @@ enum "Trabajador.SistemaPensionario" as SistemaPensionario {
   AFP
 }
 
-class TrabajadorDto <<record>>
+class TrabajadorDto <<record>> {
+  id: Long
+  nombreCompleto: String
+  tipoDocumento: TipoDocumento
+  numeroDocumento: String
+  extranjero: boolean
+  nacionalidad: String
+  sistemaPensionario: SistemaPensionario
+  nombreAfp: String
+  fechaIngreso: LocalDate
+  remuneracion: BigDecimal
+  tipoContrato: String
+  fechaInicioContrato: LocalDate
+  fechaFinContrato: LocalDate
+  +{static} from(t): TrabajadorDto
+}
 
 interface TrabajadorRepository {
   findByClienteIdOrderById(clienteId)
@@ -56,6 +76,7 @@ interface ClienteRepository {
 
 TrabajadorController --> TrabajadorService
 TrabajadorController ..> TrabajadorDto
+TrabajadorController ..> AccesoCliente : exigir(clienteId) al listar
 TrabajadorService --> TrabajadorRepository
 TrabajadorService --> ClienteRepository : el cliente debe existir
 TrabajadorRepository ..> Trabajador
@@ -67,16 +88,15 @@ note bottom of TrabajadorService
   validar(): nombre, tipo y número de documento, sistema pensionario y fecha
   de ingreso son obligatorios; con AFP se exige nombreAfp; remuneración >= 0.
   registrar(): los datos de extranjería solo se guardan si extranjero = true.
-  Si extranjero: el tipo no puede ser DNI y se exigen nacionalidad, tipoContrato
+  Si es extranjero: el tipo no puede ser DNI y se exigen nacionalidad, tipoContrato
   y fechaInicioContrato (fin no anterior al inicio). Los faltantes se listan juntos en un 400.
 end note
 
 note bottom of Trabajador
-  Nacional y extranjero son la misma clase: se distinguen por el atributo
-  extranjero. No hay subclases en el código.
-  UNIQUE (cliente_id, tipo_documento, numero_documento): un duplicado
-  responde 409 "Ya existe un trabajador con ese tipo y número de documento".
+  Nacional y extranjero son la misma clase: se distinguen por el atributo extranjero.
+  No hay subclases en el código. UNIQUE (cliente_id, tipo_documento, numero_documento):
+  un duplicado responde 409 "Ya existe un trabajador con ese tipo y número de documento".
 end note
 
-footer Fuente: TrabajadorController, TrabajadorService, model.Trabajador (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: TrabajadorController, TrabajadorService, TrabajadorDto, model.Trabajador, AccesoCliente
 @enduml

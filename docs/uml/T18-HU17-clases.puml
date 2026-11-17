@@ -1,0 +1,131 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T18 · HU-17 · Clases del fraccionamiento tributario vigente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class FraccionamientoController <<nuevo>> {
+  +registrar(clienteId, dto): FraccionamientoDto
+  +listar(clienteId): List<FraccionamientoDto>
+  +pagarCuota(cuotaId): CuotaDto
+}
+class FraccionamientoService <<nuevo>> {
+  +registrar(clienteId, dto): FraccionamientoDto
+  +listar(clienteId): List<FraccionamientoDto>
+  +pagarCuota(cuotaId): CuotaDto
+  -validar(dto, maxCuotas): void
+  -generarCuotas(dto): List<CuotaFraccionamiento>
+}
+class CalendarioService <<existe, cambia>> {
+  +listar(clienteId, desde, hasta, ...): List<CalendarioObligacionDto>
+  +cuotas(clienteId, desde, hasta): List<CalendarioCuotaDto>  <<nuevo>>
+}
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+class ParametroSistemaService <<definido en HU-12>> {
+  +entero(clave, porDefecto): int
+}
+class Fraccionamiento <<nuevo>> {
+  id: Long
+  clienteId: Long
+  tributo: TipoObligacion
+  montoTotal: BigDecimal
+  numeroCuotas: int
+  fechaPrimeraCuota: LocalDate
+  registradoEn: LocalDateTime
+}
+class CuotaFraccionamiento <<nuevo>> {
+  id: Long
+  fraccionamientoId: Long
+  numero: int
+  fechaVencimiento: LocalDate
+  monto: BigDecimal
+  estado: EstadoCuota
+  fechaPago: LocalDate
+}
+enum EstadoCuota <<nuevo>> {
+  PENDIENTE
+  PAGADA
+}
+enum TipoObligacion <<existe>> {
+  IGV
+  RENTA
+  PLAME
+  ESSALUD
+  RETENCION_QUINTA
+  AFP
+}
+class FraccionamientoEntradaDto <<record, nuevo>> {
+  tributo: TipoObligacion
+  montoTotal: BigDecimal
+  numeroCuotas: int
+  fechaPrimeraCuota: LocalDate
+}
+class FraccionamientoDto <<record, nuevo>> {
+  id: Long
+  clienteId: Long
+  tributo: TipoObligacion
+  montoTotal: BigDecimal
+  numeroCuotas: int
+  cuotas: List<CuotaDto>
+}
+class CuotaDto <<record, nuevo>> {
+  id: Long
+  numero: int
+  fechaVencimiento: LocalDate
+  monto: BigDecimal
+  estado: EstadoCuota
+  enRiesgo: boolean
+}
+class CalendarioCuotaDto <<record, nuevo>> {
+  cuota: CuotaDto
+  fraccionamientoId: Long
+  diasRestantes: long
+  vencida: boolean
+}
+interface FraccionamientoRepository <<nuevo>> {
+  findByClienteIdOrderByRegistradoEnDesc(clienteId)
+}
+interface CuotaFraccionamientoRepository <<nuevo>> {
+  findByFraccionamientoIdOrderByNumero(id)
+  findPorClienteYFechas(clienteId, desde, hasta)
+}
+
+FraccionamientoController --> FraccionamientoService
+FraccionamientoController ..> FraccionamientoEntradaDto
+FraccionamientoController ..> FraccionamientoDto
+FraccionamientoService --> ClienteService : buscar(clienteId)
+FraccionamientoService --> ParametroSistemaService : fraccionamiento.max_cuotas
+FraccionamientoService --> FraccionamientoRepository
+FraccionamientoService --> CuotaFraccionamientoRepository
+CalendarioService --> CuotaFraccionamientoRepository
+CalendarioService ..> CalendarioCuotaDto
+FraccionamientoDto o-- CuotaDto
+CalendarioCuotaDto --> CuotaDto
+FraccionamientoRepository ..> Fraccionamiento
+CuotaFraccionamientoRepository ..> CuotaFraccionamiento
+Fraccionamiento --> TipoObligacion
+CuotaFraccionamiento --> EstadoCuota
+CuotaFraccionamiento "0..*" --> "1" Fraccionamiento : fraccionamiento_id
+Fraccionamiento "0..*" --> "1" Cliente : cliente_id
+
+note bottom of FraccionamientoService
+  registrar(): exige monto, número de cuotas y fecha de la primera cuota; si falta alguno no se guarda (criterios 1 y 2).
+  Genera las cuotas; cada cuota aparece en el calendario de vencimientos (criterio 3).
+  enRiesgo = cuota PENDIENTE con fecha anterior a hoy: se resalta como riesgo de perder el fraccionamiento (criterio 4).
+end note
+note right of FraccionamientoEntradaDto
+  Supuesto: se ingresan monto total, número de cuotas y fecha de la primera cuota; las demás son mensuales, el mismo día
+  del mes (el último día si ese día no existe). La última cuota ajusta los centavos del reparto.
+  Supuesto (decisión de Beto, 06/11): el tributo puede ser cualquiera de TipoObligacion, incluidos ESSALUD, quinta y AFP.
+  Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema.
+  Supuesto: el número de cuotas va de 2 hasta el valor del parámetro fraccionamiento.max_cuotas (36 por defecto).
+  Supuesto: la fecha de la primera cuota puede ser pasada, porque se registra un fraccionamiento ya vigente.
+  Supuesto: el contador marca una cuota como pagada (pagarCuota) para quitar el riesgo; el comprobante lo ve HU-13.
+  Supuesto: solo el estudio usa estas rutas.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-17, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: CalendarioService, CalendarioObligacionDto, VencimientoTributario, ClienteService.buscar, TipoObligacion, GlobalExceptionHandler
+@enduml

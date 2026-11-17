@@ -1,0 +1,94 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T174 · HU-06 · Clases del cierre de expediente de un cliente que se retira (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class CierreExpedienteController <<nuevo>> {
+  +revisar(clienteId): RevisionCierreDto
+  +cerrar(clienteId, dto): CierreExpedienteDto
+  +historial(clienteId): HistorialClienteDto
+}
+class CierreExpedienteService <<nuevo>> {
+  +revisar(clienteId): RevisionCierreDto
+  +cerrar(clienteId, dto, usuario): CierreExpedienteDto
+  -pendientes(clienteId): List<String>
+  -honorariosPorCobrar(clienteId): HonorariosPendientesDto
+}
+class ClienteService <<existe, cambia>> {
+  +buscar(id): Cliente
+  +listar(soloActivos): List<ClienteDto>
+  +marcarInactivo(id): void  <<nuevo>>
+}
+interface ObligacionRepository <<existe>> {
+  contarPorClienteYEstado(clienteId, estado)
+}
+interface NotificacionSolRepository <<definido en HU-18>> {
+  contarPendientes(clienteId)
+}
+interface DocumentoFaltanteRepository <<definido en HU-24>> {
+  contarPendientes(clienteId)
+}
+interface CobroHonorarioRepository <<definido en HU-28>> {
+  pendientesDelCliente(clienteId)
+}
+class CierreExpediente <<nuevo>> {
+  id: Long
+  clienteId: Long
+  fechaCierre: LocalDate
+  motivo: String
+  cerradoPor: String
+  honorariosConfirmados: boolean
+  montoHonorariosPendiente: BigDecimal
+}
+class CierreExpedienteEntradaDto <<record, nuevo>> {
+  motivo: String
+  confirmarHonorarios: boolean
+}
+class RevisionCierreDto <<record, nuevo>> {
+  puedeCerrar: boolean
+  pendientes: List<String>
+  requiereConfirmacion: boolean
+  cobrosPendientes: int
+  montoPendiente: BigDecimal
+}
+class CierreExpedienteDto <<record, nuevo>> {
+  clienteId: Long
+  fechaCierre: LocalDate
+  motivo: String
+  cerradoPor: String
+}
+interface CierreExpedienteRepository <<nuevo>> {
+  findByClienteId(clienteId)
+}
+
+CierreExpedienteController --> CierreExpedienteService
+CierreExpedienteController ..> CierreExpedienteEntradaDto
+CierreExpedienteController ..> RevisionCierreDto
+CierreExpedienteController ..> CierreExpedienteDto
+CierreExpedienteService --> ClienteService
+CierreExpedienteService --> ObligacionRepository
+CierreExpedienteService --> NotificacionSolRepository
+CierreExpedienteService --> DocumentoFaltanteRepository
+CierreExpedienteService --> CobroHonorarioRepository
+CierreExpedienteService --> CierreExpedienteRepository
+CierreExpedienteRepository ..> CierreExpediente
+CierreExpediente "0..1" --> "1" Cliente : cliente_id
+
+note bottom of CierreExpedienteService
+  cerrar(): un cliente sin pendientes se cierra y sale de la cartera activa (activo = false) (criterio 1). Si tiene honorarios por cobrar,
+  advierte y exige confirmar (criterio 2). El historial del cliente cerrado sigue disponible: no se borra nada (criterio 3).
+  Solo el contador autenticado puede cerrar: el usuario sale del token (criterio 4).
+end note
+note right of CierreExpedienteService
+  Supuesto: los pendientes que impiden el cierre son obligaciones sin declarar, notificaciones del Buzón SOL pendientes (HU-18) y
+  documentos faltantes pendientes (HU-24); la lista «definida con el cliente» no está en el repositorio.
+  Supuesto: los honorarios por cobrar (HU-28) no impiden el cierre: advierten y piden confirmación (confirmarHonorarios = true).
+  Supuesto: cerrar no borra ni cambia el historial; el cliente cerrado solo se consulta. Reabrir queda fuera de esta historia.
+  Supuesto: el motivo es opcional (hasta 300 caracteres).
+  Supuesto: solo el estudio (CONTADOR, ADMIN) cierra expedientes; el cliente MYPE recibe 403.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-06, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService, model.Cliente.activo, ObligacionRepository, GlobalExceptionHandler, SecurityConfig
+@enduml

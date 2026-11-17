@@ -5,30 +5,38 @@ autonumber
 
 actor "Usuario del estudio" as U
 participant "frontend-web\n(LoginPage, authService,\napiClient)" as FE
-participant "ms-auth\nAuthController" as AC
+participant "AuthController" as AC
 participant "AuthService" as AS
+participant "UsuarioRepository" as UR
 database "auth_schema" as DBA
 participant "JwtProvider" as JP
-participant "ms-tributario\nJwtFilter" as TF
-participant "SecurityConfig\n(matriz de roles)" as SC
+participant "JwtFilter\n(ms-tributario)" as TF
+participant "Spring Security\n(SecurityConfig)" as SC
 participant "Controller\nde ms-tributario" as TC
 
-== Inicio de sesión ==
+== Inicio de sesión (ms-auth) ==
 U -> FE : usuario y contraseña
-FE -> AC : POST /api/auth/login {username, password}
-AC -> AS : login(request, ip)
-AS -> DBA : busca usuario, valida activo y bloqueo,\ncompara hash BCrypt, escribe bitacora_seguridad
-AS -> JP : generate(username, roles)
-JP --> AS : JWT HS256 {sub, roles, iat, exp = +8 h}
-AS --> AC : LoginResponse {token, "Bearer", expiraEnSegundos, usuario}
-AC --> FE : 200
-FE -> FE : guarda token y usuario en localStorage
+FE -> AC : authService.login(): POST /api/auth/login {username, password}
+AC -> AS : AuthService.login(request, ip)
+AS -> UR : UsuarioRepository.findByUsername(username)
+UR -> DBA : SELECT usuarios y sus roles
+alt usuario inexistente, inactivo, bloqueado o contraseña incorrecta
+  AS -> DBA : escribe bitacora_seguridad (LOGIN_FALLIDO, LOGIN_RECHAZADO,\nLOGIN_BLOQUEADO o CUENTA_BLOQUEADA)
+  AS --> FE : 401, 403 o 423 con el mensaje
+else credenciales correctas
+  AS -> DBA : reinicia intentos y escribe LOGIN_EXITOSO
+  AS -> JP : JwtProvider.generate(username, roles, clienteId)
+  JP --> AS : JWT HS256 {sub, roles, clienteId solo en cuentas de cliente, iat, exp = +8 h}
+  AS --> AC : LoginResponse {token, "Bearer", expiraEnSegundos, usuario}
+  AC --> FE : 200
+  FE -> FE : guarda token y usuario en localStorage
+end
 
 == Llamada protegida a ms-tributario ==
-FE -> TF : GET /api/tributario/... \nAuthorization: Bearer <JWT>
-TF -> TF : verifica firma y exp con el secreto compartido\n(JWT_SECRET); roles -> ROLE_<rol>
+FE -> TF : GET /api/tributario/...\nAuthorization: Bearer <JWT> (lo agrega apiClient)
+TF -> TF : JwtFilter.doFilterInternal(): verifica firma y exp con el\nsecreto compartido (JWT_SECRET); roles -> ROLE_<rol>
 alt token ausente, vencido, alterado o malformado
-  TF --> FE : 401
+  TF --> FE : 401 (apiClient limpia la sesión y vuelve al login)
 else token válido
   TF -> SC : ¿el rol puede usar esta ruta y método?
   alt rol no permitido
@@ -41,13 +49,12 @@ end
 
 note over TF
   ms-tributario no consulta a ms-auth: comparte solo el secreto del JWT.
-  El mismo esquema aplica a GET /api/auth/me en ms-auth.
+  El mismo esquema de filtro protege GET /api/auth/me en ms-auth.
 end note
 note over JP
-  Roles sembrados en auth_schema: ADMIN y CONTADOR.
-  CLIENTE_MYPE lo reconoce SecurityConfig de ms-tributario,
-  pero no existe en auth_schema.roles.
+  Roles sembrados en auth_schema.roles: ADMIN, CONTADOR y CLIENTE_MYPE.
+  Aún no existe el alta de cuentas de cliente (HU-37).
 end note
 
-footer Fuente: AuthService, JwtProvider, ms-tributario JwtFilter y SecurityConfig, apiClient.ts (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: AuthController, AuthService, JwtProvider, ms-tributario JwtFilter y SecurityConfig, authService.ts, apiClient.ts
 @enduml

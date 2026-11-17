@@ -1,0 +1,80 @@
+@startuml
+!pragma layout smetana
+title T104 · HT-02 · Clases del servicio de cifrado AES-256 de la Clave SOL (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class ClienteController <<existe>> {
+  +guardarSol(id, dto): void
+  +obtenerSol(id): CredencialSolDto
+}
+
+class ClienteService <<existe>> {
+  +guardarCredencialSol(clienteId, dto): void
+  +obtenerCredencialSol(clienteId): CredencialSolDto
+  +buscar(id): Cliente
+}
+
+class AesUtil <<existe, se extiende>> {
+  +{static} PREFIJO_V2: String = "v2:"
+  -keySpec: SecretKeySpec  (32 bytes, AES-256)
+  +encrypt(plainText): String
+  +decrypt(cipherText): String
+  +esLegado(cipherText): boolean
+}
+
+class CredencialSol <<existe>> {
+  id: Long
+  clienteId: Long
+  usuarioSolCifrado: String
+  claveSolCifrada: String
+  actualizadoEn: LocalDateTime
+}
+
+class CredencialSolDto <<record, existe>> {
+  usuarioSol: String
+  claveSol: String
+}
+
+interface CredencialSolRepository <<existe>> {
+  findByClienteId(clienteId)
+}
+
+class CredencialSolMigrador <<existe>> {
+  +migrar(): int
+}
+
+class "Configuración del servicio\n(application.yml)" as Cfg <<existe>> {
+  app.aes.secret-key = ${AES_SECRET_KEY}
+  app.aes.legacy-iv = ${AES_IV}
+}
+
+ClienteController --> ClienteService
+ClienteController ..> CredencialSolDto
+ClienteService --> AesUtil
+ClienteService --> CredencialSolRepository
+ClienteService ..> CredencialSol
+CredencialSolMigrador --> AesUtil
+CredencialSolMigrador --> CredencialSolRepository
+AesUtil ..> Cfg : lee la llave y el IV legado
+CredencialSolRepository ..> CredencialSol
+
+note bottom of AesUtil
+  Criterio 1: encrypt() cifra con AES-256 (GCM, IV aleatorio de 12 bytes); guarda "v2:" + Base64(IV + cifrado + etiqueta).
+  Criterio 2: lo almacenado no se lee sin la llave. Criterio 3: con otra llave o un dato alterado, decrypt() lanza
+  IllegalStateException("Error al descifrar") sin incluir el contenido. Criterio 4: la llave viene de la configuración
+  (AES_SECRET_KEY), nunca de la base de datos.
+end note
+
+note right of Cfg
+  Supuesto: la llave se guarda en la variable de entorno AES_SECRET_KEY del servicio ms-tributario
+  (32 bytes), fuera de la base de datos y del repositorio; es lo que "definido por el equipo" significa en el DoR.
+  Supuesto: se extiende AesUtil (no se crea otro servicio de cifrado), como pide la nota del Sprint 2.
+  Supuesto: la rotación de la llave queda fuera de esta historia.
+  Supuesto: ante una llave incorrecta el servicio responde 500 sin detalle (comportamiento por defecto).
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HT-02 y el código y la base de develop (de04c4f). Código existente: AesUtil, ClienteService, ClienteController, CredencialSol, CredencialSolRepository, CredencialSolMigrador
+@enduml

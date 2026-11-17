@@ -8,7 +8,7 @@ import LoginPage from '../pages/LoginPage'
 import Navbar from '../components/Navbar'
 import PrivateRoute from '../components/PrivateRoute'
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
-import { isAuthenticated, login, logout } from './authService'
+import { cerrarSesion, isAuthenticated, login, logout } from './authService'
 import { isJwtActive } from './jwtSession'
 
 const usuario = { id: 1, username: 'prueba', nombreCompleto: 'Usuario de prueba', roles: ['ADMIN'] }
@@ -80,13 +80,43 @@ describe('HU-36: sesión y login', () => {
   it('cierra sesión y vuelve a la pantalla de acceso', async () => {
     localStorage.setItem(TOKEN_KEY, jwt(Math.floor(Date.now() / 1000) + 3600))
     localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+    const post = vi.spyOn(authApi, 'post').mockResolvedValue({ data: null } as AxiosResponse)
     rutas('/')
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
 
     expect(await screen.findByRole('button', { name: 'Ingresar' })).toBeTruthy()
+    expect(post).toHaveBeenCalledWith('/api/auth/logout')
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(localStorage.getItem(USER_KEY)).toBeNull()
+  })
+
+  it('HU-36: al cerrar sesión avisa al servidor y después borra token y usuario', async () => {
+    localStorage.setItem(TOKEN_KEY, jwt(Math.floor(Date.now() / 1000) + 3600))
+    localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+    let sesionAlLlamar: string | null = null
+    vi.spyOn(authApi, 'post').mockImplementation(async () => {
+      sesionAlLlamar = localStorage.getItem(TOKEN_KEY)
+      return { data: null } as AxiosResponse
+    })
+
+    await cerrarSesion()
+
+    expect(sesionAlLlamar).not.toBeNull()
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(USER_KEY)).toBeNull()
+  })
+
+  it('HU-36: si el servidor no responde, la sesión se cierra igual en el navegador', async () => {
+    localStorage.setItem(TOKEN_KEY, jwt(Math.floor(Date.now() / 1000) + 3600))
+    localStorage.setItem(USER_KEY, JSON.stringify(usuario))
+    vi.spyOn(authApi, 'post').mockRejectedValue(new Error('sin conexión'))
+
+    await expect(cerrarSesion()).resolves.toBeUndefined()
+
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(USER_KEY)).toBeNull()
+    expect(isAuthenticated()).toBe(false)
   })
 
   it('redirige una ruta protegida cuando no hay sesión', () => {

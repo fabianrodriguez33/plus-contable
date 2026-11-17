@@ -1,0 +1,45 @@
+@startuml
+!pragma layout smetana
+title T63 · HU-18 · Modelo de datos de las notificaciones del Buzón SOL (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.notificaciones_sol" as notif <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : ESQUELA | CARTA_INDUCTIVA | COMUNICADO
+  * fecha_recepcion : DATE
+  * plazo_respuesta : DATE  CHECK (plazo_respuesta >= fecha_recepcion)
+  * estado : PENDIENTE | ATENDIDA = PENDIENTE
+    fecha_atencion : DATE
+  * registrado_en : TIMESTAMP = ahora
+  INDEX (cliente_id, estado, plazo_respuesta)
+}
+
+clientes ||--o{ notif : cliente_id, ON DELETE CASCADE
+
+note bottom of notif
+  El plazo es obligatorio (NOT NULL): sin plazo no se guarda (criterio 3).
+  El tipo se limita a esquela, carta inductiva o comunicado con un CHECK (criterio 2).
+  Los pendientes de un cliente se consultan por (cliente_id, estado = PENDIENTE) (criterio 4).
+end note
+
+note right of notif
+  Supuesto: plazo_respuesta es una fecha límite; la cantidad de días la calcula la pantalla (HU-19 la usa para las alertas).
+  Supuesto: fecha_atencion se llena al marcar como atendida (criterio 5).
+  Supuesto: sin columnas de descripción ni de archivo adjunto en esta historia.
+  Supuesto: ON DELETE CASCADE como el resto de las tablas hijas del cliente.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-18 y el código y la base de develop (de04c4f). Código existente: backend/ms-tributario/src/main/resources/schema.sql (tabla clientes y el estilo de las tablas hijas)
+@enduml

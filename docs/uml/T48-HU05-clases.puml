@@ -12,8 +12,14 @@ class AcuerdoController {
 class AcuerdoService {
   +vigente(clienteId): AcuerdoDto
   +guardar(clienteId, dto): AcuerdoDto
-  -validar(dto)
-  -exigirCliente(clienteId)
+  -aDto(a): AcuerdoDto
+  -validar(dto): void
+  -vacio(s): boolean
+  -exigirCliente(clienteId): void
+}
+
+class AccesoCliente {
+  +{static} exigir(clienteIdPedido): void
 }
 
 class AcuerdoServicio {
@@ -34,15 +40,19 @@ class HonorarioHistorial {
 }
 
 class AcuerdoDto <<record>> {
-  id, serviciosContratados, honorarioMensual,
-  honorarioDesde, fechaInicio
+  id: Long
+  serviciosContratados: String
+  honorarioMensual: BigDecimal
+  honorarioDesde: LocalDate
+  fechaInicio: LocalDate
   historial: List<Historial>
+  +{static} from(a, historial): AcuerdoDto
 }
 
 class "AcuerdoDto.Historial" as HistorialDto <<record>> {
-  monto
-  vigenteDesde
-  vigenteHasta
+  monto: BigDecimal
+  vigenteDesde: LocalDate
+  vigenteHasta: LocalDate
 }
 
 interface AcuerdoRepository {
@@ -57,22 +67,23 @@ interface ClienteRepository {
 
 AcuerdoController --> AcuerdoService
 AcuerdoController ..> AcuerdoDto
+AcuerdoController ..> AccesoCliente : exigir(clienteId) al consultar el acuerdo vigente
 AcuerdoService --> AcuerdoRepository
 AcuerdoService --> HonorarioHistorialRepository
 AcuerdoService --> ClienteRepository : el cliente debe existir
+AcuerdoService ..> AcuerdoDto
+AcuerdoDto o-- "0..*" HistorialDto
 AcuerdoRepository ..> AcuerdoServicio
 HonorarioHistorialRepository ..> HonorarioHistorial
-AcuerdoDto *-- "0..*" HistorialDto
-AcuerdoServicio "0..1" --> "1" Cliente : cliente_id (único)
 AcuerdoServicio "1" <-- "0..*" HonorarioHistorial : acuerdo_id
+AcuerdoServicio "0..1" --> "1" Cliente : cliente_id (único)
 
 note bottom of AcuerdoService
-  guardar(): sin acuerdo previo crea uno con honorarioDesde = fechaInicio.
-  Con acuerdo previo y honorario distinto: honorarioDesde de la entrada (hoy si
-  no viene) debe ser posterior al vigente; archiva el monto anterior en
-  HonorarioHistorial (vigenteHasta = nuevo desde - 1 día) y fija el nuevo.
-  validar(): honorarioMensual > 0 y fechaInicio obligatorios.
+  guardar(): crea el acuerdo o lo actualiza (uno por cliente). Honorario mensual mayor que cero
+  y fecha de inicio son obligatorios. Si cambia el honorario, el anterior pasa a
+  honorarios_historial con su vigencia, y la nueva fecha debe ser posterior al inicio del honorario actual.
+  vigente(): sin acuerdo responde 404 "El cliente no tiene acuerdo de servicio".
 end note
 
-footer Fuente: AcuerdoController, AcuerdoService, AcuerdoDto, model.AcuerdoServicio, model.HonorarioHistorial (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: AcuerdoController, AcuerdoService, AcuerdoDto, model.AcuerdoServicio, model.HonorarioHistorial, AccesoCliente
 @enduml

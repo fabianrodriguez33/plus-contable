@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { LogOut, Menu, UserCircle } from 'lucide-react'
-import { logout, usuarioActual } from '../services/authService'
+import { cerrarSesion, usuarioActual } from '../services/authService'
 import Sidebar, { MenuMovil } from './Sidebar'
 import Button from './Button'
 
@@ -11,8 +11,8 @@ export default function Navbar() {
   const usuario = usuarioActual()
   const [menuAbierto, setMenuAbierto] = useState(false)
 
-  const salir = () => {
-    logout()
+  const salir = async () => {
+    await cerrarSesion()
     navigate('/login', { replace: true })
   }
 

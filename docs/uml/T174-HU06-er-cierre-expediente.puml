@@ -1,0 +1,53 @@
+@startuml
+!pragma layout smetana
+title T174 · HU-06 · Modelo de datos del cierre de expediente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN = true
+}
+entity "tributario_schema.cierres_expediente" as cierre <<nuevo>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>> <<UNIQUE>>
+  * fecha_cierre : DATE
+    motivo : VARCHAR(300)
+  * cerrado_por : VARCHAR(60)
+  * honorarios_confirmados : BOOLEAN = false
+    monto_honorarios_pendiente : NUMERIC(12,2)
+  * registrado_en : TIMESTAMP = ahora
+}
+entity "tributario_schema.cobros_honorarios" as cobros <<definido en HU-28>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * estado : PENDIENTE
+}
+entity "tributario_schema.obligaciones, notificaciones_sol,\ndocumentos_faltantes" as pend <<existe / HU-18 / HU-24>> {
+  * cliente_id : BIGINT <<FK>>
+  * estado : PENDIENTE | ...
+}
+
+clientes ||--o| cierre : cliente_id, ON DELETE CASCADE
+clientes ||--o{ cobros : cliente_id
+clientes ||--o{ pend : cliente_id
+
+note bottom of cierre
+  Cerrar guarda una fila aquí y pone clientes.activo = false: el cliente sale de la cartera activa (criterio 1). Nada se borra,
+  así el historial sigue disponible para consultar (criterio 3). honorarios_confirmados registra que se avisó y se confirmó (criterio 2).
+end note
+note right of cierre
+  Supuesto: un cliente tiene un solo cierre (UNIQUE); reabrir queda fuera de esta historia.
+  Supuesto: los pendientes que impiden el cierre son obligaciones sin declarar, notificaciones y documentos faltantes pendientes.
+  Supuesto: los honorarios por cobrar (cobros_honorarios PENDIENTE) no impiden el cierre; se avisa y se confirma.
+  Supuesto: cerrado_por guarda el usuario del token (criterio 4).
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-06, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y su columna activo, obligaciones)
+@enduml

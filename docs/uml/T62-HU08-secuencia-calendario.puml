@@ -1,11 +1,12 @@
 @startuml
-title T62 · HU-08 · Secuencia: consultar el calendario de vencimientos (código de develop, commit 5adfb88)
+title T62 · HU-08 · Secuencia: consultar el calendario de vencimientos (código de develop)
 skinparam shadowing false
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\n(pantalla de calendario,\ntarea 63: por construir)" as FE
+participant "frontend-web\n(CalendarioPage,\ncalendarioService)" as FE
 participant "JwtFilter /\nSecurityConfig" as SEC
+participant "ClienteController" as CLC
 participant "CalendarioController" as CC
 participant "CalendarioService" as CS
 participant "ObligacionService" as OS
@@ -13,39 +14,46 @@ participant "ObligacionRepository" as OR
 database "tributario_schema" as DB
 participant "CalendarioObligacionDto /\nVencimientoTributario" as DTO
 
-U -> FE : elige cliente y rango (mes o semana)
-FE -> SEC : GET /api/tributario/calendario\n?clienteId&desde&hasta&periodo&estado&situacion\n(Authorization: Bearer)
-alt sin token o token inválido
-  SEC --> FE : 401
-else rol CLIENTE_MYPE (solo estudio: ADMIN o CONTADOR)
-  SEC --> FE : 403
+U -> FE : abre el calendario; elige vista (hoy, semana o mes) y, opcionalmente, un cliente
+FE -> CLC : clienteService.listarClientes(): GET /api/tributario/clientes
+CLC --> FE : lista de clientes de la cartera
+loop por cada cliente (hasta 4 consultas a la vez)
+  FE -> SEC : calendarioService.consultarCalendario(clienteId, rango): GET /api/tributario/calendario\n?clienteId&desde&hasta (Authorization: Bearer)
+  alt sin token o token inválido
+    SEC --> FE : 401
+  else rol CLIENTE_MYPE (la ruta es solo del estudio: ADMIN o CONTADOR)
+    SEC --> FE : 403 (la pantalla muestra "No tienes permiso ...")
+  end
+  SEC -> CC : CalendarioController.listar(clienteId, desde, hasta, periodo, estado, situacion)
+  CC -> CS : CalendarioService.listar(clienteId, desde, hasta, periodo, estado, situacion)
+  CS -> CS : validar: clienteId > 0, desde <= hasta,\nperiodo = día 1 del mes,\nsi situacion = PROXIMO entonces hasta >= hoy
+  alt validación fallida
+    CS --> FE : 400 {"mensaje": ...}
+  end
+  CS -> OS : ObligacionService.listar(clienteId)
+  OS -> OR : ObligacionRepository.findByClienteIdOrderByPeriodoDesc(clienteId)
+  OR -> DB : SELECT obligaciones del cliente
+  DB --> OR : filas
+  OR --> OS : obligaciones
+  OS --> CS : List<ObligacionDto>\n(no comprueba que el cliente exista)
+  CS -> CS : filtrar en memoria: con fecha de vencimiento,\ndentro de desde-hasta, periodo, estado, situacion\n(PROXIMO: vence hoy o después; VENCIDO: antes de hoy)
+  loop por cada obligación que queda
+    CS -> DTO : CalendarioObligacionDto.from(obligacion, clock)
+    DTO --> CS : {obligacion, diasRestantes, vencimientoPasado}
+  end
+  CS -> CS : ordenar por fecha de vencimiento y luego por id
+  CS --> CC : List<CalendarioObligacionDto>
+  CC --> FE : 200 lista (vacía si no hay coincidencias\no si el cliente no existe)
 end
-SEC -> CC : listar(clienteId, desde, hasta, periodo, estado, situacion)
-CC -> CS : listar(...)
-CS -> CS : validar: clienteId > 0, desde <= hasta,\nperiodo = día 1 del mes,\nsi situacion = PROXIMO entonces hasta >= hoy
-alt validación fallida
-  CS --> FE : 400 {"mensaje": ...}
-end
-CS -> OS : listar(clienteId)
-OS -> OR : findByClienteIdOrderByPeriodoDesc(clienteId)
-OR -> DB : SELECT obligaciones del cliente
-DB --> OR : filas
-OR --> OS : obligaciones
-OS --> CS : List<ObligacionDto>\n(no comprueba que el cliente exista)
-CS -> CS : filtrar en memoria: con fecha de vencimiento,\ndentro de desde-hasta, periodo, estado, situacion\n(PROXIMO: vence hoy o después; VENCIDO: antes de hoy)
-loop por cada obligación que queda
-  CS -> DTO : from(obligacion, clock)
-  DTO --> CS : {obligacion, diasRestantes, vencimientoPasado}
-end
-CS -> CS : ordenar por fecha de vencimiento y luego por id
-CS --> CC : List<CalendarioObligacionDto>
-CC --> FE : 200 lista (vacía si no hay coincidencias\no si el cliente no existe)
-FE -> U : agrupa por día y muestra cliente, tributo y días restantes
+FE -> FE : agruparPorDia(): une los resultados de todos los clientes por fecha
+FE -> U : muestra por día el cliente, el tributo y su situación\n(declarada, vencida, vence hoy o próxima)
 
 note over FE, DTO
-  Una consulta cubre un solo cliente (clienteId obligatorio).
-  Para el calendario de todos los clientes, el frontend consulta
-  uno por uno (opción A elegida).
-  vencimientoPasado también es verdadero para obligaciones ya declaradas.
+  Una consulta cubre un solo cliente (clienteId obligatorio): para el calendario de todos los clientes,
+  la pantalla consulta uno por uno, con un máximo de 4 a la vez, y muestra los errores sin ocultar los demás.
+  vencimientoPasado también es verdadero para obligaciones ya declaradas: la pantalla distingue
+  «declarada» con el estado de la obligación.
 end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: CalendarioController, CalendarioService, ObligacionService, ObligacionRepository, CalendarioPage y calendarioService.ts
 @enduml

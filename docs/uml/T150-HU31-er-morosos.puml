@@ -1,0 +1,42 @@
+@startuml
+!pragma layout smetana
+title T150 · HU-31 · Datos que lee la lista de morosos (sin tablas nuevas)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN
+}
+
+entity "tributario_schema.cobros_honorarios" as cobros <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * fecha_cobro : DATE
+  * monto : NUMERIC(12,2)
+  * estado : PENDIENTE | PAGO_PARCIAL | PAGADO
+  * pagado : NUMERIC(12,2)
+  INDEX (cliente_id, estado, fecha_cobro)
+}
+
+clientes ||--o{ cobros : cliente_id, ON DELETE CASCADE
+
+note right of cobros
+  Cobro vencido: estado IN (PENDIENTE, PAGO_PARCIAL) AND fecha_cobro < hoy.
+  Por cliente: SUM(monto - pagado) = monto vencido; COUNT = cobros vencidos;
+  MIN(fecha_cobro) = vencido desde (de ahí salen los días de atraso).
+  El saldo de cada cobro lo mantiene HU-29 en la columna pagado.
+end note
+
+note bottom of clientes
+  HU-31 no crea tablas. Los clientes inactivos con deuda vencida también aparecen.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-31-clientes-morosos. Código: schema.sql (clientes, cobros_honorarios), CobroHonorarioRepository.deudasVencidas. Prueba: MorosoPostgresTest
+@enduml

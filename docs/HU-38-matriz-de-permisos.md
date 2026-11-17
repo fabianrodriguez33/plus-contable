@@ -21,7 +21,7 @@ lectura y alta de cada historia; las que aparecen en las dos coinciden.
 |---|---|
 | Sin token | Petición sin `Authorization`, o con token vencido o falsificado: **401** |
 | Token sin rol | JWT válido sin ningún rol: **403** en toda ruta protegida de `ms-tributario` |
-| `CLIENTE_MYPE` | **Hoy no existe en `ms-auth`**: solo se siembran `ADMIN` y `CONTADOR`, y no hay forma de crear cuentas de cliente (HU-37). `ms-tributario` sí lo reconoce si llega en un token firmado con el secreto compartido |
+| `CLIENTE_MYPE` | Se siembra en `ms-auth`; las cuentas de cliente se crean en HU-37 (todavía no existe el alta). Su token lleva el claim `clienteId` y `ms-tributario` solo le deja ver su empresa (`AccesoCliente`). Sin ese claim, 403 |
 | `CONTADOR` y `ADMIN` | El estudio. Tienen exactamente los mismos permisos |
 
 Reglas generales de `ms-tributario`: las rutas que `SecurityConfig` no lista son **solo del estudio** (`anyRequest().hasAnyRole(ESTUDIO)`);
@@ -45,8 +45,9 @@ directo sí.
 
 Leyenda de la columna **¿Distingue entre clientes?**
 
-- **⚠ No distingue:** un `CLIENTE_MYPE` puede llamar la ruta (200) y la ruta **no compara** el cliente del token con el cliente que se pide.
-  Cualquier `CLIENTE_MYPE` leería los datos de cualquier cliente. Es la causa de la tarea 94.
+- **Solo su cliente (`AccesoCliente`):** un `CLIENTE_MYPE` entra a la ruta, pero `AccesoCliente.exigir` compara el `clienteId` del token con el cliente que se pide.
+  Si es otro, o el token no trae `clienteId`, responde **403** (igual que el resto de la matriz). Es la tarea 94.
+  **Pendiente de revisión de Beto:** hoy al cliente ajeno se le responde 403, y eso le revela que ese cliente existe. Lo ideal es que un cliente MYPE solo "vea" sus propios clientes, es decir, responder 404 como si el otro no existiera. Se propone cambiar a 404 (lanzar `EntityNotFoundException` en `AccesoCliente`) o dejarlo como mejora futura si Beto lo acepta así.
 - **Estudio: todos:** la ruta es solo del estudio, y el estudio ve todos los clientes. No hay fuga hacia un cliente MYPE.
 - **No aplica:** la ruta no trabaja con los datos de un cliente concreto.
 
@@ -54,12 +55,12 @@ Leyenda de la columna **¿Distingue entre clientes?**
 
 | Método y ruta | Sin token | Token sin rol | `CLIENTE_MYPE` | `CONTADOR` y `ADMIN` | ¿Distingue entre clientes? | Prueba que la respalda |
 |---|---|---|---|---|---|---|
-| `GET /api/tributario/clientes/{id}/trabajadores` | 401 | 403 | Sí | Sí | **⚠ No distingue** | `PermisosPorRolTest` (todas las situaciones); `ManejoDeErroresHttpTest` (401) |
-| `GET /api/tributario/clientes/{id}/documentos` | 401 | 403 | Sí | Sí | **⚠ No distingue** | `PermisosPorRolTest` |
-| `GET /api/tributario/clientes/{id}/documentos/{doc}/archivo` | 401 | 403 | Sí | Sí | **⚠ No distingue** (el servicio comprueba que el documento sea del cliente de la ruta, no que ese cliente sea el del usuario) | `PermisosPorRolTest` |
-| `GET /api/tributario/clientes/{id}/acuerdo` | 401 | 403 | Sí | Sí | **⚠ No distingue** | `PermisosPorRolTest` |
-| `GET /api/tributario/obligaciones?clienteId=` | 401 | 403 | Sí | Sí | **⚠ No distingue** | `PermisosPorRolTest` |
-| `GET /api/tributario/obligaciones/{id}` | 401 | 403 | Sí | Sí | **⚠ No distingue** (la obligación se identifica solo por su id) | `PermisosPorRolTest` |
+| `GET /api/tributario/clientes/{id}/trabajadores` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`) | `PermisosPorRolTest` (todas las situaciones); `ManejoDeErroresHttpTest` (401) |
+| `GET /api/tributario/clientes/{id}/documentos` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`) | `PermisosPorRolTest` |
+| `GET /api/tributario/clientes/{id}/documentos/{doc}/archivo` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`); el servicio además comprueba que el documento sea del cliente de la ruta | `PermisosPorRolTest` |
+| `GET /api/tributario/clientes/{id}/acuerdo` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`) | `PermisosPorRolTest` |
+| `GET /api/tributario/obligaciones?clienteId=` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`) | `PermisosPorRolTest` |
+| `GET /api/tributario/obligaciones/{id}` | 401 | 403 | Sí | Sí | Solo su cliente (`AccesoCliente`, con el `clienteId` de la obligación ya cargada; un id inexistente sigue dando 404 al estudio) | `PermisosPorRolTest` |
 
 ### Públicas
 
@@ -73,21 +74,21 @@ Leyenda de la columna **¿Distingue entre clientes?**
 |---|---|---|---|---|---|---|
 | `GET /api/tributario/clientes` | 401 | 403 | 403 | Sí | Estudio: todos (lista todos los clientes) | `ClienteControllerTest`; `TokenEntreServiciosTest` |
 | `POST /api/tributario/clientes` | 401 | 403 | 403 | Sí | Estudio: todos | `ClienteControllerTest` (contador, admin, `CLIENTE_MYPE`, sin rol y sin token); `ManejoDeErroresHttpTest` |
-| `GET /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** (regla general) |
-| `PUT /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `GET /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos (devuelve usuario y clave SOL descifrados) | **Sin prueba de rol propia** |
-| `PUT /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `GET /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `PUT /api/tributario/clientes/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `GET /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos (devuelve usuario y clave SOL descifrados) | `PermisosRutasDelEstudioTest` |
+| `PUT /api/tributario/clientes/{id}/sol` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `POST /api/tributario/clientes/{id}/trabajadores` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `POST /api/tributario/clientes/{id}/documentos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `PUT /api/tributario/clientes/{id}/acuerdo` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
 | `GET /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
 | `GET /api/tributario/clientes/{id}/socios/resumen` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
-| `PUT /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `POST /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `PUT /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `POST /api/tributario/clientes/{id}/socios` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `PATCH /api/tributario/clientes/{id}/socios/{socioId}/aporte` | 401 | 403 | 403 | Sí | Estudio: todos | `SocioControllerTest.soloElEstudioAccedeALosSocios` |
-| `GET /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `POST /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
-| `DELETE /api/tributario/clientes/{id}/activos/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | **Sin prueba de rol propia** |
+| `GET /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `POST /api/tributario/clientes/{id}/activos` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
+| `DELETE /api/tributario/clientes/{id}/activos/{id}` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosRutasDelEstudioTest` |
 | `POST /api/tributario/obligaciones` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest`; `altaDeObligacionRespetaRolesExistentes` |
 | `POST /api/tributario/obligaciones/programacion` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest`; `ProgramacionMensualControllerTest` (401) |
 | `PATCH /api/tributario/obligaciones/{id}/declaracion` | 401 | 403 | 403 | Sí | Estudio: todos | `PermisosPorRolTest` |
@@ -99,31 +100,27 @@ Leyenda de la columna **¿Distingue entre clientes?**
 «Sí» significa que la seguridad deja pasar la petición; lo que responda después (200, 201, 400, 415…) es del controlador y no es una prueba
 del contrato de cada ruta. En la ruta no listada, el 404 también viene después de pasar la seguridad.
 
-## Por qué hay tarea 94
+## Tarea 94: un cliente nunca ve datos de otro
 
-La prueba `PermisosPorRolTest.clienteNuncaVeDatosDeOtroCliente` está desactivada (`@Disabled`) y la tarea 94 sigue pendiente porque hoy
-**no hay con qué comparar** el cliente del token con el cliente de la ruta:
+Resuelta en `ms-tributario` con el claim `clienteId` del JWT:
 
-1. **El JWT no lleva cliente.** `JwtProvider.generate(username, roles)` solo escribe `sub` y `roles`; `JwtFilter` de `ms-tributario` arma la
-   autenticación con esos dos datos.
-2. **Las cuentas no están ligadas a un cliente.** `auth_schema.usuarios` no tiene `cliente_id`, y cada servicio solo accede a su esquema,
-   así que `ms-tributario` no puede preguntarle a `ms-auth` qué cliente corresponde a un usuario.
-3. **El rol y las cuentas de cliente no existen.** `ms-auth` no siembra `CLIENTE_MYPE` ni tiene un endpoint para crear cuentas (HU-37).
+1. `auth_schema.usuarios.cliente_id` (BIGINT, sin FK porque la tabla `clientes` está en `tributario_schema`) y el rol `CLIENTE_MYPE` se
+   siembran en `ms-auth`, en bases nuevas y existentes. `JwtProvider.generate` agrega `clienteId` solo cuando la cuenta lo tiene.
+2. `JwtFilter` guarda el `clienteId` en la autenticación y `AccesoCliente.exigir` se llama al inicio de las seis rutas de lectura del
+   cliente. El estudio (`CONTADOR`, `ADMIN`) ve todos los clientes.
+3. Se cierra por defecto: un `CLIENTE_MYPE` sin claim `clienteId` recibe 403 en las seis rutas.
 
-Las seis rutas marcadas **⚠** son exactamente las que dejan entrar a `CLIENTE_MYPE`. **Hoy el riesgo es potencial:** no existen cuentas de ese rol.
-Pero un token con rol `CLIENTE_MYPE` firmado con el secreto compartido sí pasa (`TokenEntreServiciosTest` lo usa), y en cuanto HU-37 cree cuentas
-de cliente, cada una podría leer los datos de cualquier cliente. Por eso `HU-38.md` dice que no debe salir a producción sin la tarea 94.
-La propuesta de solución (claim `clienteId` en el token) está en [`sprint1-jeanpierre/HU-38.md`](sprint1-jeanpierre/HU-38.md).
+Pruebas: `PermisosPorRolTest.clienteNuncaVeDatosDeOtroCliente` y las de sin claim, `AccesoClienteTest`, `JwtProviderTest`, `ContratoTokenTest`,
+`AuthServiceTest` y `ClienteMypeEsquemaPostgresTest`. **Falta HU-37:** el alta de cuentas de cliente; hasta entonces no hay cuentas reales con ese rol.
 
 ## Otras observaciones
 
 - **El estudio ve todos los clientes.** No hay cartera por contador: cualquier `CONTADOR` o `ADMIN` lee y modifica cualquier cliente
   (`ClienteService` lista todos). Es el diseño actual; si cada contador debe ver solo su cartera, es otra decisión y otra tarea.
-- **Rutas del estudio sin prueba de rol propia:** `GET` y `PUT /clientes/{id}`, las dos de `/sol`, `PUT` y `POST` de `/socios`, y las tres
-  de `/activos`. Hoy las cubre la regla general, comprobada en la medición, pero ninguna prueba lo fija. Una prueba que recorra todas las rutas
-  de los controladores contra los cuatro roles cerraría el hueco.
-- **`GET /clientes/{id}/sol` devuelve la clave SOL descifrada** al estudio. Es solo del estudio, pero es la ruta más sensible y no tiene prueba
-  de rol propia.
+- **Rutas del estudio con prueba de rol:** `GET` y `PUT /clientes/{id}`, las dos de `/sol`, `PUT` y `POST` de `/socios`, y las tres
+  de `/activos` las cubre `PermisosRutasDelEstudioTest` (tarea 93): sin token 401, sin rol y `CLIENTE_MYPE` 403, `CONTADOR` y `ADMIN` pasan.
+- **`GET /clientes/{id}/sol` devuelve la clave SOL descifrada** al estudio. Es solo del estudio y es la ruta más sensible; su rol lo fija
+  `PermisosRutasDelEstudioTest`.
 - **No existe cierre de sesión en el servidor** (`POST /api/auth/logout` responde 404): hoy el token se descarta solo en el navegador.
 
 ## Qué falta para cerrar la tarea 91
