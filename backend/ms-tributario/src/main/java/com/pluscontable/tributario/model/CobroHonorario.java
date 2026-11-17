@@ -38,4 +38,12 @@ public class CobroHonorario {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EstadoCobro estado = EstadoCobro.PENDIENTE;
+
+    /** HU-29: la suma de los pagos registrados del cobro. */
+    @Column(nullable = false)
+    private BigDecimal pagado = BigDecimal.ZERO;
+
+    public BigDecimal saldo() {
+        return monto.subtract(pagado);
+    }
 }

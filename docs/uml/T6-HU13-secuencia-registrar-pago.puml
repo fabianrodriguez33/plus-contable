@@ -1,26 +1,29 @@
 @startuml
-title T6 · HU-13 · Secuencia: registrar un pago con su comprobante y consultar saldo y acumulado (diseño previo, corregido)
+title T6 · HU-13 · Secuencia: registrar un pago con su número de constancia y consultar saldo y acumulado (diseño actualizado)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 autonumber
 
 actor "Contador" as U
-participant "frontend-web\n(formulario de constancia,\nobligacionService)" as FE
-participant "ObligacionController" as OC
+participant "frontend-web\n(PagoPage, pagoService)" as FE
+participant "PagoObligacionController" as OC
 participant "PagoObligacionService" as PS
-participant "ParametroSistemaService" as PM
-participant "AlmacenComprobantes" as AL
 participant "ObligacionRepository" as OR
 participant "PagoObligacionRepository" as PR
 database "tributario_schema" as DB
 
 == Registrar un pago ==
 U -> FE : abre una obligación declarada y elige "Registrar pago"
-U -> FE : indica fecha, monto y número de constancia y adjunta el comprobante (PDF)
-FE -> OC : POST /api/tributario/obligaciones/{id}/pagos (multipart: datos y archivo)\nAuthorization: Bearer <JWT>
-OC -> PS : registrar(obligacionId, dto, archivo)
-PS -> OR : findById(obligacionId)
+FE -> OC : GET /api/tributario/obligaciones/{id}/pagos
+OC -> PS : listar(obligacionId)
+PS -> PR : findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
+PS --> FE : 200 lista de pagos (para el saldo y las constancias ya registradas)
+U -> FE : indica fecha, monto y número de constancia
+FE -> FE : valida lo mismo que el servidor (fecha no futura, monto > 0, hasta 2 decimales y no mayor que el saldo, constancia obligatoria, hasta 30 y no repetida)
+FE -> OC : POST /api/tributario/obligaciones/{id}/pagos (formulario multipart: fechaPago, montoPagado, numeroConstancia; sin archivo)\nAuthorization: Bearer <JWT>
+OC -> PS : registrar(obligacionId, dto, archivo = nulo)
+PS -> OR : buscarParaActualizar(obligacionId)  (bloquea la obligación mientras suma)
 alt la obligación no existe
   PS --> FE : 404 "Obligación no encontrada"
 end
@@ -31,26 +34,18 @@ alt el estado es PAGADO
   PS --> FE : 400 "La obligación ya está pagada"
 end
 PS -> PR : sumaPagada(obligacionId)
-PS -> PM : entero("pagos.archivo_max_mb", 10)
 PS -> PS : valida y reúne los errores
 note right
-  Fecha de pago: obligatoria y no futura. Monto: obligatorio y mayor que cero.
-  Número de constancia: obligatorio, hasta 30 caracteres.
-  Archivo: obligatorio, PDF (por su firma) y no mayor al máximo del parámetro.
-  Supuesto: el monto no puede superar el saldo (monto determinado menos lo ya pagado).
+  Fecha de pago: obligatoria y no futura. Monto: obligatorio, mayor que cero y no mayor que el saldo (monto determinado menos lo ya pagado).
+  Número de constancia: obligatorio, hasta 30 caracteres y no repetido en la obligación.
+  Archivo: opcional. Si llega, debe ser un PDF (por su firma) y no mayor al máximo; la pantalla no lo envía.
 end note
 alt faltan o son inválidos
   PS --> FE : 400 "Faltan o son inválidos: ..."
 else datos válidos
-  PS -> AL : guardar(clienteId, archivo)
-  AL --> PS : ruta del archivo
   PS -> PS : acumulado = suma anterior + monto; saldo = monto determinado - acumulado
-  PS -> PR : save(pago con archivo, acumulado y saldo después de este pago)
+  PS -> PR : save(pago con su constancia, el acumulado y el saldo después de este pago)
   PR -> DB : INSERT pagos_obligacion
-  alt el guardado falla
-    PS -> AL : borrar(ruta)  (sin registro el archivo quedaría huérfano)
-    PS --> FE : 500
-  end
   alt acumulado igual al monto determinado
     PS -> PS : estado = PAGADO
   else acumulado menor al monto determinado
@@ -60,27 +55,28 @@ else datos válidos
   OR -> DB : UPDATE obligaciones
   PS --> OC : ObligacionDto {estado, montoAcumuladoPagado, saldo, numeroPagos}
   OC --> FE : 201
-  FE --> U : muestra el estado, el acumulado y el saldo
+  FE -> OC : GET /api/tributario/obligaciones/{id}/pagos  (vuelve a leer la obligación y sus pagos)
+  FE --> U : muestra el estado, el acumulado, el saldo y la lista de constancias
 end
 
-== Consultar los pagos y el comprobante ==
-U -> FE : abre el detalle de pagos
+== Consultar los pagos y sus constancias ==
+U -> FE : abre la pantalla de pagos de la obligación
 FE -> OC : GET /api/tributario/obligaciones/{id}/pagos
 OC -> PS : listar(obligacionId)
+PS -> OR : existsById(obligacionId)
+alt la obligación no existe
+  PS --> FE : 404 "Obligación no encontrada"
+end
 PS -> PR : findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
 PR -> DB : SELECT pagos_obligacion
-PS --> FE : 200 PagosObligacionDto (monto determinado, acumulado, saldo y cada pago con su acumulado y saldo)
-U -> FE : abre el comprobante de un pago
-FE -> OC : GET /api/tributario/obligaciones/{id}/pagos/{pagoId}/comprobante
-OC -> PS : comprobante(obligacionId, pagoId)
-PS -> AL : leer(ruta)
-PS --> FE : 200 PDF (o 404 "Comprobante no encontrado")
-FE --> U : muestra las constancias y sus archivos
+PS --> FE : 200 List<PagoDto> (id, fecha, monto, constancia, acumulado y saldo después de cada pago)
+FE --> U : muestra las constancias y el saldo
 
 note over PS
-  Supuesto (decisión de Beto, 06/11): comprobante con archivo adjunto y varios pagos parciales.
-  Supuesto: solo el estudio (CONTADOR, ADMIN) registra y consulta; el acceso del cliente MYPE lo definen HU-14 y HU-32.
+  Decisión de Beto (10/11, alcance reducido): el comprobante es el número de constancia; sin carga de archivos ni almacenamiento adicional.
+  Decisión de Beto (06/11): varios pagos parciales con saldo y acumulado; estados PAGO_PARCIAL y PAGADO.
+  Solo el estudio (CONTADOR, ADMIN) registra y consulta: sin sesión 401 y un cliente MYPE 403; el acceso del cliente lo definen HU-14 y HU-32.
   No se verifica el pago en SUNAT ni en el banco (acordado con Beto).
 end note
-footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-13, el código y la base de develop. Código existente: ObligacionController, ObligacionRepository, SecurityConfig; el almacenamiento sigue ExpedienteService.archivar (HU-04)
+footer Diseño actualizado tras decisión de Beto del 10/11 · Base: criterios de aceptación de HU-13, el código de develop y el PR #56 (comprobante = número de constancia, sin carga de archivos; consulta GET .../pagos)
 @enduml

@@ -68,6 +68,42 @@ describe('CalendarioPage', () => {
     expect(consulta).toHaveBeenCalledWith(2, { desde: '2026-11-01', hasta: '2026-11-30' })
   })
 
+  it('las obligaciones declaradas o con pago parcial ofrecen «Registrar pago» (HU-13); las pendientes y las pagadas no', async () => {
+    consulta.mockImplementation(async (clienteId) => clienteId === 1 ? [
+      it_(31, 1, '2026-11-12', {}, 'DECLARADO', 'IGV'),
+      it_(32, 1, '2026-11-12', {}, 'PAGO_PARCIAL', 'RENTA'),
+      it_(33, 1, '2026-11-12', {}, 'PENDIENTE', 'ESSALUD'),
+      it_(34, 1, '2026-11-12', {}, 'PAGADO', 'AFP'),
+    ] : [])
+    pantalla()
+
+    const dia = await screen.findByRole('region', { name: '2026-11-12' })
+    const enlaces = within(dia).getAllByRole('link', { name: 'Registrar pago' })
+    expect(enlaces.map((l) => l.getAttribute('href')).sort()).toEqual(['/obligaciones/31/pago', '/obligaciones/32/pago'])
+  })
+
+  it('una obligación con pago parcial lo muestra con su etiqueta y las demás no', async () => {
+    consulta.mockImplementation(async (clienteId) => clienteId === 1 ? [
+      it_(31, 1, '2026-11-12', {}, 'DECLARADO', 'IGV'),
+      it_(32, 1, '2026-11-12', {}, 'PAGO_PARCIAL', 'RENTA'),
+    ] : [])
+    pantalla()
+
+    const dia = await screen.findByRole('region', { name: '2026-11-12' })
+    expect(within(dia).getAllByText('Pago parcial')).toHaveLength(1)
+  })
+
+  it('una obligación PAGADA con la fecha pasada sale «Pagada», no «Vencida», y no ofrece pagar (corrección de #43)', async () => {
+    consulta.mockImplementation(async (clienteId) => clienteId === 1
+      ? [it_(34, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PAGADO', 'AFP')] : [])
+    pantalla()
+
+    const dia = await screen.findByRole('region', { name: '2026-11-02' })
+    expect(within(dia).getByText('Pagada')).toBeTruthy()
+    expect(within(dia).queryByText(/Vencida/)).toBeNull()
+    expect(within(dia).queryByRole('link', { name: 'Registrar pago' })).toBeNull()
+  })
+
   it('"Hoy" consulta solo el día de hoy y "Semana" de lunes a domingo', async () => {
     pantalla()
     await screen.findByRole('region', { name: '2026-11-05' })

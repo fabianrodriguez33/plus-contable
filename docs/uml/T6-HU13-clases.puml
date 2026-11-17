@@ -1,39 +1,27 @@
 @startuml
 !pragma layout smetana
 skinparam classAttributeIconSize 0
-title T6 · HU-13 · Clases del registro de la constancia de pago, con archivo adjunto y varios pagos parciales (diseño previo, corregido)
+title T6 · HU-13 · Clases del registro de la constancia de pago (comprobante = número) y varios pagos parciales (diseño actualizado)
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
 
+class PagoObligacionController <<existe>> {
+  +registrar(obligacionId, fechaPago, montoPagado, numeroConstancia, archivo?): ObligacionDto
+  +listar(obligacionId): List<PagoDto>  <<nuevo>>
+}
 class ObligacionController <<existe>> {
   +buscar(id): ObligacionDto
   +declarar(id, dto): ObligacionDto
-  +registrarPago(id, dto, archivo): ObligacionDto  <<nuevo>>
-  +listarPagos(id): PagosObligacionDto  <<nuevo>>
-  +descargarComprobante(id, pagoId): byte[]  <<nuevo>>
 }
-class ObligacionService <<existe>> {
-  +buscar(obligacionId): ObligacionDto
-  +declarar(obligacionId, dto): ObligacionDto
+class PagoObligacionService <<existe>> {
+  +registrar(obligacionId, dto, archivo?): ObligacionDto
+  +listar(obligacionId): List<PagoDto>  <<nuevo>>
+  -validar(obligacionId, dto, archivo?, saldo): void
 }
-class PagoObligacionService <<nuevo>> {
-  +registrar(obligacionId, dto, archivo): ObligacionDto
-  +listar(obligacionId): PagosObligacionDto
-  +comprobante(obligacionId, pagoId): ArchivoDescargable
-  -validar(dto, archivo, obligacion, saldo): void
-  -acumulado(obligacionId): BigDecimal
-}
-class AlmacenComprobantes <<nuevo>> {
+class AlmacenComprobantes <<existe; opcional>> {
   +guardar(clienteId, archivo): RutaAlmacenada
-  +leer(ruta): byte[]
   +borrar(ruta): void
-}
-class ParametroSistemaService <<definido en HU-12>> {
-  +entero(clave, porDefecto): int
-}
-class AccesoCliente <<existe>> {
-  +{static} exigir(clienteIdPedido): void
 }
 class Obligacion <<cambia>> {
   id: Long
@@ -58,13 +46,13 @@ class PagoObligacion <<nuevo>> {
   fechaPago: LocalDate
   montoPagado: BigDecimal
   numeroConstancia: String
-  nombreArchivo: String
-  contentType: String
-  tamanoBytes: long
-  rutaAlmacenamiento: String
   acumuladoDespues: BigDecimal
   saldoDespues: BigDecimal
   registradoEn: LocalDateTime
+  nombreArchivo: String  <<opcional, nulo>>
+  contentType: String  <<opcional, nulo>>
+  tamanoBytes: Long  <<opcional, nulo>>
+  rutaAlmacenamiento: String  <<opcional, nulo>>
 }
 class PagoEntradaDto <<record, nuevo>> {
   fechaPago: LocalDate
@@ -73,21 +61,12 @@ class PagoEntradaDto <<record, nuevo>> {
 }
 class PagoDto <<record, nuevo>> {
   id: Long
-  obligacionId: Long
   fechaPago: LocalDate
   montoPagado: BigDecimal
   numeroConstancia: String
-  nombreArchivo: String
   acumuladoDespues: BigDecimal
   saldoDespues: BigDecimal
   +{static} from(p): PagoDto
-}
-class PagosObligacionDto <<record, nuevo>> {
-  obligacionId: Long
-  montoDeterminado: BigDecimal
-  acumulado: BigDecimal
-  saldo: BigDecimal
-  pagos: List<PagoDto>
 }
 class ObligacionDto <<record, cambia>> {
   id: Long
@@ -98,42 +77,49 @@ class ObligacionDto <<record, cambia>> {
   numeroPagos: int  <<nuevo>>
 }
 interface ObligacionRepository <<existe>> {
-  findByClienteIdOrderByPeriodoDesc(clienteId)
+  buscarParaActualizar(id)
+  existsById(id)
 }
 interface PagoObligacionRepository <<nuevo>> {
   findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
   sumaPagada(obligacionId): BigDecimal
+  existsByObligacionIdAndNumeroConstancia(obligacionId, numero): boolean
+}
+class PagoPage <<frontend-web, nuevo>> {
+  ruta: /obligaciones/:id/pago
+  validarPago(datos, saldo, hoy, pagos)
+  resumenDePagos(obligacion, pagos)
 }
 
-ObligacionController --> ObligacionService
-ObligacionController --> PagoObligacionService
-ObligacionController ..> AccesoCliente : exigir(clienteId de la obligación) al consultar
-ObligacionController ..> PagoEntradaDto
-ObligacionController ..> PagosObligacionDto
+PagoPage ..> PagoObligacionController : POST (formulario sin archivo) y GET
+PagoObligacionController --> PagoObligacionService
+PagoObligacionController ..> PagoEntradaDto
 PagoObligacionService --> ObligacionRepository
 PagoObligacionService --> PagoObligacionRepository
-PagoObligacionService --> AlmacenComprobantes
-PagoObligacionService --> ParametroSistemaService : pagos.archivo_max_mb
+PagoObligacionService ..> AlmacenComprobantes : solo si llega un archivo
 PagoObligacionService ..> ObligacionDto
-PagosObligacionDto o-- PagoDto
+PagoObligacionService ..> PagoDto
 ObligacionRepository ..> Obligacion
 PagoObligacionRepository ..> PagoObligacion
 Obligacion --> Estado
 PagoObligacion "0..*" --> "1" Obligacion : obligacion_id
 
 note bottom of PagoObligacionService
-  registrar(): solo sobre una obligación DECLARADO o PAGO_PARCIAL (criterio 3). Cada pago suma al acumulado; con el acumulado igual al monto
-  determinado pasa a PAGADO (criterio 1); si es menor, queda PAGO_PARCIAL y se informa el saldo (criterio 2). Puede haber varios pagos parciales.
-  La constancia lleva su archivo adjunto y queda asociada a la obligación y se puede consultar (criterio 4).
-  El sistema no verifica el pago en SUNAT ni en el banco (acordado con Beto).
+  registrar(): solo sobre una obligación DECLARADO o PAGO_PARCIAL (criterio 3). Cada pago suma al acumulado y bloquea la obligación mientras suma. Con el
+  acumulado igual al monto determinado pasa a PAGADO (criterio 1) y si es menor queda PAGO_PARCIAL con su saldo (criterio 2). Puede haber varios pagos parciales.
+  La constancia queda asociada a la obligación y se puede consultar con listar() (criterio 4). No se verifica el pago en SUNAT ni en el banco (acordado con Beto).
 end note
 note right of PagoEntradaDto
-  Supuesto (decisión de Beto, 06/11): el comprobante se registra con archivo adjunto, además del número de constancia (obligatorio, hasta 30 caracteres).
-  Supuesto: el archivo es obligatorio y se trata como el de HU-04: PDF validado por su firma, nombre seguro, carpeta por cliente.
-  Supuesto (decisión de Beto, 06/11): los valores (porcentajes, UIT, vencimientos y plazos) se editan desde el sistema, sin tocar código; se guardan en parametros_sistema (definido en HU-12). El tamaño máximo es pagos.archivo_max_mb (10 por defecto, como HU-04).
-  Supuesto (decisión de Beto, 06/11): una obligación admite varios pagos parciales; saldo = monto determinado menos el acumulado de pagos.
-  Supuesto: no se admite un pago mayor que el saldo; cada pago guarda el acumulado y el saldo que quedaron después de él.
+  Decisión de Beto (10/11, alcance reducido): el comprobante es el número de constancia (obligatorio, hasta 30 caracteres, único en la obligación).
+  No hay carga de archivos ni almacenamiento adicional: la pantalla no envía archivo. El servidor conserva la carga de un PDF como opcional (si llega,
+  se valida y se guarda como en HU-04) y las columnas del archivo admiten nulo.
+  Decisión de Beto (06/11): una obligación admite varios pagos parciales; saldo = monto determinado menos el acumulado.
+  Supuesto: no se admite un pago mayor que el saldo, ni fecha futura, ni más de dos decimales en el monto en la pantalla.
   Supuesto: solo el estudio registra y consulta los pagos; el acceso del cliente MYPE lo definen HU-14 y HU-32.
 end note
-footer Diseño previo, 06/11/2026 · corregido el 07/11/2026 con las respuestas de Beto del 06/11 · Base: criterios de aceptación de HU-13, el código y la base de develop. Código existente: ObligacionController, ObligacionService, DeclaracionDto, ObligacionDto, model.Obligacion, AccesoCliente; el almacenamiento sigue ExpedienteService (HU-04)
+note right of PagoPage
+  Una obligación pagada o con la fecha pasada se muestra «Pagada» o «Declarada», nunca «Vencida» (corrección de #43). Con pago parcial todavía se
+  debe saldo y sigue su fecha.
+end note
+footer Diseño actualizado tras decisión de Beto del 10/11 · Base: criterios de aceptación de HU-13, el código de develop y el PR #56 (comprobante = número de constancia, sin carga de archivos; consulta GET .../pagos)
 @enduml

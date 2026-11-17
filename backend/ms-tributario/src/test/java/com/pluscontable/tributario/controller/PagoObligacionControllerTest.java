@@ -98,13 +98,53 @@ class PagoObligacionControllerTest {
     }
 
     @Test
-    void sinArchivoElServicioRechazaConUn400DeTodosLosErrores() throws Exception {
-        when(service.registrar(eq(3L), any(), eq(null)))
-                .thenThrow(new ValidationException("Faltan o son inválidos: archivo (el comprobante es obligatorio)"));
+    void sinArchivoElContadorRegistraIgualYAlServicioLeLlegaElArchivoNulo() throws Exception {
+        when(service.registrar(eq(3L), any(), eq(null))).thenReturn(respuesta());
+
+        mvc.perform(pago(bearer("CONTADOR"), false)).andExpect(status().isCreated()).andExpect(jsonPath("$.estado").value("PAGO_PARCIAL"));
+
+        verify(service).registrar(eq(3L), any(), eq(null));
+    }
+
+    @Test
+    void losErroresDelServicioSeDevuelvenComo400ConTodoElMensaje() throws Exception {
+        when(service.registrar(eq(3L), any(), any()))
+                .thenThrow(new ValidationException("Faltan o son inválidos: numeroConstancia"));
 
         mvc.perform(pago(bearer("CONTADOR"), false))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.mensaje").value("Faltan o son inválidos: archivo (el comprobante es obligatorio)"));
+                .andExpect(jsonPath("$.mensaje").value("Faltan o son inválidos: numeroConstancia"));
+    }
+
+    // ---- consultar los pagos de la obligación
+
+    @Test
+    void elContadorYElAdminConsultanLosPagosConSuConstanciaAcumuladoYSaldo() throws Exception {
+        when(service.listar(3L)).thenReturn(List.of(new com.pluscontable.tributario.dto.PagoDto(1L, LocalDate.of(2026, 11, 8),
+                new BigDecimal("400.00"), "C-001", new BigDecimal("400.00"), new BigDecimal("600.00"))));
+
+        for (String rol : new String[] {"CONTADOR", "ADMIN"}) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(rol)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].numeroConstancia").value("C-001"))
+                    .andExpect(jsonPath("$[0].fechaPago").value("2026-11-08"))
+                    .andExpect(jsonPath("$[0].montoPagado").value(400.00))
+                    .andExpect(jsonPath("$[0].acumuladoDespues").value(400.00))
+                    .andExpect(jsonPath("$[0].saldoDespues").value(600.00));
+        }
+    }
+
+    @Test
+    void consultarLosPagosSinSesionDa401ConUnClienteDa403YSiLaObligacionNoExisteDa404() throws Exception {
+        var get = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(RUTA);
+        mvc.perform(get).andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer("CLIENTE_MYPE")))
+                .andExpect(status().isForbidden());
+        verify(service, never()).listar(any());
+
+        when(service.listar(3L)).thenThrow(new EntityNotFoundException("Obligación no encontrada"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer("CONTADOR")))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.mensaje").value("Obligación no encontrada"));
     }
 
     @Test

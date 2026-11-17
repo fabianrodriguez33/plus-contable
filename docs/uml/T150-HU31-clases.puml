@@ -1,0 +1,78 @@
+@startuml
+!pragma layout smetana
+title T150 · HU-31 · Clases de la identificación de clientes morosos
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class MorosoController <<nuevo>> {
+  +listar(): List<MorosoDto>
+}
+
+class MorosoService <<nuevo>> {
+  ~ZONA = America/Lima
+  -clock: Clock (zona de Lima)
+  +listar(): List<MorosoDto>
+}
+
+class MorosoDto <<record, nuevo>> {
+  clienteId: Long
+  ruc: String
+  razonSocial: String
+  montoVencido: BigDecimal
+  cobrosVencidos: long
+  vencidoDesde: LocalDate
+  diasAtraso: long
+}
+
+class DeudaVencidaDto <<record, nuevo>> {
+  clienteId: Long
+  ruc: String
+  razonSocial: String
+  montoVencido: BigDecimal
+  cobrosVencidos: Long
+  vencidoDesde: LocalDate
+}
+
+interface CobroHonorarioRepository <<existe, ampliado>> {
+  deudasVencidas(conSaldo, hoy): List<DeudaVencidaDto>
+}
+
+class CobroHonorarioService <<existe>> {
+  ~CON_SALDO = [PENDIENTE, PAGO_PARCIAL]
+}
+
+class CobroHonorario <<existe>> {
+  clienteId, fechaCobro, monto, pagado, estado
+}
+
+class Cliente <<existe>> {
+  id, ruc, razonSocial, activo
+}
+
+MorosoController --> MorosoService
+MorosoController ..> MorosoDto
+MorosoService --> CobroHonorarioRepository
+MorosoService ..> CobroHonorarioService : CON_SALDO
+CobroHonorarioRepository ..> DeudaVencidaDto
+CobroHonorarioRepository ..> CobroHonorario
+CobroHonorarioRepository ..> Cliente
+MorosoService ..> MorosoDto : diasAtraso = días entre\nvencidoDesde y hoy
+
+note bottom of MorosoService
+  Moroso = cliente con al menos un cobro vencido: fecha_cobro anterior a hoy y saldo sin pagar
+  (PENDIENTE o PAGO_PARCIAL). Un cobro que vence hoy todavía no está vencido; PAGADO no cuenta.
+  montoVencido = suma de (monto - pagado) de sus cobros vencidos (criterio 1); un cliente al día no aparece (criterio 2).
+  «Hoy» es el de Lima (America/Lima), aunque el servidor corra en UTC.
+  Orden: más días de atraso primero; a igual atraso, mayor monto. Incluye clientes inactivos: su deuda sigue vigente.
+end note
+
+note right of MorosoController
+  Criterio 3: solo el estudio (CONTADOR, ADMIN); sin token 401,
+  CLIENTE_MYPE o token sin rol 403. «Contador titular» se tomó
+  como el estudio, igual que en HU-23: pendiente de confirmar con Beto.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-31-clientes-morosos. Código: MorosoController, MorosoService, MorosoDto, DeudaVencidaDto, CobroHonorarioRepository.deudasVencidas, CobroHonorarioService.CON_SALDO, SecurityConfig
+@enduml

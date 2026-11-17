@@ -1,0 +1,135 @@
+@startuml
+!pragma layout smetana
+title T224 · HU-41 · Clases del restablecimiento de las credenciales de acceso
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class RestablecimientoController <<nuevo>> {
+  +solicitar(cuerpo, http): Map<String, String>
+  +pendientes(): List<SolicitudPendienteDto>
+}
+
+class RestablecimientoService <<nuevo>> {
+  +MENSAJE_SOLICITUD: String
+  +MENSAJE_DEMASIADOS: String
+  -maximoPorIp = 5
+  -maximoPorCorreo = 3
+  -ventanaMinutos = 60
+  -transaccion: TransactionTemplate
+  -segundoPlano: Executor (applicationTaskExecutor)
+  +solicitar(correo, ip): String
+  ~registrarSiCorresponde(correo, ip)
+  +pendientes(): List<SolicitudPendienteDto>
+  ~atender(usuarioId, quien)
+  ~huella(correo): String <<SHA-256>>
+}
+
+class IntentoRestablecimiento <<nuevo>> {
+  id: Long
+  correoHuella: String
+  ip: String
+  fecha: LocalDateTime
+}
+
+interface IntentoRestablecimientoRepository <<nuevo>> {
+  countByIpAndFechaAfter(ip, desde)
+  countByCorreoHuellaAndFechaAfter(huella, desde)
+  borrarAnterioresA(antes)
+}
+
+class CuentaClienteController <<existe>> {
+  +restablecer(clienteId, autenticacion, http): CuentaClienteResponse
+  +cambiarPassword(cuerpo, autenticacion, http): LoginResponse
+}
+
+class CuentaClienteService <<existe, ampliado>> {
+  +restablecer(clienteId, restablecedor, ip): CuentaClienteResponse
+}
+
+class AuthService <<existe>> {
+  +login(...): LoginResponse
+  +cambiarPassword(username, sesion, nueva, ip): LoginResponse
+}
+
+class SolicitudRestablecimiento <<nuevo>> {
+  id: Long
+  usuarioId: Long
+  solicitadaEn: LocalDateTime
+  ip: String
+  atendidaEn: LocalDateTime
+  atendidaPor: String
+  +atender(quien)
+}
+
+class Usuario <<existe>> {
+  id: Long
+  username: String
+  clienteId: Long
+  activo: boolean
+  passwordHash: String
+  debeCambiarPassword: boolean
+  sesionVersion: int
+}
+
+class SolicitarRestablecimientoRequest <<record, nuevo>> {
+  correo: String
+}
+
+class SolicitudPendienteDto <<record, nuevo>> {
+  clienteId: Long
+  correo: String
+  solicitadaEn: LocalDateTime
+}
+
+interface SolicitudRestablecimientoRepository <<nuevo>> {
+  findByUsuarioIdAndAtendidaEnIsNull(usuarioId)
+  pendientes(): List<SolicitudPendienteDto>
+}
+
+interface UsuarioRepository <<existe>> {
+  findByUsername(username)
+  findByClienteId(clienteId)
+}
+
+class BitacoraSeguridad <<existe>> {
+  evento: RESTABLECIMIENTO_SOLICITADO | CUENTA_CLIENTE_RESTABLECIDA | ...
+}
+
+RestablecimientoController --> RestablecimientoService
+RestablecimientoController ..> SolicitarRestablecimientoRequest
+RestablecimientoController ..> SolicitudPendienteDto
+RestablecimientoService --> UsuarioRepository
+RestablecimientoService --> SolicitudRestablecimientoRepository
+RestablecimientoService --> IntentoRestablecimientoRepository
+IntentoRestablecimientoRepository ..> IntentoRestablecimiento
+RestablecimientoService ..> BitacoraSeguridad
+CuentaClienteController --> CuentaClienteService
+CuentaClienteController --> AuthService
+CuentaClienteService --> RestablecimientoService : atender(usuarioId, quien)
+SolicitudRestablecimientoRepository ..> SolicitudRestablecimiento
+SolicitudRestablecimiento "0..*" --> "1" Usuario : usuario_id
+
+note bottom of RestablecimientoService
+  solicitar(): normaliza el correo (400 si está vacío o pasa de 60); 429 si la IP ya hizo 5 pedidos o el correo 3 en
+  los últimos 60 minutos; guarda un intento con la huella del correo y responde MENSAJE_SOLICITUD. Antes de responder
+  hace lo mismo exista o no la cuenta (criterio 2): no la busca.
+  registrarSiCorresponde() (en segundo plano): solo con una cuenta de cliente activa y sin otra pendiente guarda la
+  solicitud y su bitácora en una sola transacción (criterio 1).
+  atender(): la llama CuentaClienteService.restablecer dentro de su transacción; marca quién y cuándo.
+end note
+
+note right of IntentoRestablecimiento
+  Revisión de Julio (#55): uno por pedido, exista o no la cuenta.
+  Del correo solo la huella SHA-256; se borran pasado un día.
+end note
+
+note right of CuentaClienteService
+  restablecer() (HU-37): genera otra temporal de 48 horas, cambia el hash (la contraseña anterior
+  deja de servir, criterio 3), exige el cambio y sube sesionVersion. Ahora también atiende la solicitud.
+  Decisión del 11/11: el sistema no envía correos; el «medio» es la temporal que entrega el estudio.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-41-restablecer-credenciales. Código: RestablecimientoController, RestablecimientoService, CuentaClienteService.restablecer, IntentoRestablecimiento, IntentoRestablecimientoRepository, SolicitudRestablecimiento, SolicitudRestablecimientoRepository, SolicitarRestablecimientoRequest, SolicitudPendienteDto, SecurityConfig
+@enduml

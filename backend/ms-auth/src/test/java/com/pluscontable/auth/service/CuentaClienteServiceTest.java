@@ -50,9 +50,10 @@ class CuentaClienteServiceTest {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final ClienteTributarioClient tributario = mock(ClienteTributarioClient.class);
     private final GeneradorPassword generador = mock(GeneradorPassword.class);
+    private final RestablecimientoService restablecimientos = mock(RestablecimientoService.class);
     private final TransaccionDePrueba tm = new TransaccionDePrueba();
     private final CuentaClienteService service =
-            new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 48, new TransactionTemplate(tm));
+            new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 48, new TransactionTemplate(tm), restablecimientos);
     private boolean consultaDentroDeTransaccion = true;
     private boolean guardoDentroDeTransaccion = false;
 
@@ -167,6 +168,15 @@ class CuentaClienteServiceTest {
     }
 
     @Test
+    void restablecerDejaAtendidaLaSolicitudDelClienteHu41() {
+        cuentaExistente();
+
+        restablecer();
+
+        verify(restablecimientos).atender(9L, "ana");
+    }
+
+    @Test
     void restablecerGuardaSoloElHashDeLaNuevaYLaAnteriorDejaDeServir() {
         Usuario u = cuentaExistente();
 
@@ -270,7 +280,7 @@ class CuentaClienteServiceTest {
     @Test
     void laVigenciaDelRestablecimientoSeConfigura() {
         Usuario u = cuentaExistente();
-        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm));
+        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm), restablecimientos);
         LocalDateTime antes = LocalDateTime.now();
 
         de72.restablecer(CLIENTE, "ana", "10.0.0.1");
@@ -329,7 +339,7 @@ class CuentaClienteServiceTest {
 
     @Test
     void laVigenciaDeLaTemporalSeConfigura() {
-        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm));
+        CuentaClienteService de72 = new CuentaClienteService(usuarios, roles, bitacora, encoder, tributario, generador, 72, new TransactionTemplate(tm), restablecimientos);
         LocalDateTime antes = LocalDateTime.now();
         de72.crear(CLIENTE, "contacto@acme.pe", TOKEN, "ana", "10.0.0.1");
 

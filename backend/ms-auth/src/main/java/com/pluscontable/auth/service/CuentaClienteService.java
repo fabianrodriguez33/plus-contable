@@ -40,11 +40,13 @@ public class CuentaClienteService {
     private final GeneradorPassword generador;
     private final long temporalHoras;
     private final TransactionTemplate transaccion;
+    private final RestablecimientoService restablecimientos;
 
     public CuentaClienteService(UsuarioRepository usuarios, RolRepository roles, BitacoraRepository bitacora,
                                 PasswordEncoder encoder, ClienteTributarioClient tributario, GeneradorPassword generador,
                                 @Value("${app.security.temporal-horas:48}") long temporalHoras,
-                                TransactionTemplate transaccion) {
+                                TransactionTemplate transaccion, RestablecimientoService restablecimientos) {
+        this.restablecimientos = restablecimientos;
         this.temporalHoras = temporalHoras;
         this.transaccion = transaccion;
         this.usuarios = usuarios;
@@ -121,6 +123,7 @@ public class CuentaClienteService {
             u.setTemporalVenceEn(LocalDateTime.now().plusHours(temporalHoras));
             u.setSesionVersion(u.getSesionVersion() + 1);
             usuarios.save(u);
+            restablecimientos.atender(u.getId(), restablecedor); // HU-41: si el cliente lo había pedido, queda atendido
             Long quienId = usuarios.findByUsername(restablecedor).map(Usuario::getId).orElse(null);
             // la bitácora nunca lleva la contraseña
             bitacora.save(new BitacoraSeguridad(quienId, restablecedor, "CUENTA_CLIENTE_RESTABLECIDA",
