@@ -135,8 +135,14 @@ class TableroServiceTest {
     }
 
     @Test
-    void elServicioQueCreaSpringUsaLaZonaDeLima() {
-        assertThat(new TableroService(tablero, pagos, clientes).reloj().getZone()).isEqualTo(ZoneId.of("America/Lima"));
+    void elServicioQueCreaSpringUsaLaZonaDeLimaAunqueElServidorEsteEnOtraZona() {
+        java.util.TimeZone original = java.util.TimeZone.getDefault();
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC")); // un servidor en UTC
+            assertThat(new TableroService(tablero, pagos, clientes).reloj().getZone()).isEqualTo(ZoneId.of("America/Lima"));
+        } finally {
+            java.util.TimeZone.setDefault(original);
+        }
     }
 
     @Test
