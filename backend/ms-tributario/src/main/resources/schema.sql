@@ -306,7 +306,6 @@ CREATE TABLE IF NOT EXISTS tributario_schema.avisos_clientes (
 
 CREATE INDEX IF NOT EXISTS idx_avisos_bandeja ON tributario_schema.avisos(creado_en DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_avisos_clientes_cliente ON tributario_schema.avisos_clientes(cliente_id);
-=======
 -- HU-26 (Jeanpierre): pedidos especiales del cliente (constancia, certificacion o tramite) con su fecha de entrega, en
 -- seguimiento hasta que el estudio los marca atendidos. Diseño previo T182 (supuestos pendientes de confirmar con Beto).
 CREATE TABLE IF NOT EXISTS tributario_schema.solicitudes_especiales (
