@@ -76,6 +76,14 @@ public class AesUtil {
         }
     }
 
+    /**
+     * Los bytes (UTF-8) de texto que caben cifrados en una columna de {@code largoColumna} caracteres: el valor guardado es
+     * "v2:" + Base64(IV + texto + etiqueta), y Base64 usa 4 caracteres por cada 3 bytes. Con 300 salen 194.
+     */
+    public static int maxBytesCifrables(int largoColumna) {
+        return (largoColumna - PREFIJO_V2.length()) / 4 * 3 - GCM_IV_BYTES - GCM_TAG_BITS / 8;
+    }
+
     /** true si el valor esta en el formato antiguo (CBC, sin prefijo "v2:"). */
     public boolean esLegado(String cipherText) {
         return !cipherText.startsWith(PREFIJO_V2);

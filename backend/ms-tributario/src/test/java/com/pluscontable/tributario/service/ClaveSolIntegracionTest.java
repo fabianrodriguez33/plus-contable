@@ -218,4 +218,22 @@ class ClaveSolIntegracionTest {
         Integer filas = jdbc.queryForObject("SELECT count(*) FROM tributario_schema.credenciales_sol WHERE cliente_id = ?", Integer.class, cliente);
         assertThat(filas).isZero();
     }
+
+    @Test
+    void unaClaveSolMuyLargaDa400ConMensajeClaroYNoGuardaNadaYLaDelMaximoSiSeGuarda() {
+        long cliente = crearCliente();
+        int max = com.pluscontable.tributario.service.ClienteService.MAX_SOL_BYTES;
+
+        ResponseEntity<String> larga = guardarSol(cliente, sol(USUARIO_SOL, "c".repeat(max + 1)), contador());
+
+        assertThat(larga.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(larga.getBody()).contains("claveSol").contains(String.valueOf(max)).doesNotContain("c".repeat(20));
+        Integer filas = jdbc.queryForObject("SELECT count(*) FROM tributario_schema.credenciales_sol WHERE cliente_id = ?", Integer.class, cliente);
+        assertThat(filas).isZero();
+
+        String justa = "c".repeat(max);
+        assertThat(guardarSol(cliente, sol(USUARIO_SOL, justa), contador()).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(((String) filaGuardada(cliente).get("clave_sol_cifrada")).length()).isLessThanOrEqualTo(300);
+        assertThat(leerSol(cliente, contador()).getBody()).contains(justa);
+    }
 }
