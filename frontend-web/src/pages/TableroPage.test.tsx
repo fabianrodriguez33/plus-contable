@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { AxiosError, AxiosResponse } from 'axios'
 import TableroPage from './TableroPage'
 import { listarClientes } from '../services/clienteService'
-import { consultarTablero, type FilaTablero } from '../services/tableroService'
+import { consultarTablero, type FilaTablero, type FiltroTablero } from '../services/tableroService'
 import { soles } from '../utils/societario'
 import { mesActualLima } from '../utils/tablero'
 import type { Cliente } from '../types'
@@ -33,7 +33,10 @@ function montar() {
   render(<MemoryRouter><TableroPage /></MemoryRouter>)
 }
 
-const ultimaConsulta = () => vi.mocked(consultarTablero).mock.calls[vi.mocked(consultarTablero).mock.calls.length - 1][0]
+const ultimaConsulta = (): FiltroTablero => {
+  const llamadas = vi.mocked(consultarTablero).mock.calls
+  return llamadas[llamadas.length - 1][0] ?? {}
+}
 
 beforeEach(() => {
   vi.mocked(listarClientes).mockResolvedValue([ACME, BETA])
