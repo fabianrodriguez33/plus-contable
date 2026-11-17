@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Boxes, Building, CalendarClock, CalendarPlus, ClipboardList, FileSignature, FolderOpen, History, Inbox, KeyRound, PieChart, TriangleAlert, Users, Wallet } from 'lucide-react'
+import { Boxes, Building, CalendarClock, CalendarPlus, ClipboardList, FileSignature, FileWarning, FolderOpen, History, Inbox, KeyRound, PieChart, TriangleAlert, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { mensajeError, tributarioApi } from '../services/apiClient'
 import { actualizarCliente, crearCliente, obtenerCliente } from '../services/clienteService'
@@ -13,6 +13,7 @@ import CobrosTab from '../components/ficha/CobrosTab'
 import IncidenciasTab from '../components/ficha/IncidenciasTab'
 import SolicitudesTab from '../components/ficha/SolicitudesTab'
 import HistorialTab from '../components/ficha/HistorialTab'
+import DocumentosFaltantesTab from '../components/ficha/DocumentosFaltantesTab'
 import NotificacionesTab from '../components/ficha/NotificacionesTab'
 import AccesoClienteTab from '../components/ficha/AccesoClienteTab'
 import DocumentosPage from './DocumentosPage'
@@ -21,11 +22,12 @@ import AcuerdoPage from './AcuerdoPage'
 import VencimientosPage from './VencimientosPage'
 import ProgramacionPage from './ProgramacionPage'
 
-type Tab = 'general' | 'expediente' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'cobros' | 'vencimientos' | 'programacion' | 'incidencias' | 'solicitudes' | 'historial' | 'notificaciones' | 'acceso'
+type Tab = 'general' | 'expediente' | 'faltantes' | 'socios' | 'trabajadores' | 'activos' | 'acuerdo' | 'cobros' | 'vencimientos' | 'programacion' | 'incidencias' | 'solicitudes' | 'historial' | 'notificaciones' | 'acceso'
 
 const TABS: { id: Tab; etiqueta: string; icono: LucideIcon }[] = [
   { id: 'general', etiqueta: 'Datos generales', icono: Building },
   { id: 'expediente', etiqueta: 'Expediente digital', icono: FolderOpen },
+  { id: 'faltantes', etiqueta: 'Documentos faltantes', icono: FileWarning },
   { id: 'socios', etiqueta: 'Socios y capital', icono: PieChart },
   { id: 'trabajadores', etiqueta: 'Planilla', icono: Users },
   { id: 'activos', etiqueta: 'Activos fijos', icono: Boxes },
@@ -135,6 +137,7 @@ export default function FichaMaestraPage() {
       {clienteId !== null && tab === 'incidencias' && <IncidenciasTab clienteId={clienteId} setError={setError} setOk={setOk} />}
       {clienteId !== null && tab === 'solicitudes' && <SolicitudesTab clienteId={clienteId} setError={setError} setOk={setOk} />}
       {clienteId !== null && tab === 'historial' && <HistorialTab clienteId={clienteId} setError={setError} />}
+      {clienteId !== null && tab === 'faltantes' && <DocumentosFaltantesTab clienteId={clienteId} setError={setError} setOk={setOk} />}
       {clienteId !== null && tab === 'notificaciones' && <NotificacionesTab clienteId={clienteId} setError={setError} setOk={setOk} />}
       {clienteId !== null && tab === 'acceso' && <AccesoClienteTab clienteId={clienteId} setError={setError} setOk={setOk} />}
     </Card>

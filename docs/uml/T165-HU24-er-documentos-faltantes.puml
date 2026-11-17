@@ -1,6 +1,6 @@
 @startuml
 !pragma layout smetana
-title T165 · HU-24 · Modelo de datos de los documentos faltantes (diseño previo)
+title T165 · HU-24 · Modelo de datos de los documentos faltantes
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -16,16 +16,18 @@ entity "tributario_schema.documentos_faltantes" as doc <<nuevo>> {
   * id : BIGSERIAL <<PK>>
   --
   * cliente_id : BIGINT <<FK>>
-  * documento : VARCHAR(150)
-  * fecha_solicitud : DATE = hoy
+  * documento : VARCHAR(150)  CHECK (no vacío)
+  * fecha_solicitud : DATE (hoy si no se indica)
   * fecha_limite : DATE  CHECK (fecha_limite >= fecha_solicitud)
   * estado : PENDIENTE | ENTREGADO = PENDIENTE
     fecha_entrega : DATE
-    incidencia_id : BIGINT <<FK>>
+    incidencia_id : BIGINT <<FK>> <<UNIQUE>>
+  * registrado_por : VARCHAR(60)
   * registrado_en : TIMESTAMP = ahora
+  CHECK ((estado = 'ENTREGADO') = (fecha_entrega IS NOT NULL))
   INDEX (cliente_id, estado, fecha_limite)
 }
-entity "tributario_schema.incidencias" as inc <<definido en HU-23>> {
+entity "tributario_schema.incidencias" as inc <<existe, HU-23>> {
   * id : BIGSERIAL <<PK>>
   --
   * tipo : CAIDA_PORTAL_SOL | CLIENTE_NO_ENVIA_DOCUMENTOS | ...
@@ -40,9 +42,10 @@ note bottom of doc
   La fecha en que se solicitó queda en fecha_solicitud (criterio 2). Lo que falta por cliente se lee por (cliente_id, estado) (criterio 5).
 end note
 note right of doc
-  Supuesto: documento es texto libre; la lista de documentos y estados validada con el cliente no está en el repositorio.
+  Supuestos de T165, pendientes de confirmar con Beto:
+  documento es texto libre; la lista de documentos y estados validada con el cliente no está en el repositorio.
   Supuesto: incidencia_id enlaza con la incidencia de HU-23 al registrar un documento sin respuesta; una incidencia por documento.
   Supuesto: ON DELETE CASCADE como el resto de las tablas hijas del cliente.
 end note
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-24, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: backend/ms-tributario/src/main/resources/schema.sql (clientes y el estilo de las tablas hijas)
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-24-documentos-faltantes (actualiza el diseño previo del 07/11). Código: backend/ms-tributario/src/main/resources/schema.sql (documentos_faltantes), DocumentoFaltante. Prueba: DocumentoFaltantePostgresTest
 @enduml
