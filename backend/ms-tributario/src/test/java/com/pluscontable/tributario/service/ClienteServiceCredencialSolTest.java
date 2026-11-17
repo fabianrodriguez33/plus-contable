@@ -119,4 +119,41 @@ class ClienteServiceCredencialSolTest {
                 .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
         verify(credenciales, never()).save(any());
     }
+
+    @Test
+    void largo_elMaximoQueCabeCifradoEnLaColumnaSeGuardaYUnByteMasDa400() {
+        int max = ClienteService.MAX_SOL_BYTES;
+        assertThat(max).isEqualTo(194); // 300 caracteres de columna: "v2:" + Base64(12 de IV + texto + 16 de etiqueta)
+
+        service.guardarCredencialSol(CLIENTE, new CredencialSolDto("u".repeat(max), "c".repeat(max)));
+        CredencialSol c = guardada();
+        assertThat(c.getClaveSolCifrada().length()).isLessThanOrEqualTo(300);
+        assertThat(c.getUsuarioSolCifrado().length()).isLessThanOrEqualTo(300);
+    }
+
+    @Test
+    void largo_siUnoDeLosDosPasaDelMaximoSeRechazaConUnMensajeClaroSinGuardarNada() {
+        int max = ClienteService.MAX_SOL_BYTES;
+
+        assertThatThrownBy(() -> service.guardarCredencialSol(CLIENTE, new CredencialSolDto(USUARIO, "c".repeat(max + 1))))
+                .isInstanceOf(jakarta.validation.ValidationException.class)
+                .hasMessageContaining("claveSol").hasMessageNotContaining("usuarioSol").hasMessageContaining("194");
+        assertThatThrownBy(() -> service.guardarCredencialSol(CLIENTE, new CredencialSolDto("u".repeat(max + 1), CLAVE)))
+                .isInstanceOf(jakarta.validation.ValidationException.class)
+                .hasMessageContaining("usuarioSol").hasMessageNotContaining("claveSol");
+        assertThatThrownBy(() -> service.guardarCredencialSol(CLIENTE, new CredencialSolDto("u".repeat(max + 1), "c".repeat(max + 1))))
+                .hasMessageContaining("usuarioSol").hasMessageContaining("claveSol");
+        verify(credenciales, never()).save(any());
+    }
+
+    @Test
+    void largo_seCuentaEnBytesYUnaEnieOcupaDos() {
+        assertThat(ClienteService.MAX_SOL_BYTES / 2).isEqualTo(97);
+
+        service.guardarCredencialSol(CLIENTE, new CredencialSolDto(USUARIO, "ñ".repeat(97)));
+        assertThat(guardada().getClaveSolCifrada().length()).isLessThanOrEqualTo(300);
+
+        assertThatThrownBy(() -> service.guardarCredencialSol(CLIENTE, new CredencialSolDto(USUARIO, "ñ".repeat(98))))
+                .isInstanceOf(jakarta.validation.ValidationException.class).hasMessageContaining("claveSol");
+    }
 }

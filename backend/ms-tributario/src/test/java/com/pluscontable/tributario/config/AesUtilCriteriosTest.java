@@ -197,4 +197,14 @@ class AesUtilCriteriosTest {
         assertThatThrownBy(() -> util.encrypt(null)).isInstanceOf(IllegalStateException.class).hasMessage("Error al cifrar");
         assertThatThrownBy(() -> util.decrypt(null)).isInstanceOf(IllegalStateException.class).hasMessage("Error al descifrar");
     }
+
+    @Test
+    void limites_elMaximoQueCabeEnLaColumnaSeCalculaDelTamanoRealDelCifrado() {
+        assertThat(AesUtil.maxBytesCifrables(300)).isEqualTo(194);
+        for (int columna = 60; columna <= 400; columna++) {
+            int max = AesUtil.maxBytesCifrables(columna);
+            assertThat(util.encrypt("a".repeat(max)).length()).as("columna %d, %d bytes", columna, max).isLessThanOrEqualTo(columna);
+            assertThat(util.encrypt("a".repeat(max + 1)).length()).as("columna %d, %d bytes", columna, max + 1).isGreaterThan(columna);
+        }
+    }
 }
