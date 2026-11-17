@@ -1,0 +1,57 @@
+@startuml
+!pragma layout smetana
+title T189 · HU-27 · Datos que lee el historial (sin tablas nuevas)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11) <<UNIQUE>>
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN
+}
+
+entity "tributario_schema.incidencias" as incidencias <<existe, HU-23>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * tipo : VARCHAR(40)
+  * fecha : DATE
+  * descripcion : VARCHAR(1000)
+  * registrada_en : TIMESTAMP
+}
+
+entity "tributario_schema.incidencias_clientes" as ic <<existe, HU-23>> {
+  * incidencia_id : BIGINT <<PK, FK>>
+  * cliente_id : BIGINT <<PK, FK>>
+}
+
+entity "tributario_schema.solicitudes_especiales" as sol <<existe, HU-26>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : CONSTANCIA | CERTIFICACION | TRAMITE
+    descripcion : VARCHAR(500)
+  * fecha_entrega : DATE
+  * estado : PENDIENTE | ATENDIDA
+  * registrada_en : TIMESTAMP
+}
+
+clientes ||--o{ ic : cliente_id
+incidencias ||--o{ ic : incidencia_id
+clientes ||--o{ sol : cliente_id
+
+note right of ic
+  Incidencias del cliente: las que tienen una fila con su cliente_id
+  (las propias y las generales, que se asocian a toda la cartera activa).
+end note
+
+note right of sol
+  Todas las del cliente (pendientes y atendidas).
+  Su fecha en el historial es el día de registrada_en.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-27-historial-incidencias. Código: schema.sql (incidencias, incidencias_clientes, solicitudes_especiales), IncidenciaRepository.findByCliente, SolicitudEspecialRepository.findByClienteId. Prueba: HistorialPostgresTest
+@enduml

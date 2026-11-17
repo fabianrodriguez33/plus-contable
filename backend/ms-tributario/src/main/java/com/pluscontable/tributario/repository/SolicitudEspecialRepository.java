@@ -9,4 +9,7 @@ public interface SolicitudEspecialRepository extends JpaRepository<SolicitudEspe
 
     /** HU-26: los pedidos en seguimiento, el de entrega más próxima primero. */
     List<SolicitudEspecial> findByClienteIdAndEstadoOrderByFechaEntregaAscIdAsc(Long clienteId, EstadoSolicitud estado);
+
+    /** HU-27: todas las solicitudes del cliente (pendientes y atendidas), para su historial. */
+    List<SolicitudEspecial> findByClienteId(Long clienteId);
 }
