@@ -11,6 +11,8 @@ import PagoPage from './pages/PagoPage'
 import CalendarioPage from './pages/CalendarioPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
+import MiEmpresaPage from './pages/MiEmpresaPage'
+import { esCliente } from './services/authService'
 
 export default function App() {
   return (
@@ -20,7 +22,8 @@ export default function App() {
       <Route path="/restablecer" element={<RestablecerPage />} />
       <Route element={<PrivateRoute />}>
         <Route element={<Navbar />}>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={esCliente() ? <Navigate to="/mi-empresa" replace /> : <DashboardPage />} />
+          <Route path="/mi-empresa" element={<MiEmpresaPage />} />
           <Route path="/calendario" element={<CalendarioPage />} />
           <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
           <Route path="/morosos" element={<MorososPage />} />

@@ -1,6 +1,6 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
 import type { Usuario } from '../types'
-import { isJwtActive, jwtRequiereCambioPassword } from './jwtSession'
+import { isJwtActive, jwtClienteId, jwtRequiereCambioPassword } from './jwtSession'
 
 interface LoginResponse {
   token: string
@@ -59,3 +59,11 @@ export function usuarioActual(): Usuario | null {
   const raw = localStorage.getItem(USER_KEY)
   return raw ? (JSON.parse(raw) as Usuario) : null
 }
+
+/** HU-35: la empresa de la cuenta de cliente que inició sesión (null si es una cuenta del estudio). */
+export function clienteIdActual(): number | null {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return token ? jwtClienteId(token) : null
+}
+
+export const esCliente = (): boolean => usuarioActual()?.roles.includes('CLIENTE_MYPE') ?? false
