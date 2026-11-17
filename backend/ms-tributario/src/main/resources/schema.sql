@@ -287,6 +287,24 @@ CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
 
 CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);
 
+-- HU-26 (Jeanpierre): pedidos especiales del cliente (constancia, certificacion o tramite) con su fecha de entrega, en
+-- seguimiento hasta que el estudio los marca atendidos. Diseño previo T182 (supuestos pendientes de confirmar con Beto).
+CREATE TABLE IF NOT EXISTS tributario_schema.solicitudes_especiales (
+    id              BIGSERIAL PRIMARY KEY,
+    cliente_id      BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo            VARCHAR(20) NOT NULL CHECK (tipo IN ('CONSTANCIA', 'CERTIFICACION', 'TRAMITE')),
+    descripcion     VARCHAR(500),
+    fecha_entrega   DATE NOT NULL,
+    estado          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA')),
+    fecha_atencion  DATE,
+    registrada_por  VARCHAR(60) NOT NULL,
+    registrada_en   TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_solicitudes_especiales_atencion CHECK ((estado = 'ATENDIDA') = (fecha_atencion IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_solicitudes_especiales_cliente
+    ON tributario_schema.solicitudes_especiales(cliente_id, estado, fecha_entrega);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
