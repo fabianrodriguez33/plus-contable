@@ -19,7 +19,7 @@ const TIPOS: { id: TipoIncidencia; etiqueta: string }[] = [
   { id: 'ERROR_PROCESO_CONTABLE', etiqueta: 'Errores en procesos contables o en la presentación de declaraciones' },
   { id: 'OTRO', etiqueta: 'Otro' },
 ]
-const etiqueta = (t: TipoIncidencia) => TIPOS.find((x) => x.id === t)?.etiqueta ?? t
+export const etiqueta = (t: TipoIncidencia) => TIPOS.find((x) => x.id === t)?.etiqueta ?? t
 const MAX_DESCRIPCION = 1000
 const MAX_OBSERVACIONES = 1000
 

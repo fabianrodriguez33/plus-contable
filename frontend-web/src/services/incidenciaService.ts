@@ -34,3 +34,25 @@ export const registrarIncidencia = (entrada: IncidenciaEntrada) =>
 /** Las incidencias del cliente y las generales, la más reciente primero. */
 export const listarIncidencias = (clienteId: number) =>
   tributarioApi.get<Incidencia[]>(`/api/tributario/clientes/${clienteId}/incidencias`).then((r) => r.data)
+
+// ---- HU-27 ----
+/** Un registro del historial: una incidencia (HU-23) o una solicitud especial (HU-26). */
+export interface HistorialItem {
+  origen: 'INCIDENCIA' | 'SOLICITUD'
+  id: number
+  /** TipoIncidencia o TipoSolicitud, según el origen. */
+  tipo: string
+  /** La fecha de la incidencia o el día en que se pidió la solicitud. */
+  fecha: string
+  descripcion: string | null
+  /** Solo incidencias: la general (caída del portal SOL) es de toda la cartera. */
+  general: boolean
+  /** Solo solicitudes. */
+  estado: 'PENDIENTE' | 'ATENDIDA' | null
+  fechaEntrega: string | null
+  registradaEn: string
+}
+
+/** El historial del cliente, de lo más reciente a lo más antiguo. */
+export const listarHistorial = (clienteId: number) =>
+  tributarioApi.get<HistorialItem[]>(`/api/tributario/clientes/${clienteId}/historial`).then((r) => r.data)

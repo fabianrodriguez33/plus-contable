@@ -1,5 +1,5 @@
 @startuml
-title T165 · HU-24 · Actividad: seguimiento de un documento faltante (diseño previo)
+title T165 · HU-24 · Actividad: seguimiento de un documento faltante
 skinparam shadowing false
 skinparam noteBackgroundColor #FFF2CC
 skinparam noteBorderColor #BF9000
@@ -25,8 +25,8 @@ repeat
   if (¿Llegó la fecha límite sin entrega?) then (sí)
     :Muestra el documento como SIN_RESPUESTA;
     note right
-      Supuesto: SIN_RESPUESTA se calcula al consultar,
-      no se guarda.
+      SIN_RESPUESTA se calcula al consultar
+      (hora de Lima); no se guarda.
     end note
   else (no)
     :Lo muestra PENDIENTE;
@@ -53,5 +53,5 @@ endif
 :Ve el resultado en la lista de documentos del cliente;
 stop
 
-footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-24, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: ClienteService.buscar; la incidencia usa el servicio de HU-23 (diseño previo)
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-24-documentos-faltantes (actualiza el diseño previo del 07/11). Código: DocumentosFaltantesTab.tsx, DocumentoFaltanteService, DocumentoFaltanteDto.estadoVisible, IncidenciaService.registrar
 @enduml

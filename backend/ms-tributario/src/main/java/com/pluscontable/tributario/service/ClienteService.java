@@ -67,8 +67,14 @@ public class ClienteService {
         return obtener(id);
     }
 
+    /** Largo de las columnas usuario_sol_cifrado y clave_sol_cifrada (CredencialSol). */
+    static final int COLUMNA_CIFRADA = 300;
+    public static final int MAX_SOL_BYTES = AesUtil.maxBytesCifrables(COLUMNA_CIFRADA);
+
+    /** 400 si el usuario o la clave, ya cifrados, no caben en su columna; 404 si el cliente no existe. */
     @Transactional
     public void guardarCredencialSol(Long clienteId, CredencialSolDto dto) {
+        validarLargoSol(dto);
         buscar(clienteId);
         CredencialSol cred = credencialRepository.findByClienteId(clienteId).orElseGet(() -> {
             CredencialSol n = new CredencialSol();
@@ -79,6 +85,20 @@ public class ClienteService {
         cred.setClaveSolCifrada(aesUtil.encrypt(dto.claveSol()));
         cred.setActualizadoEn(LocalDateTime.now());
         credencialRepository.save(cred);
+    }
+
+    private static void validarLargoSol(CredencialSolDto dto) {
+        List<String> largos = new java.util.ArrayList<>();
+        if (dto.usuarioSol() != null && dto.usuarioSol().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_SOL_BYTES) {
+            largos.add("usuarioSol");
+        }
+        if (dto.claveSol() != null && dto.claveSol().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_SOL_BYTES) {
+            largos.add("claveSol");
+        }
+        if (!largos.isEmpty()) {
+            throw new ValidationException("Son demasiado largos: " + String.join(" y ", largos) + " (máximo " + MAX_SOL_BYTES
+                    + " bytes cada uno; una letra con tilde o ñ ocupa 2)");
+        }
     }
 
     /** Recupera las credenciales descifradas solo en memoria para la respuesta; nunca se persisten en claro. */

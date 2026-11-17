@@ -32,11 +32,10 @@ loop cada cliente activo cuando corresponde verificar
     opt si Beto aprueba guardar intentos fallidos en el historial
       VS -> H : registrar intento sin cambio confirmado
     end
-    VS --> J : sin BAJA / NO_HABIDO inferidos; sin aviso
+    VS --> J : sin BAJA / SUSPENDIDO / NO_HABIDO inferidos; sin aviso
   else consulta válida
-    VS -> DC : evaluar(condición anterior, respuesta)
-    DC --> VS : CAMBIO / SIN_CAMBIO (solo HABIDO / NO_HABIDO)
-    VS -> VS : comparar por separado estado SUNAT anterior y observado
+    VS -> DC : evaluar(condición anterior, estado anterior, respuesta)
+    DC --> VS : sin cambio / cambio sin aviso / motivos relevantes
     opt si Beto aprueba el historial completo
       VS -> H : registrar fecha, fuente, valores anteriores y observados
     end
@@ -45,8 +44,8 @@ loop cada cliente activo cuando corresponde verificar
       VS --> J : conservar condición y estado; sin aviso
     else existe cambio válido
       VS -> CS : actualizar condición / estado actual y fecha (campos propuestos)
-      alt transición a NO_HABIDO o estado SUNAT BAJA
-        VS -> AS : crear aviso interno con cliente y nuevo dato (diseño T48)
+      alt transición a NO_HABIDO, BAJA o SUSPENDIDO
+        VS -> AS : crear aviso interno con cliente y todos los motivos (diseño T48)
       else cambio sin transición relevante
         VS --> J : sin aviso
       end
@@ -59,7 +58,7 @@ U -> FE : abre la ficha y consulta o actualiza manualmente
 FE -> CS : PUT /api/tributario/clientes/{id} (ruta existente; comparación propuesta)
 CS -> C : leer condición y estado actuales
 CS -> CS : comparar condición y estado con valores válidos ingresados
-alt transición válida a NO_HABIDO o BAJA
+alt transición válida a NO_HABIDO, BAJA o SUSPENDIDO
   CS -> C : actualizar estado actual (ampliación propuesta)
   opt si Beto aprueba historial completo
     CS -> H : registrar cambio manual y fuente
@@ -79,13 +78,13 @@ FE --> U : muestra la alerta
 note over CR,FE
   Decisiones de Beto comunicadas por Julio: verificación diaria configurable
   (valor inicial 1); fallo sin cambio ni alerta, con respaldo manual;
-  aviso interno solo por transición válida a BAJA o NO_HABIDO.
-  SUSPENDIDO no activa aviso automáticamente. Correo pospuesto.
+  aviso interno por transición válida a BAJA, SUSPENDIDO o NO_HABIDO.
+  Sin cambio no hay aviso. Correo pospuesto.
   No existen job, historial, bandeja ni infraestructura compartida T48.
 end note
 note over VS,H
   Solo la persistencia del historial completo y sus datos
   siguen pendientes de aprobación definitiva de Beto.
 end note
-footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop dbe22ce, T79 original del PR #31 y decisiones comunicadas por Julio
+footer Diseño previo · Actualizado 11/11/2026 · Base: origin/develop 2f3f33b, PR #49 y decisión de Beto comunicada por Julio
 @enduml
