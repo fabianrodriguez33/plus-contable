@@ -18,4 +18,11 @@ public interface PagoObligacionRepository extends JpaRepository<PagoObligacion, 
     /** Acumulado de la obligación: suma de sus pagos (0 si no tiene). */
     @Query("select coalesce(sum(p.montoPagado), 0) from PagoObligacion p where p.obligacionId = :obligacionId")
     BigDecimal sumaPagada(@Param("obligacionId") Long obligacionId);
+
+    /** HU-14: lo pagado por cada una de las obligaciones indicadas (las que no tienen pagos no aparecen). */
+    @Query("""
+            select new com.pluscontable.tributario.dto.PagadoPorObligacionDto(p.obligacionId, sum(p.montoPagado))
+            from PagoObligacion p where p.obligacionId in :ids group by p.obligacionId
+            """)
+    List<com.pluscontable.tributario.dto.PagadoPorObligacionDto> sumasPagadas(@Param("ids") java.util.Collection<Long> ids);
 }
