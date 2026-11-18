@@ -1,0 +1,55 @@
+@startuml
+title T202 · HU-33 · Secuencia: generar los avisos de pago y verlos
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+participant "AvisoClienteProgramador\n(todos los días 7:00, Lima)" as PR
+participant "AvisoClienteService" as AS
+participant "RecordatorioSireFechas" as RF
+database "tributario_schema" as DB
+actor "Cliente MYPE\no contador" as U
+participant "frontend-web\n(AvisosPagoTab)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "AvisoClienteController" as AC
+participant "AccesoCliente" as AX
+
+== Generación diaria (criterios de T203 y T205) ==
+PR -> AS : generar(hoy de Lima)
+AS -> DB : SELECT obligaciones DECLARADO o PAGO_PARCIAL con monto,\nde clientes activos, con vencimiento entre hoy y hoy + 3,\ncon saldo = monto - SUM(pagos_obligacion)
+loop cada obligación candidata
+  alt saldo <= 0
+    AS -> AS : sin aviso (ya no hay nada por pagar)
+    note right : T205: si el pago ya está registrado, no recibe el aviso
+  else faltan 3, 1 o 0 días
+    AS -> RF : corresponde(vence, hoy, [3, 1, 0])
+    AS -> DB : INSERT avisos_cliente (cliente, obligación, tributo, saldo, vencimiento, hoy)\nON CONFLICT (obligacion_id, fecha_aviso) DO NOTHING
+    note right : un aviso por obligación y por día
+  else otro día
+    AS -> AS : sin aviso
+  end
+end
+
+== Ver los avisos (T204) ==
+U -> FE : abre «Avisos de pago» en la ficha del cliente
+FE -> SEC : GET /api/tributario/clientes/{id}/avisos-pago\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+end
+SEC -> AC : listar(clienteId)
+AC -> AX : exigir(clienteId)
+alt CLIENTE_MYPE de otra empresa, o sin clienteId en el token
+  AX --> FE : 403
+end
+AC -> AS : listar(clienteId)
+AS -> DB : SELECT avisos_cliente WHERE cliente_id = ?\nORDER BY fecha_aviso DESC, id DESC
+AS --> FE : 200 [AvisoClienteDto]
+alt hay avisos
+  FE -> U : tabla con el día del aviso, el tributo, el monto por pagar y la fecha de vencimiento
+else sin avisos
+  FE -> U : "No hay avisos de pago: ningún pago vence en los próximos días."
+end
+
+footer Documentado a partir del código, 17/11/2026 · rama feature/HU-33-recordatorios-cliente (PR #68). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AccesoCliente, SecurityConfig, AvisosPagoTab.tsx. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest
+@enduml
