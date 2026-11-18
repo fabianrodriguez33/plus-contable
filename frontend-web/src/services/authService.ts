@@ -1,5 +1,6 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
 import type { Usuario } from '../types'
+import { limpiarCache } from './cacheLocal'
 import { isJwtActive, jwtClienteId, jwtRequiereCambioPassword } from './jwtSession'
 
 interface LoginResponse {
@@ -35,6 +36,7 @@ export async function cambiarPassword(passwordNueva: string): Promise<Usuario> {
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  limpiarCache()
 }
 
 /** HU-36: cierra la sesión en el servidor (revoca el token) y limpia la local; si el servidor no responde igual se limpia. */

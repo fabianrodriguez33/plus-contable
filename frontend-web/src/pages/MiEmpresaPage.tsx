@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { clienteIdActual } from '../services/authService'
-import { mensajeError } from '../services/apiClient'
-import { obtenerDatosEmpresa, type DatosEmpresa, type TipoDocumento } from '../services/datosEmpresaService'
+import { useConsultaConCache } from '../hooks/useConsultaConCache'
+import EstadoConexion from '../components/EstadoConexion'
+import { obtenerDatosEmpresa, type TipoDocumento } from '../services/datosEmpresaService'
 import { fechaCorta } from '../utils/programacion'
 import Card from '../components/Card'
 import Table, { Td } from '../components/Table'
@@ -27,13 +27,8 @@ const dato = (valor: string | null | undefined) => (valor && valor.trim() ? valo
  */
 export default function MiEmpresaPage() {
   const clienteId = clienteIdActual()
-  const [datos, setDatos] = useState<DatosEmpresa | null>(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (clienteId === null) return
-    obtenerDatosEmpresa(clienteId).then(setDatos).catch((e) => setError(mensajeError(e)))
-  }, [clienteId])
+  const { datos, estado, actualizadoEn, error } = useConsultaConCache(
+    clienteId === null ? null : `datos-empresa:${clienteId}`, () => obtenerDatosEmpresa(clienteId!))
 
   if (clienteId === null) {
     return <Card title="Mi empresa"><p role="alert" className="text-sm text-red-600">Su cuenta no está vinculada a una empresa. Comuníquese con el estudio.</p></Card>
@@ -41,8 +36,9 @@ export default function MiEmpresaPage() {
   return (
     <Card title="Mi empresa">
       {error && <p role="alert" className="mb-4 text-sm text-red-600">{error}</p>}
+      <EstadoConexion estado={estado} actualizadoEn={actualizadoEn} />
       {datos === null ? (
-        !error && <p className="text-sm text-slate-500">Cargando...</p>
+        estado === 'cargando' && <p className="text-sm text-slate-500">Cargando...</p>
       ) : (
         <div className="space-y-8">
           <dl className="grid gap-4 text-sm md:grid-cols-2">

@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { limpiarCache } from './cacheLocal'
 
 export const TOKEN_KEY = 'pc_token'
 export const USER_KEY = 'pc_user'
@@ -23,6 +24,7 @@ function crear(baseURL: string): AxiosInstance {
       if (error.response?.status === 401 && !url.includes('/auth/login')) {
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(USER_KEY)
+        limpiarCache() // la copia local de la empresa no queda en el equipo tras una sesión vencida
         window.location.href = '/login'
       }
       return Promise.reject(error)
