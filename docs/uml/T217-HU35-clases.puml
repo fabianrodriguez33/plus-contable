@@ -1,0 +1,107 @@
+@startuml
+!pragma layout smetana
+title T217 · HU-35 · Clases de «Mi empresa»: el cliente consulta los datos y documentos de su empresa
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class DatosEmpresaController <<nuevo>> {
+  +obtener(clienteId): DatosEmpresaDto   (solo GET)
+}
+
+class DatosEmpresaService <<nuevo>> {
+  +obtener(clienteId): DatosEmpresaDto
+  -vacioANulo(valor): String
+}
+
+class DatosEmpresaDto <<record, nuevo>> {
+  clienteId, ruc, razonSocial, regimenTributario
+  direccion, telefono, email: String (null si falta)
+  socios: List<SocioVista>
+  documentos: List<DocumentoVigente>
+}
+
+class SocioVista <<record, nuevo>> {
+  nombreCompleto, cargo, porcentaje
+}
+
+class DocumentoVigente <<record, nuevo>> {
+  tipo: MINUTA | VIGENCIA_PODERES | FICHA_RUC
+  id, version, fechaEmision  (null si no se subió)
+}
+
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+
+class SocioService <<existe>> {
+  +listar(clienteId): List<SocioDto>
+}
+
+class ExpedienteService <<existe>> {
+  +listar(clienteId): List<DocumentoDto>
+}
+
+class AccesoCliente <<existe>> {
+  {static} exigir(clienteIdPedido)
+}
+
+class SecurityConfig <<existe, ampliado>> {
+  GET .../clientes/*/datos-empresa: CONTADOR, ADMIN, CLIENTE_MYPE
+  las rutas de escritura siguen siendo del estudio
+}
+
+class "MiEmpresaPage\n(frontend-web)" as Pagina <<nuevo>> {
+  solo lectura: régimen, socios, documentos vigentes
+  dato faltante: «Pendiente de registrar»
+}
+
+class "jwtSession.jwtClienteId()\nauthService.clienteIdActual()\nauthService.esCliente()" as Sesion <<nuevo>> {
+  la empresa sale del claim clienteId del token
+}
+
+class "App.tsx · Sidebar.tsx" as Nav <<ampliado>> {
+  ruta /mi-empresa
+  cuenta de cliente: «/» redirige a «Mi empresa»
+  menú del cliente: solo «Mi empresa»
+}
+
+class "datosEmpresaService.ts" as Srv <<nuevo>> {
+  obtenerDatosEmpresa(clienteId)
+}
+
+DatosEmpresaController --> DatosEmpresaService
+DatosEmpresaController ..> AccesoCliente : exigir(clienteId)
+DatosEmpresaController ..> DatosEmpresaDto
+DatosEmpresaService --> ClienteService
+DatosEmpresaService --> SocioService
+DatosEmpresaService --> ExpedienteService
+DatosEmpresaDto *-- SocioVista
+DatosEmpresaDto *-- DocumentoVigente
+SecurityConfig ..> DatosEmpresaController
+Pagina --> Sesion : clienteId
+Pagina --> Srv
+Srv ..> DatosEmpresaController : GET /api/tributario/clientes/{id}/datos-empresa
+Nav ..> Pagina
+
+note bottom of DatosEmpresaService
+  Solo lectura: reúne lo que ya guardan ClienteService, SocioService y ExpedienteService; sin tablas nuevas.
+  Un documento por tipo: la versión mayor (ExpedienteService.listar ordena por tipo y versión descendente; la primera de cada tipo es la vigente).
+  Texto vacío o en blanco = null (la pantalla lo muestra como «Pendiente de registrar»).
+  No incluye la clave SOL ni los documentos de identidad de los socios.
+end note
+
+note right of AccesoCliente
+  Un CLIENTE_MYPE solo accede a su empresa (claim clienteId): otra empresa, o un token sin empresa, 403.
+  El estudio (CONTADOR, ADMIN) ve cualquiera; sin token, 401 (lo responde SecurityConfig).
+  El cliente no puede modificar nada: las rutas de escritura no están abiertas a CLIENTE_MYPE (403).
+end note
+
+note bottom of Nav
+  La redirección y el menú del cliente se deciden con esCliente() al montar la aplicación: el servidor es el que
+  protege los datos (límite del código actual: tras iniciar sesión sin recargar la página, «/» no redirige a «Mi empresa»).
+end note
+
+footer Documentado a partir del código, 17/11/2026 · rama feature/HU-35-datos-empresa-cliente (PR #69, aún sin fusionar). Código: DatosEmpresaController, DatosEmpresaService, DatosEmpresaDto, SecurityConfig, AccesoCliente, MiEmpresaPage.tsx, datosEmpresaService.ts, jwtSession.ts, authService.ts, App.tsx, Sidebar.tsx. Pruebas: DatosEmpresaServiceTest, DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx, jwtClienteId.test.ts
+@enduml
