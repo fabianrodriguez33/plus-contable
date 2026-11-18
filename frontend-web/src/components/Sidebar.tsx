@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { esCliente } from '../services/authService'
-import { Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, TriangleAlert, UserPlus, X } from 'lucide-react'
+import { Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, TriangleAlert, UserPlus, X } from 'lucide-react'
 
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
@@ -12,7 +12,10 @@ export const ENLACES = [
 ]
 
 /** HU-35: la cuenta de un cliente solo ve su empresa; el resto del menú es del estudio. */
-const ENLACES_CLIENTE = [{ to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase }]
+const ENLACES_CLIENTE = [
+  { to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase },
+  { to: '/mis-avisos', etiqueta: 'Avisos de pago', icono: Bell },
+]
 
 function Enlaces({ onNavegar }: { onNavegar?: () => void }) {
   return (
