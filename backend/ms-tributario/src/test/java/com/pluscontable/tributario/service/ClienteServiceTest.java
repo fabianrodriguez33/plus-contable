@@ -12,6 +12,7 @@ import com.pluscontable.tributario.dto.ClienteDto;
 import com.pluscontable.tributario.model.Cliente;
 import com.pluscontable.tributario.repository.ClienteRepository;
 import com.pluscontable.tributario.repository.CredencialSolRepository;
+import com.pluscontable.tributario.ruc.AlertaCondicionRucService;
 import jakarta.validation.ValidationException;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,11 +28,12 @@ class ClienteServiceTest {
     @Mock ClienteRepository clientes;
     @Mock CredencialSolRepository credenciales;
     @Mock AesUtil aes;
+    @Mock AlertaCondicionRucService alerta;
     ClienteService service;
 
     @BeforeEach
     void setUp() {
-        service = new ClienteService(clientes, credenciales, aes);
+        service = new ClienteService(clientes, credenciales, aes, alerta);
     }
 
     private static ClienteDto dto(String ruc) {
