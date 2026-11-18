@@ -1,7 +1,9 @@
 package com.pluscontable.tributario.avisocliente;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -11,13 +13,20 @@ import org.springframework.scheduling.annotation.Scheduled;
 @EnableScheduling
 public class AvisoClienteProgramador {
     private final AvisoClienteService service;
+    private final Clock reloj;
 
+    @Autowired // con dos constructores Spring necesita saber cuál usar
     public AvisoClienteProgramador(AvisoClienteService service) {
+        this(service, Clock.system(ZoneId.of("America/Lima")));
+    }
+
+    AvisoClienteProgramador(AvisoClienteService service, Clock reloj) {
         this.service = service;
+        this.reloj = reloj;
     }
 
     @Scheduled(cron = "0 0 7 * * *", zone = "America/Lima")
     public void generarAvisosDelDia() {
-        service.generar(LocalDate.now(ZoneId.of("America/Lima")));
+        service.generar(LocalDate.now(reloj));
     }
 }

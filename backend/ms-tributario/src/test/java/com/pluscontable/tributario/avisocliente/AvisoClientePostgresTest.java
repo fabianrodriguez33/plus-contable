@@ -78,6 +78,46 @@ class AvisoClientePostgresTest {
     }
 
     @Test
+    void conPagoParcialQueYaCubreTodoElMontoNoAvisa() {
+        long c = cliente();
+        long o = obligacion(c, "PAGO_PARCIAL", HOY.plusDays(1), "1000");
+        pago(o, "1000", "0");   // la suma de pagos iguala el monto: saldo 0 aunque el estado siga PAGO_PARCIAL
+        service.generar(HOY);
+        assertThat(service.listar(c)).isEmpty();
+    }
+
+    @Test
+    void noAvisaAClientesInactivos() {
+        long activo = cliente();
+        long inactivo = cliente();
+        jdbc.update("UPDATE tributario_schema.clientes SET activo = false WHERE id = ?", inactivo);
+        obligacion(activo, "DECLARADO", HOY.plusDays(3), "100");
+        obligacion(inactivo, "DECLARADO", HOY.plusDays(3), "100");
+        service.generar(HOY);
+        assertThat(service.listar(activo)).hasSize(1);
+        assertThat(service.listar(inactivo)).isEmpty();
+    }
+
+    @Test
+    void unaDeclaradaSinMontoDeterminadoNoAvisa() {
+        long c = cliente();
+        obligacion(c, "DECLARADO", HOY.plusDays(3), null);
+        obligacion(c, "PAGO_PARCIAL", HOY.plusDays(3), null);
+        service.generar(HOY);
+        assertThat(service.listar(c)).isEmpty();
+    }
+
+    @Test
+    void soloAvisaA3_1Y0DiasYElDiaDelVencimientoTambien() {
+        long c = cliente();
+        for (int dias = 0; dias <= 5; dias++) obligacion(c, "DECLARADO", HOY.plusDays(dias), "100");
+        service.generar(HOY);
+        // la de HOY (día 0), la de +1 y la de +3; no las de +2, +4 ni +5
+        assertThat(service.listar(c)).extracting(AvisoClienteDto::fechaVencimiento)
+                .containsExactlyInAnyOrder(HOY, HOY.plusDays(1), HOY.plusDays(3));
+    }
+
+    @Test
     void conPagoParcialAvisaSoloElSaldo() {
         long c = cliente();
         long o = obligacion(c, "PAGO_PARCIAL", HOY.plusDays(1), "1000");
