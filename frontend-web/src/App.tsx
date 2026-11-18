@@ -9,6 +9,7 @@ import EstadoCuentaPage from './pages/EstadoCuentaPage'
 import MorososPage from './pages/MorososPage'
 import PagoPage from './pages/PagoPage'
 import CalendarioPage from './pages/CalendarioPage'
+import AlertasPlazoPage from './pages/AlertasPlazoPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
 
@@ -22,6 +23,7 @@ export default function App() {
         <Route element={<Navbar />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/calendario" element={<CalendarioPage />} />
+          <Route path="/alertas-plazo" element={<AlertasPlazoPage />} />
           <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
           <Route path="/morosos" element={<MorososPage />} />
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />
