@@ -75,6 +75,23 @@ class DatosEmpresaServiceTest {
     }
 
     @Test
+    void cargoDireccionYTelefonoVaciosOEnBlancoViajanComoNuloYLosConDatoSeRecortan() {
+        Cliente c = cliente("   ");
+        c.setTelefono("");
+        when(clientes.buscar(4L)).thenReturn(c);
+        when(socios.listar(4L)).thenReturn(List.of(
+                new SocioDto(1L, "Ana Pérez", "DNI", "11111111", BigDecimal.ONE, new BigDecimal("50.00"), "  "),
+                new SocioDto(2L, "Luis Díaz", "DNI", "22222222", BigDecimal.ONE, new BigDecimal("50.00"), " Gerente ")));
+        when(expediente.listar(4L)).thenReturn(List.of());
+
+        var datos = service.obtener(4L);
+
+        assertThat(datos.direccion()).isNull();
+        assertThat(datos.telefono()).isNull();
+        assertThat(datos.socios()).extracting(DatosEmpresaDto.SocioVista::cargo).containsExactly(null, "Gerente");
+    }
+
+    @Test
     void noExponeDocumentosDeIdentidadDeLosSocios() {
         assertThat(DatosEmpresaDto.SocioVista.class.getRecordComponents()).extracting("name")
                 .containsExactly("nombreCompleto", "cargo", "porcentaje");
