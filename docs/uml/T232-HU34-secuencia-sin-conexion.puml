@@ -1,0 +1,75 @@
+@startuml
+title T232 · HU-34 · Secuencia: «Mi empresa» con y sin conexión
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Cliente MYPE" as U
+participant "MiEmpresaPage" as P
+participant "useConsultaConCache" as H
+participant "cacheLocal\n(localStorage)" as C
+participant "EstadoConexion" as E
+participant "Servidor\n(ms-tributario)" as S
+participant "Service worker\n(sw.js)" as SW
+
+== Con internet: cada respuesta del servidor se guarda como copia local ==
+U -> P : abre «Mi empresa»
+P -> H : useConsultaConCache("datos-empresa:{clienteId}", cargar)
+H -> S : GET /api/tributario/clientes/{id}/datos-empresa
+S --> H : 200 datos de la empresa
+H -> C : guardar(clave, datos) -> actualizadoEn
+H --> P : estado en-linea, datos
+P -> U : los datos de la empresa
+
+== Sin internet y con copia (T233) ==
+U -> P : abre «Mi empresa» sin internet
+note right : el service worker sirve la página guardada de la app: abre aunque no haya red
+P -> H : useConsultaConCache(...)
+H -> S : GET .../datos-empresa
+S --> H : sin respuesta (error de red)
+H -> C : leer(clave)
+C --> H : { datos, actualizadoEn }
+H --> P : estado sin-conexion
+P -> E : EstadoConexion(sin-conexion, actualizadoEn)
+E -> U : "Sin conexión. Se muestra la información de su última actualización: dd/MM/aaaa HH:mm" (hora de Lima)\ny los datos guardados
+
+== Sin internet y sin copia: primera vez (T234) ==
+H -> C : leer(clave)
+C --> H : null
+H --> P : estado primera-vez
+P -> E : EstadoConexion(primera-vez)
+E -> U : "Conéctese a internet la primera vez para ver su información" (sin datos)
+
+== Vuelve el internet (T235) ==
+note over H : evento «online» del navegador
+H -> S : GET .../datos-empresa
+S --> H : 200 datos nuevos
+H -> C : guardar(clave, datos nuevos)
+H --> P : estado en-linea
+P -> U : datos actualizados y el aviso desaparece
+note over H : si el internet se pierde con la página abierta («offline»):\nel estado pasa a sin-conexion sin quitar lo que ya se ve
+
+== El servidor rechaza la petición ==
+H -> S : GET .../datos-empresa
+S --> H : 401, 403 o 500 (hay respuesta)
+H --> P : estado error, mensaje del servidor
+P -> U : el error; nunca se tapa con la copia local
+
+== Cerrar sesión ==
+U -> P : cierra sesión (authService.logout)
+P -> C : limpiarCache() (borra todas las copias pc_cache:*)
+note right : si la sesión vence (401), el interceptor borra token y usuario\npero no llama a limpiarCache()
+
+== La app como página (service worker) ==
+U -> SW : navega a cualquier ruta de la app
+alt hay internet
+  SW -> S : fetch (página y archivos propios, no /api)
+  S --> SW : respuesta
+  SW -> SW : guarda la copia en el caché "pc-shell-v1" (la navegación se guarda como «/»)
+else sin internet
+  SW --> U : la copia guardada
+end
+
+footer Documentado a partir del código, 17/11/2026 · rama feature/HU-34-consulta-sin-conexion (PR #71). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx (el service worker no se probó en un navegador real)
+@enduml
