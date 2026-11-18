@@ -1,0 +1,62 @@
+@startuml
+!pragma layout smetana
+title T87 · HU-19 · Modelo de datos de las alertas escalonadas del plazo de respuesta
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)
+  * razon_social : VARCHAR(200)
+}
+
+entity "tributario_schema.notificaciones_sol" as notif <<existe, HU-18>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * tipo : ESQUELA | CARTA_INDUCTIVA | COMUNICADO
+  * plazo_respuesta : DATE
+  * estado : PENDIENTE | ATENDIDA
+}
+
+entity "tributario_schema.avisos" as avisos <<existe, HU-12>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * origen : VARCHAR(40)
+  * clave_evento : VARCHAR(160)
+  * mensaje : VARCHAR(500)
+  UNIQUE (origen, clave_evento)
+}
+
+entity "tributario_schema.alertas_plazo_notificacion" as alertas <<nueva>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * notificacion_id : BIGINT <<FK>>
+  * dias_antes : INTEGER (>= 0)
+  * fecha_alerta : DATE
+  * aviso_id : BIGINT <<FK>>
+  * creada_en : TIMESTAMPTZ
+  UNIQUE (notificacion_id, dias_antes)
+  INDEX (notificacion_id)
+}
+
+clientes ||--o{ notif : cliente_id, ON DELETE CASCADE
+notif ||--o{ alertas : notificacion_id, ON DELETE CASCADE
+avisos ||--o{ alertas : aviso_id
+
+note right of alertas
+  Una fila por notificación y por día de alerta (5, 3, 1, 0 supuestos): el UNIQUE hace que un
+  reintento el mismo día no duplique. No se guarda ningún «estado de la alerta» ni los días
+  restantes: se calculan al consultar (alerta visible solo si la notificación sigue PENDIENTE
+  y su plazo no pasó). El aviso compartido de HU-12 conserva el mensaje y el cliente.
+end note
+
+note bottom of avisos
+  avisos_clientes (HU-12) restringe borrar un cliente con avisos: las alertas de HU-19 también.
+end note
+
+footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-19, el esquema de develop (7c1594d), HU-18 y el núcleo de avisos de HU-12. Migración idempotente en schema.sql (CREATE TABLE IF NOT EXISTS)
+@enduml
