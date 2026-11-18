@@ -14,5 +14,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 // HU-34: solo en producción (en desarrollo un service worker taparía los cambios)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => undefined) })
+  window.addEventListener('load', () => { navigator.serviceWorker.register(`/sw.js?v=${__BUILD_ID__}`).catch(() => undefined) })
 }

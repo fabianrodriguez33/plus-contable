@@ -1,6 +1,7 @@
 // HU-34: guarda la cáscara de la app (páginas y archivos propios) para poder abrirla sin internet.
 // Nunca guarda /api: los datos del cliente viven en su copia local y se borran al cerrar sesión.
-const CACHE = 'pc-shell-v1'
+// El nombre sale de la versión con que se registró (?v=), así una versión nueva no sirve archivos de la anterior
+const CACHE = `pc-shell-${new URL(self.location.href).searchParams.get('v') ?? '0'}`
 
 self.addEventListener('install', () => self.skipWaiting())
 
