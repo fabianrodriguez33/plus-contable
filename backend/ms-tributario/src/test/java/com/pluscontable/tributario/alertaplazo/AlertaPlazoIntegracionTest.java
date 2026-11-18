@@ -270,4 +270,43 @@ class AlertaPlazoIntegracionTest {
 
         assertThat(columnas).containsExactly("id", "notificacion_id", "dias_antes", "fecha_alerta", "aviso_id", "creada_en");
     }
+
+    @Test
+    void alAtenderUnaNotificacionSuAvisoSaleDeLaBandejaNoLeidaYElDeLasDemasSeQueda() throws Exception {
+        service.generar(hoy);
+        String claveB = "notificacion:" + cartaB + ":dias:3";
+        String claveA = "notificacion:" + cartaA + ":dias:5";
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento = ? AND leido_en IS NULL", claveB)).isEqualTo(1);
+
+        assertThat(enviar("PATCH", "/api/tributario/notificaciones/" + cartaB + "/atencion", null, "CONTADOR").statusCode()).isEqualTo(200);
+
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento = ? AND leido_en IS NOT NULL", claveB)).isEqualTo(1);
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento = ? AND leido_en IS NULL", claveA)).isEqualTo(1);
+        // lo que ve el contador en la bandeja del núcleo: sin leer solo queda el de la otra notificación
+        HttpResponse<String> bandeja = enviar("GET", "/api/tributario/avisos?leido=false", null, "CONTADOR");
+        assertThat(bandeja.body()).contains(claveA).doesNotContain(claveB);
+    }
+
+    @Test
+    void atenderUnaNotificacionConVariasAlertasMarcaTodosSusAvisos() throws Exception {
+        service.generar(hoy);                // faltan 5
+        service.generar(hoy.plusDays(2));    // faltan 3
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento LIKE ? AND leido_en IS NULL",
+                "notificacion:" + cartaA + ":dias:%")).isEqualTo(2);
+
+        assertThat(enviar("PATCH", "/api/tributario/notificaciones/" + cartaA + "/atencion", null, "CONTADOR").statusCode()).isEqualTo(200);
+
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento LIKE ? AND leido_en IS NULL",
+                "notificacion:" + cartaA + ":dias:%")).isZero();
+    }
+
+    @Test
+    void atenderUnaNotificacionYaAtendidaDa400YNoTocaNadaMas() throws Exception {
+        service.generar(hoy);
+        enviar("PATCH", "/api/tributario/notificaciones/" + cartaB + "/atencion", null, "CONTADOR");
+
+        assertThat(enviar("PATCH", "/api/tributario/notificaciones/" + cartaB + "/atencion", null, "CONTADOR").statusCode()).isEqualTo(400);
+        assertThat(cuenta("SELECT count(*) FROM tributario_schema.avisos WHERE clave_evento = ? AND leido_en IS NULL",
+                "notificacion:" + cartaA + ":dias:5")).isEqualTo(1);
+    }
 }

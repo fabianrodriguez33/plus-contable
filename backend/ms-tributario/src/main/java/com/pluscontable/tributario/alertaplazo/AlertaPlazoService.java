@@ -4,6 +4,7 @@ import com.pluscontable.tributario.alertaplazo.AlertaPlazoRepositorio.Candidata;
 import com.pluscontable.tributario.aviso.AvisoInternoDto;
 import com.pluscontable.tributario.aviso.AvisoInternoService;
 import com.pluscontable.tributario.model.TipoNotificacion;
+import com.pluscontable.tributario.service.NotificacionAtendidaEvento;
 import com.pluscontable.tributario.sire.RecordatorioSireFechas;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,6 +78,15 @@ public class AlertaPlazoService {
             if (repositorio.registrar(c.notificacionId(), faltan, hoy, aviso.id())) creadas++;
         }
         return creadas;
+    }
+
+    /**
+     * Al atender una notificación, sus avisos salen de la bandeja no leída (el núcleo de HU-12 solo sabe «leído»): se marcan leídos
+     * en la misma transacción. Repetirlo no cambia nada.
+     */
+    @EventListener
+    public void alAtender(NotificacionAtendidaEvento evento) {
+        for (Long aviso : repositorio.avisosDe(evento.notificacionId())) avisos.marcarLeido(aviso);
     }
 
     /** Las alertas de notificaciones aún pendientes, con el cliente y los días restantes desde hoy (Lima). */

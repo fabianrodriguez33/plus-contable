@@ -16,6 +16,7 @@ import com.pluscontable.tributario.alertaplazo.AlertaPlazoRepositorio.Candidata;
 import com.pluscontable.tributario.aviso.AvisoInternoDto;
 import com.pluscontable.tributario.aviso.AvisoInternoService;
 import com.pluscontable.tributario.model.TipoNotificacion;
+import com.pluscontable.tributario.service.NotificacionAtendidaEvento;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -175,5 +176,26 @@ class AlertaPlazoServiceTest {
     void elMensajeNombraElTipoDeNotificacion() {
         assertThat(AlertaPlazoService.mensaje(new Candidata(1L, 7L, "Acme SAC", TipoNotificacion.ESQUELA, HOY), 3)).contains("la esquela");
         assertThat(AlertaPlazoService.mensaje(new Candidata(1L, 7L, "Acme SAC", TipoNotificacion.COMUNICADO, HOY), 3)).contains("el comunicado");
+    }
+
+    @Test
+    void alAtenderUnaNotificacionSusAvisosSeMarcanLeidosYLosDeOtraNoSeTocan() {
+        when(repo.avisosDe(40L)).thenReturn(List.of(900L, 901L));
+
+        service.alAtender(new NotificacionAtendidaEvento(40L));
+
+        verify(avisos).marcarLeido(900L);
+        verify(avisos).marcarLeido(901L);
+        verify(repo, never()).avisosDe(41L);
+        verify(avisos, times(2)).marcarLeido(anyLong());
+    }
+
+    @Test
+    void alAtenderUnaNotificacionSinAlertasNoSeMarcaNada() {
+        when(repo.avisosDe(40L)).thenReturn(List.of());
+
+        service.alAtender(new NotificacionAtendidaEvento(40L));
+
+        verify(avisos, never()).marcarLeido(anyLong());
     }
 }

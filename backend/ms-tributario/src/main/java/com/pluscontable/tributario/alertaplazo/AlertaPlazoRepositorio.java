@@ -41,6 +41,12 @@ public class AlertaPlazoRepositorio {
                 """, notificacionId, diasAntes, fechaAlerta, avisoId) > 0;
     }
 
+    /** Los avisos de la bandeja que creó cada alerta de esa notificación. */
+    public List<Long> avisosDe(Long notificacionId) {
+        return jdbc.queryForList("SELECT aviso_id FROM tributario_schema.alertas_plazo_notificacion WHERE notificacion_id = ? ORDER BY id",
+                Long.class, notificacionId);
+    }
+
     /** Las alertas de notificaciones que siguen PENDIENTES y cuyo plazo no pasó, con los días que faltan desde hoy. */
     public List<AlertaPlazoDto> visibles(LocalDate hoy) {
         return jdbc.query("""
