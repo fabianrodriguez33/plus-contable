@@ -33,3 +33,16 @@ export function isJwtActive(token: string, now = Date.now()): boolean {
   const expiration = jwtExpirationMs(token)
   return expiration !== null && expiration > now
 }
+
+/** HU-35: el claim clienteId solo lo lleva el token de una cuenta de cliente; el servidor lo verifica en cada petición. */
+export function jwtClienteId(token: string): number | null {
+  const parts = token.split('.')
+  if (parts.length !== 3 || !parts[1]) return null
+  try {
+    const claims: unknown = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    const id = typeof claims === 'object' && claims !== null && 'clienteId' in claims ? claims.clienteId : null
+    return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
+}
