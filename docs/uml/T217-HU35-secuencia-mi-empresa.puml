@@ -13,7 +13,7 @@ participant "AccesoCliente" as AX
 participant "DatosEmpresaService" as DS
 database "tributario_schema" as DB
 
-U -> FE : abre «Mi empresa» (su menú solo tiene esa opción)
+U -> FE : abre «Mi empresa» (al entrar, «/» la abre sola; su menú también tiene «Avisos de pago», de HU-33)
 FE -> FE : clienteId = claim clienteId del token (jwtClienteId)
 alt la cuenta no tiene empresa en el token
   FE -> U : "Su cuenta no está vinculada a una empresa. Comuníquese con el estudio." (no pide datos)
@@ -44,5 +44,5 @@ end note
 U -> SEC : PUT / POST / PATCH / DELETE sobre datos, socios o documentos
 SEC --> U : 403 (esas rutas son solo del estudio)
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-35-datos-empresa-cliente (PR #69). Código: MiEmpresaPage.tsx, jwtSession.ts, SecurityConfig, DatosEmpresaController, AccesoCliente, DatosEmpresaService. Pruebas: DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #69 fusionado). Código: MiEmpresaPage.tsx, jwtSession.ts, SecurityConfig, DatosEmpresaController, AccesoCliente, DatosEmpresaService. Pruebas: DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx
 @enduml

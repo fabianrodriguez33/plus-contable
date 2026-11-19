@@ -59,17 +59,17 @@ P -> U : el error; nunca se tapa con la copia local
 == Cerrar sesión ==
 U -> P : cierra sesión (authService.logout)
 P -> C : limpiarCache() (borra todas las copias pc_cache:*)
-note right : si la sesión vence (401), el interceptor borra token y usuario\npero no llama a limpiarCache()
+note right : si la sesión vence (401), el interceptor también borra token y usuario\ny llama a limpiarCache(): la copia no queda en el equipo
 
 == La app como página (service worker) ==
 U -> SW : navega a cualquier ruta de la app
 alt hay internet
   SW -> S : fetch (página y archivos propios, no /api)
   S --> SW : respuesta
-  SW -> SW : guarda la copia en el caché "pc-shell-v1" (la navegación se guarda como «/»)
+  SW -> SW : guarda la copia en el caché "pc-shell-<versión de la compilación>" (la navegación se guarda como «/»)\nlos cachés de versiones anteriores se borran al activarse la nueva
 else sin internet
   SW --> U : la copia guardada
 end
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-34-consulta-sin-conexion (PR #71). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx (el service worker no se probó en un navegador real)
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #71 fusionado). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, main.tsx, vite.config.ts, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx, apiClient.test.ts (el service worker no se probó en un navegador real)
 @enduml

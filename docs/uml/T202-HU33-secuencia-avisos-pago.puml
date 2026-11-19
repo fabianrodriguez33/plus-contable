@@ -32,7 +32,7 @@ loop cada obligación candidata
 end
 
 == Ver los avisos (T204) ==
-U -> FE : abre «Avisos de pago» en la ficha del cliente
+U -> FE : abre «Avisos de pago» (el estudio, en la ficha del cliente; el cliente, en su menú: /mis-avisos)
 FE -> SEC : GET /api/tributario/clientes/{id}/avisos-pago\nAuthorization: Bearer <JWT>
 alt sin token
   SEC --> FE : 401
@@ -51,5 +51,5 @@ else sin avisos
   FE -> U : "No hay avisos de pago: ningún pago vence en los próximos días."
 end
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-33-recordatorios-cliente (PR #68). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AccesoCliente, SecurityConfig, AvisosPagoTab.tsx. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #68 fusionado). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AccesoCliente, SecurityConfig, AvisosPagoTab.tsx, MisAvisosPage.tsx. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest, MisAvisosPage.test.tsx
 @enduml

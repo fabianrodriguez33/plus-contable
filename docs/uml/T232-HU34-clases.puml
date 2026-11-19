@@ -36,17 +36,21 @@ class "authService.logout()" as Logout <<existe, ampliado>> {
   borra token, usuario y limpiarCache()
 }
 
-class "apiClient (interceptor 401)" as Api <<existe>> {
-  401 fuera del login: borra token y usuario y va a /login
+class "apiClient (interceptor 401)" as Api <<existe, ampliado>> {
+  401 fuera del login: borra token y usuario, limpiarCache() y va a /login
 }
 
 class "main.tsx" as Main <<ampliado>> {
-  registra /sw.js solo en producción
+  registra /sw.js?v=__BUILD_ID__ solo en producción
+}
+
+class "vite.config.ts" as Vite <<ampliado>> {
+  define __BUILD_ID__ = id de la compilación (Date.now en base 36)
 }
 
 class "public/sw.js\n(service worker)" as SW <<nuevo>> {
-  CACHE = "pc-shell-v1"
-  install: skipWaiting · activate: borra otros cachés y claim()
+  CACHE = "pc-shell-" + versión de la compilación (parámetro ?v=)
+  install: skipWaiting · activate: borra los cachés de otras versiones y claim()
   fetch: primero la red; si falla, la copia
 }
 
@@ -66,7 +70,9 @@ Hook --> Cache
 Estado ..> Cache : fechaHora
 Cache --> LS
 Logout ..> Cache : limpiarCache()
-Main ..> SW : register('/sw.js')
+Api ..> Cache : limpiarCache() en el 401
+Vite ..> Main : __BUILD_ID__
+Main ..> SW : register('/sw.js?v=' + __BUILD_ID__)
 SW --> CS
 
 note bottom of Hook
@@ -79,14 +85,13 @@ end note
 note bottom of SW
   Qué guarda: solo GET del mismo origen que no empiecen por /api/; toda navegación se guarda y se sirve como «/».
   Cuándo se actualiza: cada vez que hay internet se pide a la red y se guarda lo nuevo; el service worker nuevo se activa al instante.
-  El nombre del caché es fijo: los archivos con hash de versiones anteriores no se borran solos.
+  El nombre del caché lleva la versión de la compilación: al activarse una versión nueva se borran los cachés de las versiones anteriores.
   Los datos de las cuentas (/api) viven solo en la copia local, no en el service worker.
 end note
 
 note right of Api
-  Límite del código actual: la copia local se borra en logout(), pero el 401 por sesión vencida no llama a limpiarCache():
-  la copia queda en el equipo hasta el siguiente cierre de sesión.
+  La copia local se borra en logout() y también cuando el 401 cierra la sesión por vencimiento: no queda en el equipo.
 end note
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-34-consulta-sin-conexion (PR #71, apilado sobre #69, aún sin fusionar). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, main.tsx, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #71 fusionado). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, main.tsx, vite.config.ts, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx, apiClient.test.ts
 @enduml

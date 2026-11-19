@@ -49,8 +49,18 @@ class "avisos_cliente" as Tabla <<tabla nueva>> {
   UNIQUE (obligacion_id, fecha_aviso)
 }
 
-class "AvisosPagoTab\n(frontend-web, ficha del cliente)" as Tab <<nuevo>> {
+class "AvisosPagoTab\n(frontend-web)" as Tab <<nuevo>> {
   Aviso del · Tributo · Monto por pagar · Vence
+}
+
+class "MisAvisosPage\n(frontend-web, cuenta del cliente)" as Mis <<nuevo>> {
+  solo lectura: la empresa sale del claim clienteId del token
+  cuenta sin empresa: aviso «Su cuenta no está vinculada a una empresa»
+}
+
+class "App.tsx · Sidebar.tsx" as Nav <<ampliado>> {
+  ruta /mis-avisos
+  menú del cliente: «Mi empresa» y «Avisos de pago»
 }
 
 class "avisoClienteService.ts" as Srv <<nuevo>> {
@@ -64,6 +74,8 @@ AvisoClienteController ..> AvisoClienteDto
 AvisoClienteService ..> RecordatorioSireFechas : día exacto de aviso
 AvisoClienteService ..> Tabla : INSERT ... ON CONFLICT DO NOTHING
 Tab --> Srv
+Mis --> Tab : muestra la lista del cliente
+Nav ..> Mis
 Srv ..> AvisoClienteController : GET /api/tributario/clientes/{id}/avisos-pago
 SecurityConfig ..> AvisoClienteController
 
@@ -82,9 +94,9 @@ note right of AvisoClienteController
 end note
 
 note bottom of Tab
-  Hoy la pestaña está en la ficha del estudio (T204). El menú de la cuenta del cliente solo tiene «Mi empresa» (HU-35):
-  el cliente puede leer sus avisos por la API, pero no tiene una pantalla propia para verlos.
+  La misma lista se ve en dos lugares (T204): la pestaña «Avisos de pago» de la ficha, para el estudio, y la pantalla propia
+  «Avisos de pago» (/mis-avisos) de la cuenta del cliente, que reutiliza AvisosPagoTab. Un cliente solo ve los de su empresa.
 end note
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-33-recordatorios-cliente (PR #68, aún sin fusionar). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AvisoClienteDto, SecurityConfig, schema.sql, AvisosPagoTab.tsx, avisoClienteService.ts. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest, AvisosPagoTab.test.tsx
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #68 fusionado). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AvisoClienteDto, SecurityConfig, schema.sql, AvisosPagoTab.tsx, MisAvisosPage.tsx, App.tsx, Sidebar.tsx, avisoClienteService.ts. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest, AvisosPagoTab.test.tsx, MisAvisosPage.test.tsx
 @enduml

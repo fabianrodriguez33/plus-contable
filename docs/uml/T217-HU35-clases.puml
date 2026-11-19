@@ -63,8 +63,8 @@ class "jwtSession.jwtClienteId()\nauthService.clienteIdActual()\nauthService.esC
 
 class "App.tsx · Sidebar.tsx" as Nav <<ampliado>> {
   ruta /mi-empresa
-  cuenta de cliente: «/» redirige a «Mi empresa»
-  menú del cliente: solo «Mi empresa»
+  cuenta de cliente: «/» redirige a «Mi empresa» (Inicio decide al renderizar)
+  menú del cliente: «Mi empresa» y «Avisos de pago» (HU-33)
 }
 
 class "datosEmpresaService.ts" as Srv <<nuevo>> {
@@ -99,9 +99,9 @@ note right of AccesoCliente
 end note
 
 note bottom of Nav
-  La redirección y el menú del cliente se deciden con esCliente() al montar la aplicación: el servidor es el que
-  protege los datos (límite del código actual: tras iniciar sesión sin recargar la página, «/» no redirige a «Mi empresa»).
+  La redirección (componente Inicio de App.tsx) y el menú (Sidebar.tsx) llaman a esCliente() cada vez que se renderizan, no al cargar el
+  módulo: tras iniciar sesión sin recargar la página, «/» también lleva a «Mi empresa». El servidor es el que protege los datos.
 end note
 
-footer Documentado a partir del código, 17/11/2026 · rama feature/HU-35-datos-empresa-cliente (PR #69, aún sin fusionar). Código: DatosEmpresaController, DatosEmpresaService, DatosEmpresaDto, SecurityConfig, AccesoCliente, MiEmpresaPage.tsx, datosEmpresaService.ts, jwtSession.ts, authService.ts, App.tsx, Sidebar.tsx. Pruebas: DatosEmpresaServiceTest, DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx, jwtClienteId.test.ts
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #69 fusionado). Código: DatosEmpresaController, DatosEmpresaService, DatosEmpresaDto, SecurityConfig, AccesoCliente, MiEmpresaPage.tsx, datosEmpresaService.ts, jwtSession.ts, authService.ts, App.tsx, Sidebar.tsx. Pruebas: DatosEmpresaServiceTest, DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx, jwtClienteId.test.ts
 @enduml
