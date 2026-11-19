@@ -89,7 +89,7 @@ export default function MisComprasPage() {
         <div className="space-y-4">
           {cercaDelCierre > 0 && (
             <Aviso tipo="advertencia">
-              {cercaDelCierre === 1 ? 'Tiene 1 compra sin clasificar' : `Tiene ${cercaDelCierre} compras sin clasificar`} y el cierre del mes está cerca. Clasifíquelas lo antes posible.
+              {cercaDelCierre === 1 ? 'Tiene 1 compra sin clasificar' : `Tiene ${cercaDelCierre} compras sin clasificar`} y el cierre del mes está cerca o ya pasó. Clasifíquelas lo antes posible.
             </Aviso>
           )}
           {lista.length === 0 ? (

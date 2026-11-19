@@ -89,7 +89,7 @@ describe('Mis compras (HU-25 · T210, T213)', () => {
       compra(3, { clasificada: true, tipo: 'ACTIVO_FIJO', descripcion: 'x' }),
     ])
     expect(screen.getAllByText(ETIQUETA_CIERRE)).toHaveLength(2)
-    expect(screen.getByText(/Tiene 2 compras sin clasificar/)).toBeTruthy()
+    expect(screen.getByText(/Tiene 2 compras sin clasificar.*cerca o ya pasó/)).toBeTruthy()
   })
 
   it('lejos del cierre no hay alerta', async () => {
