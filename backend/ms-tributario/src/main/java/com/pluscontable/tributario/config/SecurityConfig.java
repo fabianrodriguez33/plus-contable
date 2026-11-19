@@ -48,11 +48,14 @@ public class SecurityConfig {
                                 "/api/tributario/clientes/*/documentos/*/archivo",
                                 "/api/tributario/clientes/*/acuerdo",
                                 "/api/tributario/clientes/*/avisos-pago",
+                                "/api/tributario/clientes/*/compras",
                                 "/api/tributario/clientes/*/datos-empresa",
                                 "/api/tributario/obligaciones",
                                 "/api/tributario/obligaciones-vencidas",
                                 "/api/tributario/obligaciones/*")
                         .hasAnyRole(ESTUDIO_Y_CLIENTE)
+                        // HU-25: solo el cliente clasifica sus compras (el contador las carga y las ve)
+                        .requestMatchers(HttpMethod.PATCH, "/api/tributario/clientes/*/compras/*/clasificacion").hasRole("CLIENTE_MYPE")
                         .anyRequest().hasAnyRole(ESTUDIO))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

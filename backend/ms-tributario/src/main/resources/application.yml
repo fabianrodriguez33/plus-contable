@@ -49,6 +49,9 @@ app:
   storage:
     dir: ${STORAGE_DIR:./uploads}
   tributario:
+    # HU-25: días antes del último día del mes desde los que una compra sin validar avisa al contador. Propuesta de Beto (5); configurable.
+    compras:
+      alerta-dias-antes-cierre: ${APP_TRIBUTARIO_COMPRAS_ALERTA_DIAS:5}
     # UIT por anio, en soles, tomada del decreto supremo del MEF de cada anio. Sin montos en el repositorio:
     # se carga por entorno (por ejemplo APP_TRIBUTARIO_UIT_2026). Sin UIT de un anio no se evalua la quinta.
     # La quinta categoria sigue apagada hasta que Beto confirme unidad y formula de proyeccion

@@ -485,3 +485,42 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_recordatorios_pago_programado
     ON tributario_schema.recordatorios_pago(obligacion_id, fecha_recordatorio) WHERE estado = 'PROGRAMADO';
 CREATE INDEX IF NOT EXISTS idx_recordatorios_pago_pendientes
     ON tributario_schema.recordatorios_pago(fecha_recordatorio) WHERE estado = 'PROGRAMADO';
+
+-- HU-25 (Ricardo): compras del cliente y su clasificación. Las compras las carga el contador, con el SIRE como referencia (decisión de
+-- Beto, 18/11); el cliente propone «mercadería o gasto» o «activo fijo», con una descripción, y el contador la valida. Una compra sin
+-- validar queda pendiente y avisa solo al contador cerca del fin del mes (días configurables, ver
+-- app.tributario.compras.alerta-dias-antes-cierre). Aislamiento por
+-- empresa: toda consulta y clasificación va por cliente_id. El proveedor se guarda solo como RUC y razón social (sin tabla de
+-- proveedores: HU-20 la podrá enlazar). El mismo comprobante de un proveedor no se repite en un cliente.
+CREATE TABLE IF NOT EXISTS tributario_schema.compras_cliente (
+    id                   BIGSERIAL PRIMARY KEY,
+    cliente_id           BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    periodo              DATE NOT NULL CHECK (EXTRACT(DAY FROM periodo) = 1),
+    proveedor_ruc        VARCHAR(11) NOT NULL CHECK (proveedor_ruc ~ '^[0-9]{11}$'),
+    proveedor_razon_social VARCHAR(200),
+    comprobante          VARCHAR(30) NOT NULL CHECK (length(btrim(comprobante)) > 0),
+    fecha_comprobante    DATE NOT NULL,
+    importe              NUMERIC(14,2) NOT NULL CHECK (importe > 0),
+    tipo_clasificacion   VARCHAR(30) CHECK (tipo_clasificacion IN ('MERCADERIA_O_GASTO', 'ACTIVO_FIJO')),
+    descripcion          VARCHAR(300),
+    clasificada_por      VARCHAR(150),
+    clasificada_en       TIMESTAMPTZ,
+    validada_por         VARCHAR(150),
+    validada_en          TIMESTAMPTZ,
+    registrada_por       VARCHAR(150) NOT NULL,
+    registrada_en        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_compras_cliente_comprobante UNIQUE (cliente_id, proveedor_ruc, comprobante),
+    CONSTRAINT ck_compras_cliente_clasificacion CHECK (
+        (tipo_clasificacion IS NULL AND descripcion IS NULL AND clasificada_por IS NULL AND clasificada_en IS NULL)
+        OR (tipo_clasificacion IS NOT NULL AND length(btrim(descripcion)) > 0 AND clasificada_por IS NOT NULL AND clasificada_en IS NOT NULL))
+);
+
+-- Bases que ya tenían la tabla sin la validación del contador: columnas y restricción (idempotente).
+ALTER TABLE tributario_schema.compras_cliente ADD COLUMN IF NOT EXISTS validada_por VARCHAR(150);
+ALTER TABLE tributario_schema.compras_cliente ADD COLUMN IF NOT EXISTS validada_en TIMESTAMPTZ;
+ALTER TABLE tributario_schema.compras_cliente DROP CONSTRAINT IF EXISTS ck_compras_cliente_validacion;
+ALTER TABLE tributario_schema.compras_cliente ADD CONSTRAINT ck_compras_cliente_validacion CHECK (
+    (validada_por IS NULL AND validada_en IS NULL)
+    OR (validada_por IS NOT NULL AND validada_en IS NOT NULL AND tipo_clasificacion IS NOT NULL));
+
+CREATE INDEX IF NOT EXISTS idx_compras_cliente_periodo ON tributario_schema.compras_cliente(cliente_id, periodo DESC, id DESC);
