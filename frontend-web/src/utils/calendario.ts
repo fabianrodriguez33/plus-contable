@@ -94,16 +94,17 @@ export function agruparEntradasPorDia(entradas: Entrada[], nombreCliente: (clien
     }))
 }
 
-export type SituacionVisual = 'DECLARADA' | 'PAGADA' | 'VENCIDA' | 'HOY' | 'PROXIMA'
+export type SituacionVisual = 'DECLARADA' | 'PAGADA' | 'VENCIDA' | 'SIN_DECLARAR' | 'HOY' | 'PROXIMA'
 
 /**
- * Una obligación declarada o pagada nunca se muestra como vencida, aunque su fecha ya haya pasado.
- * Con pago parcial todavía se debe saldo: sigue su fecha como una pendiente.
+ * «Vencida» (definición de Beto) = fecha pasada y saldo pendiente: la declarada sin pago y la de pago parcial. La pagada
+ * nunca; la sin declarar con fecha pasada va aparte como pendiente de atención.
  */
 export function situacionVisual(item: CalendarioItem): SituacionVisual {
-  if (item.obligacion.estado === 'PAGADO') return 'PAGADA'
-  if (item.obligacion.estado === 'DECLARADO') return 'DECLARADA'
-  if (item.vencimientoPasado) return 'VENCIDA'
+  const { estado } = item.obligacion
+  if (estado === 'PAGADO') return 'PAGADA'
+  if (estado === 'DECLARADO' && !item.vencimientoPasado) return 'DECLARADA'
+  if (item.vencimientoPasado) return estado === 'PENDIENTE' ? 'SIN_DECLARAR' : 'VENCIDA'
   if (item.diasRestantes === 0) return 'HOY'
   return 'PROXIMA'
 }
@@ -114,6 +115,7 @@ export function etiquetaSituacion(item: CalendarioItem): string {
     case 'DECLARADA': return 'Declarada'
     case 'PAGADA': return 'Pagada'
     case 'VENCIDA': return `Vencida hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
+    case 'SIN_DECLARAR': return `Sin declarar hace ${-dias} ${-dias === 1 ? 'día' : 'días'} · pendiente de atención`
     case 'HOY': return 'Vence hoy'
     default: return dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`
   }
