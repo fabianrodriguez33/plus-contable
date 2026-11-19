@@ -76,7 +76,7 @@ note bottom of TableroService
   Criterio 4: «declarado sin pago» = estado DECLARADO (sin ningún pago); con pago parcial ya no.
   Regla de Beto: vencida = fecha límite anterior a hoy y saldo pendiente, es decir estado DECLARADO sin pago o PAGO_PARCIAL; con pago parcial
   sigue vencida y la fila trae lo pagado y el saldo. PAGADO nunca es vencida. Una PENDIENTE (sin declarar) con fecha pasada no se mezcla con las
-  vencidas: va aparte con sinDeclarar = true («pendiente de atención»). No es la regla del calendario (que marca vencido toda fecha pasada).
+  vencidas: va aparte con sinDeclarar = true («pendiente de atención»). El calendario seguía otra regla hasta #81 (ya fusionado); ahora la pantalla del calendario usa la misma que el tablero.
   Ninguno de los dos estados se guarda: se calculan con la fecha de hoy. Sin monto determinado el saldo es nulo y la regla se decide por el estado.
   «Hoy» es el de Lima (America/Lima), aunque el servidor corra en UTC. Sin tablas nuevas.
 end note

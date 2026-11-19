@@ -118,8 +118,9 @@ note right of PagoEntradaDto
   Supuesto: solo el estudio registra y consulta los pagos; el acceso del cliente MYPE lo definen HU-14 y HU-32.
 end note
 note right of PagoPage
-  Una obligación pagada o con la fecha pasada se muestra «Pagada» o «Declarada», nunca «Vencida» (corrección de #43). Con pago parcial todavía se
-  debe saldo y sigue su fecha.
+  Hasta #81 esta pantalla seguía la regla anterior del calendario («Declarada», nunca «Vencida», aunque la fecha hubiera pasado). Desde #81 usa la misma
+  regla que el tablero: la pagada nunca sale «Vencida»; la declarada sin pago o con pago parcial con la fecha pasada sale «Vencida» (con pago parcial,
+  «Pago parcial · Vencida…»); la sin declarar se muestra «Pendiente de declarar».
 end note
 footer Diseño actualizado tras decisión de Beto del 10/11 · Base: criterios de aceptación de HU-13, el código de develop y el PR #56 (comprobante = número de constancia, sin carga de archivos; consulta GET .../pagos)
 @enduml
