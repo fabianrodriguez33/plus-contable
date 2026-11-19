@@ -1,11 +1,12 @@
 import { FormEvent, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Building2, Loader2, Lock, User } from 'lucide-react'
+import { Loader2, Lock, User } from 'lucide-react'
 import { isAuthenticated, login } from '../services/authService'
 import { mensajeError } from '../services/apiClient'
 import Aviso from '../components/Aviso'
 import Button from '../components/Button'
 import Input from '../components/Input'
+import '../styles/piloto.css'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -31,19 +32,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-      {/* Luces de fondo: dan algo que desenfocar al panel de vidrio */}
-      <div aria-hidden="true" className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-acento/25 blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -right-24 h-96 w-96 rounded-full bg-acento/20 blur-3xl" />
-
-      <form onSubmit={enviar} className="vidrio relative w-full max-w-md rounded-panel p-8 md:p-10">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-campo bg-acento text-white shadow-sm">
-            <Building2 size={24} aria-hidden="true" />
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-tinta">Plus Contable</h1>
-          <span aria-hidden="true" className="mt-3 h-1 w-10 rounded-full bg-ambar" />
-          <p className="mt-3 text-sm text-slate-500">V&amp;F Asesores Empresarial — Control tributario MYPE</p>
+    <main className="piloto flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={enviar} className="vidrio w-full max-w-md rounded-panel p-8 md:p-10">
+        <div className="mb-8 border-b border-tinta/15 pb-6">
+          {/* Marca provisional: solo texto, V&F no entregó logo */}
+          <p className="piloto-marca text-lg font-semibold text-acento-oscuro">V&amp;F Asesores</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-tinta">Plus Contable</h1>
+          <p className="mt-1 text-sm text-slate-500">Control tributario para MYPE</p>
         </div>
         {error && <Aviso tipo="peligro" className="mb-5">{error}</Aviso>}
         <div className="space-y-4">
