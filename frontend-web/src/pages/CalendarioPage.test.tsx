@@ -122,15 +122,18 @@ describe('CalendarioPage', () => {
     expect(consulta).toHaveBeenCalledWith(2, expect.any(Object))
   })
 
-  it('las obligaciones declaradas se muestran como declaradas, no como vencidas', async () => {
+  it('con la fecha pasada: la declarada sin pago y la de pago parcial son vencidas (con pagado y saldo); la sin declarar va aparte', async () => {
     consulta.mockImplementation(async (clienteId) => clienteId !== 1 ? [] : [
       it_(30, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'DECLARADO'),
       it_(31, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PENDIENTE', 'RENTA'),
+      { ...it_(32, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PAGO_PARCIAL', 'AFP'),
+        obligacion: { ...it_(32, 1, '2026-11-02', {}, 'PAGO_PARCIAL', 'AFP').obligacion, montoAcumuladoPagado: 400, saldo: 600 } },
     ])
     pantalla()
     const dia = await screen.findByRole('region', { name: '2026-11-02' })
-    expect(within(dia).getAllByText('Declarada')).toHaveLength(1)
-    expect(within(dia).getAllByText('Vencida hace 2 días')).toHaveLength(1)
+    expect(within(dia).getAllByText('Vencida hace 2 días')).toHaveLength(2)
+    expect(within(dia).getAllByText('Sin declarar hace 2 días · pendiente de atención')).toHaveLength(1)
+    expect(within(dia).getByText(/Pagado .*400.* · Saldo .*600/)).toBeTruthy()
   })
 
   it('una cuota pendiente y vencida se resalta como riesgo de perder el fraccionamiento (T22, criterio 4)', async () => {
@@ -164,7 +167,7 @@ describe('CalendarioPage', () => {
   it('una obligación pagada con fecha pasada sale pagada, no vencida', async () => {
     consulta.mockImplementation(async (clienteId) => clienteId !== 1 ? [] : [
       it_(40, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PAGADO'),
-      it_(41, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'PENDIENTE', 'RENTA'),
+      it_(41, 1, '2026-11-02', { diasRestantes: -2, vencimientoPasado: true }, 'DECLARADO', 'RENTA'),
     ])
     pantalla()
     const dia = await screen.findByRole('region', { name: '2026-11-02' })

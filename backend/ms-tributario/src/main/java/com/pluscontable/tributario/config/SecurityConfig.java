@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/tributario/clientes/*/avisos-pago",
                                 "/api/tributario/clientes/*/datos-empresa",
                                 "/api/tributario/obligaciones",
+                                "/api/tributario/obligaciones-vencidas",
                                 "/api/tributario/obligaciones/*")
                         .hasAnyRole(ESTUDIO_Y_CLIENTE)
                         .anyRequest().hasAnyRole(ESTUDIO))
