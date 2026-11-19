@@ -1,0 +1,75 @@
+@startuml
+!pragma layout smetana
+title T34 · HU-15 · Modelo de datos de los recordatorios de pago (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN
+}
+
+entity "tributario_schema.obligaciones" as obl <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  tipo_obligacion : VARCHAR(30)
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO | PAGO_PARCIAL | PAGADO
+  monto_determinado : NUMERIC(14,2)
+}
+
+entity "tributario_schema.pagos_obligacion" as pagos <<existe, HU-13>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * monto_pagado : NUMERIC(14,2)
+}
+
+entity "tributario_schema.avisos_cliente" as avisos <<existe, #68>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * obligacion_id : BIGINT <<FK>>
+  * tributo : VARCHAR(30)
+  * monto : NUMERIC(14,2)
+  * fecha_vencimiento : DATE
+  * fecha_aviso : DATE
+  UNIQUE (obligacion_id, fecha_aviso)
+}
+
+entity "tributario_schema.recordatorios_pago" as rec <<pendiente de #79 · campos tentativos>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * fecha_programada : DATE
+  * creado_por : VARCHAR
+  * creado_en : TIMESTAMPTZ
+  entregado_en : TIMESTAMPTZ  (nulo = sin entregar)
+}
+
+clientes ||--o{ obl : cliente_id
+obl ||--o{ pagos : obligacion_id
+clientes ||--o{ avisos : cliente_id
+obl ||--o{ avisos : obligacion_id
+obl ||--o{ rec : obligacion_id
+
+note right of rec
+  Pendiente de #79: la tabla y sus campos no están en develop; los nombres son tentativos hasta que se fusione.
+  El saldo no se guarda: se calcula al entregar (monto determinado - suma de pagos_obligacion), así un pago registrado después
+  evita el envío (criterio 3). Un pago parcial no cancela el recordatorio mientras quede saldo (regla de Beto).
+  entregado_en nulo y fecha_programada anterior a hoy = recordatorio atrasado: se envía una sola vez y solo si sigue pendiente.
+  El recordatorio entregado se muestra al cliente como una fila de avisos_cliente (monto = saldo), como en #68.
+end note
+
+note bottom of avisos
+  Ya en develop (#68): los avisos automáticos 3, 1 y 0 días antes del vencimiento, un aviso por obligación y por día.
+end note
+
+footer Diseño previo, 18/11/2026 · Base: criterios de aceptación de HU-15 y el código fusionado en develop (922edee). Lo marcado «pendiente de #79» no está en develop.
+@enduml
