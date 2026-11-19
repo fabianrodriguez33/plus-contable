@@ -61,6 +61,12 @@ U -> P : cierra sesión (authService.logout)
 P -> C : limpiarCache() (borra todas las copias pc_cache:*)
 note right : si la sesión vence (401), el interceptor también borra token y usuario\ny llama a limpiarCache(): la copia no queda en el equipo
 
+== Registro del service worker (solo en producción) ==
+note over SW : vite.config.ts define __BUILD_ID__ (un id por compilación)
+U -> SW : abre la app: main.tsx registra /sw.js?v=__BUILD_ID__
+SW -> SW : CACHE = "pc-shell-" + el valor de v
+SW -> SW : al activarse borra los cachés de otras versiones y toma el control (claim)
+
 == La app como página (service worker) ==
 U -> SW : navega a cualquier ruta de la app
 alt hay internet

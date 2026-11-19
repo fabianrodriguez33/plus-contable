@@ -10,6 +10,7 @@ participant "AvisoClienteService" as AS
 participant "RecordatorioSireFechas" as RF
 database "tributario_schema" as DB
 actor "Cliente MYPE\no contador" as U
+participant "MisAvisosPage\n(/mis-avisos, cuenta del cliente)" as MP
 participant "frontend-web\n(AvisosPagoTab)" as FE
 participant "SecurityConfig\n+ JwtFilter" as SEC
 participant "AvisoClienteController" as AC
@@ -32,7 +33,16 @@ loop cada obligación candidata
 end
 
 == Ver los avisos (T204) ==
-U -> FE : abre «Avisos de pago» (el estudio, en la ficha del cliente; el cliente, en su menú: /mis-avisos)
+alt el estudio, en la ficha del cliente
+  U -> FE : abre la pestaña «Avisos de pago»
+else el cliente, en su menú «Avisos de pago» (/mis-avisos)
+  U -> MP : abre «Avisos de pago»
+  MP -> MP : clienteId = claim clienteId del token
+  alt la cuenta no tiene empresa en el token
+    MP -> U : "Su cuenta no está vinculada a una empresa. Comuníquese con el estudio." (no pide datos)
+  end
+  MP -> FE : muestra AvisosPagoTab(clienteId): reutiliza la misma lista
+end
 FE -> SEC : GET /api/tributario/clientes/{id}/avisos-pago\nAuthorization: Bearer <JWT>
 alt sin token
   SEC --> FE : 401
