@@ -1,0 +1,82 @@
+@startuml
+title T42 · HU-16 · Secuencia: ver las obligaciones vencidas sin pago y las sin declarar (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as CO
+actor "Cliente MYPE" as CL
+participant "frontend-web\n(TableroPage /\nVencidasPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "TableroController /\nObligacionesVencidasController" as TC
+participant "TableroService" as TS
+participant "ObligacionesVencidasService" as VS
+participant "ReglaObligacionVencida" as RG
+participant "AccesoCliente" as AX
+database "tributario_schema" as DB
+
+== El estudio ve el tablero con las vencidas (ya en develop, #67) ==
+CO -> FE : abre «Tablero» y elige el mes (periodo tributario) o todos
+FE -> SEC : GET /api/tributario/tablero?periodo=AAAA-MM-01\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403
+end
+SEC -> TC : listar(clienteId, periodo, soloDeclaradoSinPago)
+TC -> TS : listar(...)
+alt clienteId no positivo o periodo que no es el primer día del mes
+  TS --> FE : 400
+else el cliente indicado no existe
+  TS --> FE : 404
+end
+TS -> DB : obligaciones (cliente, periodo, estado) y SUM(monto_pagado) por obligación (pagos_obligacion)
+loop cada obligación
+  TS -> TS : saldo = monto determinado - suma de pagos
+  TS -> TS : pasada = fecha límite anterior a hoy (hoy = Lima)
+  alt estado DECLARADO sin pago, o PAGO_PARCIAL, y pasada
+    TS -> TS : vencida = true (el pago parcial sigue vencida: trae pagado y saldo)
+  else estado PENDIENTE (sin declarar) y pasada
+    TS -> TS : sinDeclarar = true (pendiente de atención, aparte de las vencidas)
+  else PAGADO, o fecha límite vigente
+    TS -> TS : ni vencida ni sinDeclarar
+  end
+end
+TS --> FE : 200 [TableroFilaDto] ordenadas por fecha límite, cliente y tributo
+FE -> CO : tabla con estado, monto, pagado, saldo y fecha límite;\nbadge «Vencida» solo si vencida y badge «Sin declarar» solo si sinDeclarar;\nresumen: N vencidas · N sin declarar (pendientes de atención)
+
+== El estudio ve la lista de obligaciones vencidas (ya en develop, #77) ==
+CO -> FE : abre «Obligaciones vencidas»
+FE -> SEC : GET /api/tributario/obligaciones-vencidas[?clienteId=]\nAuthorization: Bearer <JWT>
+SEC -> TC : listar(clienteId, autenticación)
+TC -> AX : exigir(clienteId)
+note right : el estudio pasa con o sin clienteId
+TC -> VS : listar(clienteId)
+VS -> DB : obligaciones de clientes activos con fecha límite < hoy y estado <> PAGADO,\ncon SUM(monto_pagado) por obligación
+loop cada obligación
+  VS -> RG : vencida(estado, fechaVencimiento, hoy) / sinDeclarar(...)
+end
+VS --> FE : 200 {vencidas, sinDeclarar} (las más atrasadas primero)
+FE -> CO : tabla «Vencidas» con atraso, monto, pagado y saldo («VENCIDA SIN PAGO» o «VENCIDA CON SALDO»)\ny, aparte, «Sin declarar · pendientes de atención»
+
+== El cliente ve sus vencidas (API ya en develop, #77; su pantalla, pendiente de #78) ==
+CL -> FE : consulta sus obligaciones vencidas
+FE -> SEC : GET /api/tributario/obligaciones-vencidas?clienteId={su empresa}\nAuthorization: Bearer <JWT>
+SEC -> TC : listar(clienteId, autenticación)
+TC -> AX : exigir(clienteId)
+alt CLIENTE_MYPE de otra empresa, sin clienteId o token sin empresa
+  AX --> FE : 403
+end
+TC -> VS : listar(clienteId)
+VS --> TC : {vencidas, sinDeclarar}
+TC -> TC : para CLIENTE_MYPE la lista sinDeclarar sale vacía (es un pendiente de atención del estudio)
+TC --> FE : 200 {vencidas con pagado y saldo, sinDeclarar: []}
+note over TC
+  Regla de Beto: el cliente SÍ ve sus vencidas, pagadas y saldos, solo de su empresa. Hoy el cliente ve sus vencidas por esta ruta; el tablero le responde 403.
+  GET /api/tributario/obligaciones?clienteId= trae lo pagado y el saldo solo en las de PAGO_PARCIAL (desde #81). La pantalla del cliente con
+  vencidas, pagadas y saldos está pendiente de #78 (nombre tentativo).
+end note
+
+footer Diseño previo, 18/11/2026 · actualizado con develop (8685443): tablero de HU-14 (#67), lista de vencidas de HU-16 (#77), calendario (#81) y pagos de HU-13. Lo marcado «pendiente de #78» no está en develop.
+@enduml

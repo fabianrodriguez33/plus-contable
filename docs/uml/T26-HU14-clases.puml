@@ -29,6 +29,7 @@ class TableroFilaDto <<record, nuevo>> {
   montoPagado: BigDecimal
   saldo: BigDecimal
   vencida: boolean
+  sinDeclarar: boolean
 }
 
 interface TableroRepository <<nuevo>> {
@@ -55,7 +56,8 @@ interface ClienteRepository <<existe>> {
 
 class "TableroPage\n(frontend-web)" as TP <<nuevo>> {
   filtros: cliente, mes, «declarado sin pago»
-  estado visible, «Vencida» solo si vencida
+  estado visible, «Vencida» solo si vencida y «Sin declarar» solo si sinDeclarar
+  resumen: N vencidas · N sin declarar (pendientes de atención)
 }
 
 TP ..> TableroController : GET /api/tributario/tablero
@@ -72,8 +74,10 @@ note bottom of TableroService
   Criterio 2: filtros opcionales por cliente y por mes (periodo = primer día del mes tributario).
   Criterio 3: monto determinado y fecha límite (fechaVencimiento); además lo pagado y el saldo (HU-13).
   Criterio 4: «declarado sin pago» = estado DECLARADO (sin ningún pago); con pago parcial ya no.
-  vencida = estado PENDIENTE o PAGO_PARCIAL y fecha límite anterior a hoy; PAGADO y DECLARADO nunca
-  salen vencidos (misma regla del calendario). No se guarda ningún estado VENCIDA: se calcula con la fecha de hoy.
+  Regla de Beto: vencida = fecha límite anterior a hoy y saldo pendiente, es decir estado DECLARADO sin pago o PAGO_PARCIAL; con pago parcial
+  sigue vencida y la fila trae lo pagado y el saldo. PAGADO nunca es vencida. Una PENDIENTE (sin declarar) con fecha pasada no se mezcla con las
+  vencidas: va aparte con sinDeclarar = true («pendiente de atención»). El calendario seguía otra regla hasta #81 (ya fusionado); ahora la pantalla del calendario usa la misma que el tablero.
+  Ninguno de los dos estados se guarda: se calculan con la fecha de hoy. Sin monto determinado el saldo es nulo y la regla se decide por el estado.
   «Hoy» es el de Lima (America/Lima), aunque el servidor corra en UTC. Sin tablas nuevas.
 end note
 
@@ -82,5 +86,5 @@ note right of TableroController
   CLIENTE_MYPE o token sin rol 403 (SecurityConfig: ruta no listada = estudio).
 end note
 
-footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-14, el código de develop (a9bdff1), HU-13 (pagos de obligaciones) y la regla de estados del calendario. Supuestos por confirmar con Beto: mes = periodo tributario, «declarado sin pago» = DECLARADO, orden por fecha límite
+footer Diseño previo, 17/11/2026 · actualizado el 18/11/2026 con el tablero ya fusionado (#67) en develop (61adf8b). Base: criterios de aceptación de HU-14, el código de develop y HU-13 (pagos de obligaciones); la regla de vencida es la definición de Beto. Supuestos por confirmar con Beto: mes = periodo tributario, «declarado sin pago» = DECLARADO, orden por fecha límite
 @enduml

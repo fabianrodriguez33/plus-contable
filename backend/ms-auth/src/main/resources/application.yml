@@ -1,5 +1,6 @@
 server:
-  port: 8081
+  # Render entrega el puerto en PORT
+  port: ${PORT:8081}
 
 spring:
   config:
@@ -12,6 +13,16 @@ spring:
     # Usuario propio del servicio (HT-01); si no se define, usa DB_USER y DB_PASSWORD
     username: ${AUTH_DB_USER:${DB_USER}}
     password: ${AUTH_DB_PASSWORD:${DB_PASSWORD}}
+    # Despliegue gratis (Neon): la base se suspende tras ~5 min sin uso y corta las conexiones abiertas.
+    # Una conexion vive menos que eso y se valida antes de entregarse; con 0 inactivas el pool se vacia solo.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: 0
+      idle-timeout: 120000
+      max-lifetime: ${DB_MAX_LIFETIME_MS:240000}
+      connection-timeout: 30000
+      validation-timeout: 5000
+      keepalive-time: 0
   jpa:
     hibernate:
       ddl-auto: none
@@ -33,7 +44,8 @@ app:
     # HU-37: vigencia de la contraseña temporal desde que se crea la cuenta
     temporal-horas: 48
   cors:
-    allowed-origins: http://localhost:5173
+    # Varios origenes separados por coma (CORS_ORIGINS)
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
   tributario:
     # HU-37: ms-tributario, para comprobar que la empresa existe antes de crearle la cuenta
     url: ${TRIBUTARIO_URL:http://localhost:8082}
