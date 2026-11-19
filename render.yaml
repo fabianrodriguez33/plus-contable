@@ -20,7 +20,7 @@ services:
         sync: false
       - key: ADMIN_USERNAME
         sync: false
-      - key: ADMIN_PASSWORD
+      - key: ADMIN_PASSWORD    # mínimo 16 caracteres, aleatoria (docs/DESPLIEGUE.md, sección 6)
         sync: false
       - key: TRIBUTARIO_URL    # https://<servicio tributario>.onrender.com
         sync: false

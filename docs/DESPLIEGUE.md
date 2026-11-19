@@ -4,6 +4,9 @@ Arquitectura: **Neon** (PostgreSQL) + **Render** (ms-auth y ms-tributario, plan 
 Nada de esto está creado todavía: son los pasos para que Julio lo haga con sus propias cuentas. **Ningún secreto va en el repositorio**
 (ni en archivos, ni en el chat, ni en capturas): se generan en tu terminal y se pegan directo en el panel de cada servicio.
 
+> **Solo demostración.** Este despliegue usa una base **solo de demostración** (un proyecto o una base de Neon nueva, nunca la base de trabajo ni una
+> copia de ella) y **datos ficticios** (sección 7). **Nunca se usan Clave SOL ni datos reales de clientes**: no las registres en la demo, ni siquiera de prueba.
+
 ## 1. Variables de entorno (nombres; los valores no se versionan)
 
 | Variable | Servicio | Qué es |
@@ -13,7 +16,7 @@ Nada de esto está creado todavía: son los pasos para que Julio lo haga con sus
 | `JWT_SECRET` | ambos | **el mismo valor en los dos**, mínimo 32 caracteres |
 | `AES_SECRET_KEY` | ms-tributario | exactamente 32 caracteres |
 | `AES_IV` | ms-tributario | exactamente 16 caracteres |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | ms-auth | administrador inicial (solo se crea si no existe) |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | ms-auth | administrador inicial (solo se crea si no existe). **`ADMIN_PASSWORD`: mínimo 16 caracteres, generada al azar** (sección 6), nunca una clave que uses en otro lugar |
 | `TRIBUTARIO_URL` | ms-auth | URL pública de ms-tributario, `https://….onrender.com` |
 | `CORS_ORIGINS` | ambos | origen(es) de la web, sin barra final, separados por coma: `https://<proyecto>.pages.dev` |
 | `PORT` | ambos | lo pone Render; sin ella: 8081 (auth) y 8082 (tributario) |
@@ -117,14 +120,14 @@ Set-Clipboard -Value (Nuevo-Texto 32)   # AES_SECRET_KEY (32 caracteres)
 Set-Clipboard -Value (Nuevo-Texto 16)   # AES_IV (16 caracteres)
 ```
 ```powershell
-Set-Clipboard -Value (Nuevo-Texto 20)   # ADMIN_PASSWORD
+Set-Clipboard -Value (Nuevo-Texto 24)   # ADMIN_PASSWORD (aleatoria, mínimo 16 caracteres)
 ```
 ```powershell
 Set-Clipboard -Value ' '                # vaciar el portapapeles
 ```
 
-**Guarda `AES_SECRET_KEY` y `AES_IV` en tu gestor de contraseñas** (no en un archivo del repositorio): si se pierden o cambian, las claves SOL ya cifradas
-dejan de poder leerse. Si cambias `JWT_SECRET`, todas las sesiones abiertas se cierran. `DB_PASSWORD` te lo da Neon.
+**Guarda `AES_SECRET_KEY`, `AES_IV` y `ADMIN_PASSWORD` en tu gestor de contraseñas** (no en un archivo del repositorio). La app no arranca sin las dos primeras;
+en la demo no se registran claves SOL, así que si las pierdes basta generar otras nuevas. Si cambias `JWT_SECRET`, todas las sesiones abiertas se cierran. `DB_PASSWORD` te lo da Neon.
 
 ## 7. Datos de demostración
 
@@ -147,12 +150,13 @@ Para quitar la demo: borra los clientes con razón social que empiece por `(DEMO
   arranque de la JVM + despertar de Neon). La web puede mostrar un error o tardar en la primera pantalla; recargar suele bastar.
   Antes de una demostración abre `…/api/auth/health` y `…/api/tributario/health` unos minutos antes.
 - **Los trabajos programados de las 7:00 (hora de Lima) no corren con el servicio dormido.** Un trabajo `@Scheduled` solo se ejecuta si el proceso
-  está despierto a esa hora; el plan gratis casi nunca lo está de madrugada. Hoy `develop` no tiene trabajos programados; los de los avisos de pago (HU-33, PR #68)
-  y las alertas de carta (HU-19, PR #73) los añaden y, en este despliegue, **no se ejecutarían por sí solos**. Opciones, fuera de este PR: un servicio externo
+  está despierto a esa hora; el plan gratis casi nunca lo está de madrugada. `develop` ya trae dos: los avisos de pago al cliente (HU-33, `AvisoClienteProgramador`, #68)
+  y las alertas del plazo de una notificación (HU-19, `AlertaPlazoProgramador`, #73). En este despliegue **no se ejecutarían por sí solos**: no se envían avisos ni alertas
+  mientras el servicio duerme, y un día que se pierde no se recupera solo. Opciones, fuera de este PR: un servicio externo
   gratuito que llame al `health` a las 6:55, o un plan de pago. Un servicio despierto 24 h gasta las 750 horas gratuitas mensuales de Render (dos servicios las superan).
 - **El disco de Render gratis no es persistente**: los comprobantes y documentos subidos a ms-tributario (`STORAGE_DIR`) se pierden al reiniciar o redesplegar.
   Los datos en la base (Neon) sí persisten. Para guardar archivos hace falta un disco de pago o un almacenamiento externo.
 - **Neon Free** suspende el cómputo a los 5 minutos sin uso (el pool lo tolera, ver sección 2) y tiene límites de almacenamiento y horas de cómputo.
 - **Memoria**: 512 MB por servicio. Una carga muy grande (por ejemplo un archivo de 10 MB junto a otras peticiones) puede reiniciar el servicio.
 - **CORS**: si la web muestra «No se pudo conectar con el servidor» pero el `health` responde, revisa que `CORS_ORIGINS` sea exactamente el origen de la web.
-- **HTTPS y datos reales**: este despliegue es para demostración con datos ficticios. No cargues claves SOL ni datos reales de clientes sin revisar seguridad y respaldos.
+- **Datos reales**: la demo es solo con datos ficticios y en una base solo de demostración. No cargues Clave SOL ni datos reales de clientes; para eso hace falta revisar seguridad y respaldos antes.
