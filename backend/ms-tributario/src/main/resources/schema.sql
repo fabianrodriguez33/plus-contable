@@ -447,3 +447,19 @@ CREATE INDEX IF NOT EXISTS idx_socios_cliente ON tributario_schema.socios(client
 CREATE INDEX IF NOT EXISTS idx_activos_cliente ON tributario_schema.activos_fijos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_trabajadores_cliente ON tributario_schema.trabajadores(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_obligaciones_cliente ON tributario_schema.obligaciones(cliente_id);
+
+-- HU-33 (Jeanpierre): avisos que recibe el cliente antes de que venza el pago de una obligación. Un aviso por obligación y
+-- por día de envío (el reintento del mismo día no duplica). Guarda tributo, monto y fecha tal como se avisaron.
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos_cliente (
+    id                BIGSERIAL PRIMARY KEY,
+    cliente_id        BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    obligacion_id     BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    tributo           VARCHAR(30) NOT NULL,
+    monto             NUMERIC(14,2) NOT NULL CHECK (monto > 0),
+    fecha_vencimiento DATE NOT NULL,
+    fecha_aviso       DATE NOT NULL,
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_avisos_cliente_obligacion_dia UNIQUE (obligacion_id, fecha_aviso)
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_cliente_cliente ON tributario_schema.avisos_cliente(cliente_id, fecha_aviso DESC, id DESC);

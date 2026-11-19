@@ -47,6 +47,8 @@ public class SecurityConfig {
                                 "/api/tributario/clientes/*/documentos",
                                 "/api/tributario/clientes/*/documentos/*/archivo",
                                 "/api/tributario/clientes/*/acuerdo",
+                                "/api/tributario/clientes/*/avisos-pago",
+                                "/api/tributario/clientes/*/datos-empresa",
                                 "/api/tributario/obligaciones",
                                 "/api/tributario/obligaciones/*")
                         .hasAnyRole(ESTUDIO_Y_CLIENTE)

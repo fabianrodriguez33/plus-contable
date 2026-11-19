@@ -1,6 +1,7 @@
 import { authApi, TOKEN_KEY, USER_KEY } from './apiClient'
 import type { Usuario } from '../types'
-import { isJwtActive, jwtRequiereCambioPassword } from './jwtSession'
+import { limpiarCache } from './cacheLocal'
+import { isJwtActive, jwtClienteId, jwtRequiereCambioPassword } from './jwtSession'
 
 interface LoginResponse {
   token: string
@@ -35,6 +36,7 @@ export async function cambiarPassword(passwordNueva: string): Promise<Usuario> {
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  limpiarCache()
 }
 
 /** HU-36: cierra la sesión en el servidor (revoca el token) y limpia la local; si el servidor no responde igual se limpia. */
@@ -59,3 +61,11 @@ export function usuarioActual(): Usuario | null {
   const raw = localStorage.getItem(USER_KEY)
   return raw ? (JSON.parse(raw) as Usuario) : null
 }
+
+/** HU-35: la empresa de la cuenta de cliente que inició sesión (null si es una cuenta del estudio). */
+export function clienteIdActual(): number | null {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return token ? jwtClienteId(token) : null
+}
+
+export const esCliente = (): boolean => usuarioActual()?.roles.includes('CLIENTE_MYPE') ?? false
