@@ -1,0 +1,8 @@
+# Cloudflare Pages: el service worker y la pagina de entrada no se guardan en el cache del navegador,
+# para que una version nueva se vea al recargar (los archivos de /assets llevan hash en el nombre).
+/sw.js
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
