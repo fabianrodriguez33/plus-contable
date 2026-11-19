@@ -165,4 +165,25 @@ class RecordatorioPagoHttpTest {
         assertThat(json.readTree(llamar("GET", "/api/tributario/clientes/" + suyo + "/avisos-pago", token("CLIENTE_MYPE", suyo), null).body())).isEmpty();
         assertThat(json.readTree(llamar("GET", ruta, contador, null).body()).get(0).get("estado").asText()).isEqualTo("OMITIDO");
     }
+
+    @Test
+    void conPagoParcialElContadorProgramaYElClienteRecibeElSaldoPendiente() throws Exception {
+        long suyo = cliente();
+        long o = declarada(suyo);                                     // monto determinado 1200.00
+        jdbc.update("""
+                INSERT INTO tributario_schema.pagos_obligacion(obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues)
+                VALUES (?, ?, 200.00, 'C-PARCIAL-1', 200.00, 1000.00)""", o, HOY);
+        jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGO_PARCIAL' WHERE id = ?", o);
+        String ruta = "/api/tributario/obligaciones/" + o + "/recordatorios-pago";
+
+        var creado = llamar("POST", ruta, token("CONTADOR", null), fecha(HOY));
+        assertThat(creado.statusCode()).isEqualTo(201);
+        assertThat(json.readTree(creado.body()).get("saldo").decimalValue()).isEqualByComparingTo("1000.00");
+
+        recordatorios.entregar(HOY);
+
+        JsonNode lista = json.readTree(llamar("GET", "/api/tributario/clientes/" + suyo + "/avisos-pago", token("CLIENTE_MYPE", suyo), null).body());
+        assertThat(lista).hasSize(1);
+        assertThat(lista.get(0).get("monto").decimalValue()).isEqualByComparingTo("1000.00");   // el saldo, no el monto determinado
+    }
 }

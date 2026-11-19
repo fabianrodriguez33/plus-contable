@@ -12,66 +12,61 @@ class ReglaRecordatorioPagoTest {
     private static final LocalDate VENCE = HOY.plusDays(10);
 
     @Test
-    void declaradaSinPagosYEnFechaProgramadaCorresponde() {
-        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, HOY, HOY));
+    void declaradaEnLaFechaProgramadaCorresponde() {
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY, HOY));
     }
 
     @Test
-    void declaradaSinPagosPeroAunNoLlegaLaFechaQuedaPendiente() {
-        assertEquals(FECHA_PENDIENTE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, HOY.plusDays(1), HOY));
+    void conPagoParcialTambienCorresponde_Beto18Nov() {
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGO_PARCIAL, VENCE, HOY, HOY));
+        assertEquals(FECHA_PENDIENTE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGO_PARCIAL, VENCE, HOY.plusDays(1), HOY));
     }
 
     @Test
-    void pagoCompletoNoEsElegible() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.PAGADO, VENCE, true, HOY, HOY));
+    void aunNoLlegaLaFechaQuedaPendiente() {
+        assertEquals(FECHA_PENDIENTE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY.plusDays(1), HOY));
     }
 
     @Test
-    void pagoParcialNoEsElegiblePorqueYaExisteUnPago() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.PAGO_PARCIAL, VENCE, true, HOY, HOY));
+    void pagadaNoEsElegible() {
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGADO, VENCE, HOY, HOY));
     }
 
     @Test
     void obligacionSinDeclararNoEsElegible() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.PENDIENTE, VENCE, false, HOY, HOY));
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PENDIENTE, VENCE, HOY, HOY));
     }
 
     @Test
     void recordatorioPosteriorAlVencimientoNoEsElegible() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, VENCE.plusDays(1), HOY));
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, VENCE.plusDays(1), HOY));
     }
 
     @Test
-    void fechaDeRecordatorioYaPasadaNoSeReenvia() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, HOY.minusDays(1), HOY));
+    void siElSistemaEstuvoCaidoSeEnviaConRetrasoMientrasSigaSiendoUtil_Beto18Nov() {
+        LocalDate fecha = HOY.minusDays(2);
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, fecha, HOY));
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGO_PARCIAL, VENCE, fecha, VENCE));
+    }
+
+    @Test
+    void yaVencidaElRecordatorioAtrasadoDejoDeSerUtil() {
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY, VENCE.plusDays(1)));
     }
 
     @Test
     void reprogramarCambiaElDiaElegibleYLaClaveDelEvento() {
         LocalDate nuevaFecha = HOY.plusDays(2);
-        assertEquals(FECHA_PENDIENTE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, nuevaFecha, HOY));
-        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, nuevaFecha, nuevaFecha));
-        assertNotEquals(ReglaRecordatorioPago.claveEvento(7L, HOY),
-                ReglaRecordatorioPago.claveEvento(7L, nuevaFecha));
+        assertEquals(FECHA_PENDIENTE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, nuevaFecha, HOY));
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, nuevaFecha, nuevaFecha));
+        assertNotEquals(ReglaRecordatorioPago.claveEvento(7L, HOY), ReglaRecordatorioPago.claveEvento(7L, nuevaFecha));
     }
 
     @Test
     void fechasAusentesNoHabilitanRecordatorio() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, null, false, HOY, HOY));
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, null, HOY));
-        assertThrows(NullPointerException.class, () -> ReglaRecordatorioPago.evaluar(
-                Obligacion.Estado.DECLARADO, VENCE, false, HOY, null));
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, null, HOY, HOY));
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, null, HOY));
+        assertThrows(NullPointerException.class, () -> ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY, null));
     }
 
     @Test

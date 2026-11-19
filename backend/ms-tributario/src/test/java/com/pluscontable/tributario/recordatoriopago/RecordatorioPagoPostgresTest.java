@@ -86,22 +86,32 @@ class RecordatorioPagoPostgresTest {
     }
 
     @Test
-    void noSeProgramaSobrePendienteParcialPagadaNiConPagos() {
+    void conPagoParcialSiSePuedeProgramarYElContadorVeElSaldo_Beto18Nov() {
+        long cli = cliente(true);
+        long parcial = obligacion(cli, "PAGO_PARCIAL", "1000.00");
+        pago(parcial, "400.00", "C-1");
+
+        var r = servicio(HOY).programar(parcial, HOY.plusDays(2), "c");
+
+        assertThat(r.estado()).isEqualTo("PROGRAMADO");
+        assertThat(r.saldo()).isEqualByComparingTo("600.00");
+        assertThat(servicio(HOY).listar(parcial).get(0).saldo()).isEqualByComparingTo("600.00");
+    }
+
+    @Test
+    void noSeProgramaSobreSinDeclararPagadaNiSinSaldo() {
         long cli = cliente(true);
         long pendiente = obligacion(cli, "PENDIENTE", "1000.00");
-        long parcial = obligacion(cli, "PAGO_PARCIAL", "1000.00");
-        pago(parcial, "100.00", "C-1");
         long pagada = obligacion(cli, "PAGADO", "1000.00");
         pago(pagada, "1000.00", "C-2");
-        long declaradaConPago = obligacion(cli, "DECLARADO", "1000.00");
-        pago(declaradaConPago, "50.00", "C-3");
+        long sinSaldo = obligacion(cli, "PAGO_PARCIAL", "1000.00");
+        pago(sinSaldo, "1000.00", "C-3");
 
         assertThatThrownBy(() -> servicio(HOY).programar(pendiente, VENCE, "c")).hasMessageContaining("no está declarada");
-        assertThatThrownBy(() -> servicio(HOY).programar(parcial, VENCE, "c")).hasMessageContaining("ya tiene pagos");
         assertThatThrownBy(() -> servicio(HOY).programar(pagada, VENCE, "c")).hasMessageContaining("ya está pagada");
-        assertThatThrownBy(() -> servicio(HOY).programar(declaradaConPago, VENCE, "c")).hasMessageContaining("ya tiene pagos");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tributario_schema.recordatorios_pago WHERE obligacion_id IN (?,?,?,?)",
-                Integer.class, pendiente, parcial, pagada, declaradaConPago)).isZero();
+        assertThatThrownBy(() -> servicio(HOY).programar(sinSaldo, VENCE, "c")).hasMessageContaining("no tiene saldo pendiente");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM tributario_schema.recordatorios_pago WHERE obligacion_id IN (?,?,?)",
+                Integer.class, pendiente, pagada, sinSaldo)).isZero();
     }
 
     @Test
@@ -148,33 +158,70 @@ class RecordatorioPagoPostgresTest {
     }
 
     @Test
-    void siSePagoDespuesDeProgramarNoSeEnvia_pagoCompletoOParcial() {
-        long cli = cliente(true);
-        long pagada = obligacion(cli, "DECLARADO", "1000.00");
-        long parcial = obligacion(cli, "DECLARADO", "1000.00");
+    void siSePagoTodoDespuesDeProgramarNoSeEnvia() {
+        long pagada = declarada();
         var dia = HOY.plusDays(1);
-        var r1 = servicio(HOY).programar(pagada, dia, "c");
-        var r2 = servicio(HOY).programar(parcial, dia, "c");
+        var r = servicio(HOY).programar(pagada, dia, "c");
         pago(pagada, "1000.00", "C-9");
         jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGADO' WHERE id = ?", pagada);
-        pago(parcial, "100.00", "C-8");
-        jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGO_PARCIAL' WHERE id = ?", parcial);
 
-        assertThat(servicio(dia).entregar(dia)).isEqualTo(new RecordatorioPagoService.Resultado(0, 2));
+        assertThat(servicio(dia).entregar(dia)).isEqualTo(new RecordatorioPagoService.Resultado(0, 1));
         assertThat(avisos(pagada)).isEmpty();
-        assertThat(avisos(parcial)).isEmpty();
-        assertThat(estado(r1.id())).isEqualTo("OMITIDO");
-        assertThat(estado(r2.id())).isEqualTo("OMITIDO");
+        assertThat(estado(r.id())).isEqualTo("OMITIDO");
     }
 
     @Test
-    void siElJobNoCorrioEnSuDiaQuedaOmitidoYNoSeEnviaTarde() {
+    void siSePagoUnaParteDespuesDeProgramarSeEnviaConElSaldoDeHoy_Beto18Nov() {
+        long parcial = declarada();
+        var dia = HOY.plusDays(1);
+        var r = servicio(HOY).programar(parcial, dia, "c");
+        pago(parcial, "100.00", "C-8");
+        jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGO_PARCIAL' WHERE id = ?", parcial);
+
+        assertThat(servicio(dia).entregar(dia)).isEqualTo(new RecordatorioPagoService.Resultado(1, 0));
+        assertThat(avisos(parcial)).containsExactly("IGV|900.00|" + VENCE + "|" + dia);
+        assertThat(estado(r.id())).isEqualTo("ENVIADO");
+    }
+
+    @Test
+    void siElSistemaEstuvoCaidoElRecordatorioSeEnviaAlVolverMientrasSigaSiendoUtil_Beto18Nov() {
         long o = declarada();
         var r = servicio(HOY).programar(o, HOY.plusDays(1), "c");
-        var tarde = HOY.plusDays(3);
+        var alVolver = HOY.plusDays(4);
+        assertThat(servicio(alVolver).entregar(alVolver)).isEqualTo(new RecordatorioPagoService.Resultado(1, 0));
+        assertThat(avisos(o)).containsExactly("IGV|1000.00|" + VENCE + "|" + alVolver);   // el aviso lleva la fecha en que se envió
+        assertThat(estado(r.id())).isEqualTo("ENVIADO");
+    }
+
+    @Test
+    void siYaVencioElRecordatorioAtrasadoDejoDeSerUtilYNoSeEnvia() {
+        long o = declarada();
+        var r = servicio(HOY).programar(o, HOY.plusDays(1), "c");
+        var tarde = VENCE.plusDays(1);
         assertThat(servicio(tarde).entregar(tarde)).isEqualTo(new RecordatorioPagoService.Resultado(0, 1));
         assertThat(avisos(o)).isEmpty();
         assertThat(estado(r.id())).isEqualTo("OMITIDO");
+    }
+
+    @Test
+    void conVariosAtrasadosDeLaMismaObligacionSeEnviaUnoSoloYLosDemasQuedanOmitidos_Beto18Nov() {
+        long o = declarada();
+        var primero = servicio(HOY).programar(o, HOY.plusDays(1), "c");
+        var segundo = servicio(HOY).programar(o, HOY.plusDays(2), "c");
+        var tercero = servicio(HOY).programar(o, HOY.plusDays(3), "c");
+        long otra = declarada();
+        var deOtra = servicio(HOY).programar(otra, HOY.plusDays(2), "c");  // otra obligación: se envía el suyo
+        var alVolver = HOY.plusDays(5);
+
+        assertThat(servicio(alVolver).entregar(alVolver)).isEqualTo(new RecordatorioPagoService.Resultado(2, 2));
+
+        assertThat(avisos(o)).hasSize(1);
+        assertThat(avisos(otra)).hasSize(1);
+        assertThat(estado(tercero.id())).isEqualTo("ENVIADO");      // el de la fecha más reciente
+        assertThat(estado(segundo.id())).isEqualTo("OMITIDO");
+        assertThat(estado(primero.id())).isEqualTo("OMITIDO");
+        assertThat(estado(deOtra.id())).isEqualTo("ENVIADO");
+        assertThat(servicio(alVolver).entregar(alVolver)).isEqualTo(new RecordatorioPagoService.Resultado(0, 0));   // repetir no cambia nada
     }
 
     @Test
