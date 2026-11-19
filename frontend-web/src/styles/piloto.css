@@ -1,0 +1,28 @@
+/*
+ * Tema local de las dos pantallas piloto: Login y Cartera de clientes.
+ * Todo cuelga de la clase .piloto, que solo ponen esas dos páginas: ninguna otra pantalla cambia de aspecto.
+ * No redefine la paleta global ni los componentes compartidos; solo reasigna, dentro de .piloto, los radios y
+ * el panel de vidrio (hoja blanca con borde fino). Colores y fuentes son PROVISIONALES: V&F no entregó logo ni
+ * colores oficiales.
+ */
+.piloto {
+  --radio-campo: 0.375rem;
+  --radio-panel: 0.625rem;
+  --piloto-regla: rgb(var(--tinta) / 0.15);
+  --piloto-serif: Georgia, 'Times New Roman', serif;
+}
+
+/* La hoja: papel blanco con borde fino y casi sin sombra, en lugar del vidrio translúcido */
+.piloto .vidrio {
+  background: #fff;
+  border: 1px solid var(--piloto-regla);
+  box-shadow: 0 1px 0 rgb(var(--tinta) / 0.05);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.piloto h1,
+.piloto h2,
+.piloto .piloto-marca {
+  font-family: var(--piloto-serif);
+}
