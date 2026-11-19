@@ -448,3 +448,23 @@ CREATE TABLE IF NOT EXISTS tributario_schema.avisos_cliente (
 );
 
 CREATE INDEX IF NOT EXISTS idx_avisos_cliente_cliente ON tributario_schema.avisos_cliente(cliente_id, fecha_aviso DESC, id DESC);
+
+-- HU-15 (Ricardo): recordatorios de pago que el contador programa para una fecha. El día elegido se entrega al cliente como un aviso
+-- de pago (avisos_cliente, HU-33), solo si la obligación sigue declarada y sin ningún pago. Estados: PROGRAMADO (pendiente de su fecha),
+-- ENVIADO, CANCELADO (lo canceló el contador) y OMITIDO (llegó su fecha y ya no correspondía enviarlo). Una obligación puede tener
+-- varios recordatorios en fechas distintas; no se repite una fecha mientras siga programada.
+CREATE TABLE IF NOT EXISTS tributario_schema.recordatorios_pago (
+    id                 BIGSERIAL PRIMARY KEY,
+    obligacion_id      BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    fecha_recordatorio DATE NOT NULL,
+    estado             VARCHAR(20) NOT NULL DEFAULT 'PROGRAMADO' CHECK (estado IN ('PROGRAMADO', 'ENVIADO', 'CANCELADO', 'OMITIDO')),
+    programado_por     VARCHAR(150) NOT NULL,
+    programado_en      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resuelto_en        TIMESTAMPTZ,
+    CONSTRAINT ck_recordatorios_pago_resuelto CHECK ((estado = 'PROGRAMADO') = (resuelto_en IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recordatorios_pago_programado
+    ON tributario_schema.recordatorios_pago(obligacion_id, fecha_recordatorio) WHERE estado = 'PROGRAMADO';
+CREATE INDEX IF NOT EXISTS idx_recordatorios_pago_pendientes
+    ON tributario_schema.recordatorios_pago(fecha_recordatorio) WHERE estado = 'PROGRAMADO';
