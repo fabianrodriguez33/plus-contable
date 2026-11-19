@@ -1,0 +1,54 @@
+@startuml
+title T87 · HU-19 · Secuencia: generar y ver las alertas del plazo de respuesta
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+participant "AlertaPlazoProgramador\n(todos los días 7:00, Lima)" as PR
+participant "AlertaPlazoService" as AS
+participant "RecordatorioSireFechas" as RF
+participant "AvisoInternoService\n(HU-12)" as AV
+database "tributario_schema" as DB
+actor "Contador" as U
+participant "frontend-web\n(AlertasPlazoPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "AlertaPlazoController" as AC
+
+== Generación diaria (criterios 1, 2 y 4) ==
+PR -> AS : generar(hoy de Lima)
+AS -> DB : SELECT notificaciones_sol PENDIENTE\ncon plazo entre hoy y hoy + el mayor de los días
+note right : Criterio 4: una ATENDIDA no se consulta
+loop cada notificación pendiente
+  AS -> RF : corresponde(plazo, hoy, días de alerta)
+  alt faltan exactamente 5, 3, 1 o 0 días
+    AS -> AV : crear("HU-19", "notificacion:{id}:dias:{n}", mensaje, [cliente])
+    AV --> AS : aviso (el mismo si ya existía)
+    AS -> DB : INSERT alertas_plazo_notificacion ... ON CONFLICT DO NOTHING
+    note right : Criterio 2: una alerta por escalón, una sola vez
+  else otro día
+    AS -> AS : sin alerta
+  end
+end
+
+== Ver las alertas (criterio 3) ==
+U -> FE : abre «Alertas de plazo» en el menú
+FE -> SEC : GET /api/tributario/alertas-plazo\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403
+end
+SEC -> AC : listar()
+AC -> AS : listar()
+AS -> DB : SELECT alertas JOIN notificaciones_sol JOIN clientes\nWHERE estado = PENDIENTE AND plazo >= hoy (Lima)
+AS -> AS : diasRestantes = plazo - hoy (Lima)
+AS --> FE : 200 [AlertaPlazoDto] por plazo más próximo
+alt hay alertas
+  FE -> U : cliente, tipo, plazo, «faltan N días» y la alerta (5, 3, 1 o 0 días antes)
+else sin alertas
+  FE -> U : "No hay alertas de plazo."
+end
+
+footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-19, el código de develop (7c1594d) y HU-12. Código existente: NotificacionSol, AvisoInternoService, RecordatorioSireFechas, SecurityConfig, GlobalExceptionHandler
+@enduml

@@ -6,6 +6,7 @@ import { Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, Tr
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
   { to: '/calendario', etiqueta: 'Calendario', icono: CalendarDays },
+  { to: '/alertas-plazo', etiqueta: 'Alertas de plazo', icono: Bell },
   { to: '/estado-cuenta', etiqueta: 'Estado de cuenta', icono: FileText },
   { to: '/morosos', etiqueta: 'Clientes morosos', icono: TriangleAlert },
   { to: '/clientes/nuevo', etiqueta: 'Nuevo cliente', icono: UserPlus },
