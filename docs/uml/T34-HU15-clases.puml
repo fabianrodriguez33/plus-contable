@@ -1,0 +1,123 @@
+@startuml
+!pragma layout smetana
+title T34 · HU-15 · Clases de los recordatorios de pago al cliente (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class RecordatorioPagoController <<pendiente de #79>> {
+  +programar(obligacionId, dto): RecordatorioPagoDto
+  +listar(obligacionId): List<RecordatorioPagoDto>
+}
+class RecordatorioPagoService <<pendiente de #79>> {
+  +programar(obligacionId, fecha, usuario): RecordatorioPagoDto
+  +entregarDelDia(hoy): int
+  -corresponde(obligacion, saldo): boolean
+}
+class RecordatorioPagoProgramador <<pendiente de #79>> {
+  +entregarRecordatoriosDelDia()
+}
+class RecordatorioPago <<pendiente de #79>> {
+  id: Long
+  obligacionId: Long
+  fechaProgramada: LocalDate
+  entregadoEn: LocalDateTime
+  creadoPor: String
+}
+
+class AvisoClienteService <<existe, #68>> {
+  +generar(hoy): int
+  +listar(clienteId): List<AvisoClienteDto>
+}
+class AvisoClienteProgramador <<existe, #68>> {
+  +generarAvisosDelDia()
+}
+class AvisoClienteController <<existe, #68>> {
+  +listar(clienteId): List<AvisoClienteDto>
+}
+class AvisoClienteDto <<record, existe, #68>> {
+  id: Long
+  obligacionId: Long
+  tributo: String
+  monto: BigDecimal
+  fechaVencimiento: LocalDate
+  fechaAviso: LocalDate
+}
+class RecordatorioSireFechas <<existe>> {
+  {static} DIAS_AVISO_INICIALES: List<Integer>
+  {static} +corresponde(fecha, hoy, dias): boolean
+}
+class PagoObligacionService <<existe, HU-13>> {
+  +registrar(obligacionId, dto, archivo): ObligacionDto
+  +listar(obligacionId): List<PagoDto>
+}
+class Obligacion <<existe>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: String
+  fechaVencimiento: LocalDate
+  estado: Estado
+  montoDeterminado: BigDecimal
+}
+enum "Obligacion.Estado" as Estado <<existe>> {
+  PENDIENTE
+  DECLARADO
+  PAGO_PARCIAL
+  PAGADO
+}
+class PagoObligacion <<existe, HU-13>> {
+  obligacionId: Long
+  montoPagado: BigDecimal
+}
+class AvisoInternoService <<existe, #64 · HU-12>> {
+  +crear(origen, claveEvento, mensaje, clienteIds): AvisoInternoDto
+  +buscarPorEvento(origen, claveEvento): Optional<AvisoInternoDto>
+}
+class ReglaVencimientoProximo <<existe, #65 · HU-11>> {
+  {static} +corresponde(candidato, hoy, dias): boolean
+  {static} +seleccionar(candidatos, hoy, dias): List<Candidato>
+}
+
+RecordatorioPagoController --> RecordatorioPagoService
+RecordatorioPagoProgramador --> RecordatorioPagoService : cada día 7:00 Lima
+RecordatorioPagoService ..> RecordatorioPago
+RecordatorioPagoService --> Obligacion : solo DECLARADO o PAGO_PARCIAL
+RecordatorioPagoService --> PagoObligacion : saldo = monto determinado - suma de pagos
+RecordatorioPagoService ..> AvisoClienteService : entrega el aviso al cliente (por confirmar con #79)
+AvisoClienteProgramador --> AvisoClienteService
+AvisoClienteController --> AvisoClienteService
+AvisoClienteService ..> AvisoClienteDto
+AvisoClienteService --> RecordatorioSireFechas : días 3, 1 y 0 antes
+AvisoClienteService --> Obligacion : DECLARADO o PAGO_PARCIAL con saldo
+AvisoClienteService --> PagoObligacion : suma de pagos
+PagoObligacionService --> PagoObligacion
+Obligacion --> Estado
+Obligacion "1" o-- "0..*" PagoObligacion
+ReglaVencimientoProximo ..> Obligacion : solo PENDIENTE (HU-11)
+
+note bottom of RecordatorioPagoService
+  Criterio 1: el contador elige la fecha y el cliente recibe el recordatorio ese día (lo programa el contador; lo entrega el
+  programador diario). Criterio 4: solo se programa si la obligación está DECLARADO o PAGO_PARCIAL (nunca PENDIENTE ni PAGADO).
+  Criterio 3: al entregar, se recalcula el saldo y, si ya no queda saldo, no se envía. Criterio 2: el recordatorio lleva el
+  monto (saldo) y la fecha límite, igual que AvisoClienteDto.
+  Todo lo marcado «pendiente de #79» no está en develop: nombres y campos son tentativos hasta que se fusione #79.
+end note
+note right of AvisoClienteService
+  Ya en develop (#68): aviso automático 3, 1 y 0 días antes (supuesto por confirmar con Beto) sobre obligaciones DECLARADO o
+  PAGO_PARCIAL con saldo. Un pago parcial sigue avisando por el saldo. Se guarda en avisos_cliente, sin duplicar por día, y el
+  cliente lo lee en su portal (GET /api/tributario/clientes/{id}/avisos-pago). No tiene fecha elegida por el contador.
+end note
+note right of ReglaVencimientoProximo
+  No sirve tal cual para HU-15: selecciona obligaciones PENDIENTE (sin declarar) para HU-11 (el aviso interno al contador sigue en #76, no fusionado), y HU-15
+  necesita lo contrario (declaradas con saldo). HU-15 sí reutiliza la idea de clave estable por evento y el UNIQUE por día.
+end note
+note right of RecordatorioPago
+  Decisión de Beto (regla vigente): el recordatorio sobre un pago parcial está permitido. Los recordatorios atrasados (el
+  sistema estuvo apagado a las 7:00) se envían una sola vez cuando el sistema vuelva y solo si la obligación sigue pendiente.
+  Hoy el programador de #68 solo mira el día exacto: esa recuperación depende de #79.
+  Supuesto: el canal es el portal del cliente (como #68); correo u otro canal queda sin definir (riesgo 11 del Sprint Backlog).
+end note
+
+footer Diseño previo, 18/11/2026 · Base: criterios de aceptación de HU-15 y el código fusionado en develop (922edee): núcleo de avisos (#64), regla de vencimientos próximos (#65), avisos al cliente (#68) y pagos de HU-13. Lo marcado «pendiente de #79» no está en develop.
+@enduml
