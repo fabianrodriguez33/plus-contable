@@ -1,0 +1,72 @@
+@startuml
+title T34 · HU-15 · Secuencia: programar un recordatorio de pago y entregarlo al cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as CO
+actor "Cliente MYPE" as CL
+participant "frontend-web" as FE
+participant "RecordatorioPagoController\n<<pendiente de #79>>" as RC
+participant "RecordatorioPagoService\n<<pendiente de #79>>" as RS
+participant "RecordatorioPagoProgramador\n<<pendiente de #79>>\n(todos los días 7:00, Lima)" as RP
+participant "PagoObligacionService\n<<existe, HU-13>>" as PS
+participant "AvisoClienteController\n+ AvisoClienteService\n<<existe, #68>>" as AC
+database "tributario_schema" as DB
+
+== Programar el recordatorio (criterios 1 y 4) · pendiente de #79 ==
+CO -> FE : elige una obligación y la fecha del recordatorio
+FE -> RC : POST (ruta por confirmar en #79)\nAuthorization: Bearer <JWT>
+RC -> RS : programar(obligacionId, fecha, usuario)
+RS -> DB : obligación y suma de sus pagos (pagos_obligacion)
+alt la obligación no existe
+  RS --> FE : 404
+else estado PENDIENTE (sin declarar) o PAGADO, o sin saldo
+  RS --> FE : 400 «solo se programa sobre obligaciones declaradas y con saldo por pagar»
+else estado DECLARADO o PAGO_PARCIAL con saldo
+  note right : Regla de Beto: el pago parcial está permitido; el recordatorio muestra el saldo.
+  RS -> DB : INSERT recordatorios_pago (obligación, fecha programada, usuario)
+  RS --> FE : 201
+end
+
+== Entrega diaria (criterios 1, 2 y 3) · pendiente de #79 ==
+RP -> RS : entregarDelDia(hoy de Lima)
+RS -> DB : recordatorios con fecha programada <= hoy y sin entregar
+loop cada recordatorio
+  RS -> DB : saldo = monto determinado - suma de pagos (se recalcula al entregar)
+  alt saldo <= 0 (el pago ya está registrado)
+    RS -> RS : no se envía (criterio 3)
+  else queda saldo (DECLARADO o PAGO_PARCIAL)
+    RS -> DB : aviso al cliente con el saldo y la fecha límite (criterio 2)
+    RS -> DB : marca el recordatorio como entregado (se envía una sola vez)
+  end
+end
+note over RS
+  Regla de Beto: si el sistema estuvo apagado a las 7:00, el recordatorio atrasado (fecha programada anterior a hoy y sin entregar)
+  se envía una sola vez cuando el sistema vuelva, y solo si la obligación sigue pendiente. El programador ya existente de #68
+  (AvisoClienteProgramador) solo mira el día exacto: esa recuperación es de #79.
+end note
+
+== Registrar un pago (ya en develop, HU-13) ==
+CO -> PS : registrar(obligacionId, pago, constancia)
+PS -> DB : INSERT pagos_obligacion; el estado pasa a PAGO_PARCIAL o PAGADO
+note right : el siguiente recordatorio ve el saldo nuevo; con saldo 0 ya no se envía
+
+== El cliente ve el aviso (ya en develop, #68) ==
+CL -> FE : abre «Avisos de pago» (/mis-avisos)
+FE -> AC : GET /api/tributario/clientes/{id}/avisos-pago
+AC -> DB : SELECT avisos_cliente del cliente (AccesoCliente: solo su empresa)
+AC --> FE : 200 [aviso: tributo, monto (saldo), fecha de vencimiento, día del aviso]
+note over AC
+  Ya en develop (#68): además del recordatorio programado, el sistema avisa solo 3, 1 y 0 días antes del vencimiento
+  (supuesto por confirmar con Beto). El recordatorio programado por el contador no existe aún en develop (#79).
+end note
+
+note over RS, AC
+  Supuesto: la entrega es dentro del sistema (el aviso en el portal del cliente, como en #68). Correo, WhatsApp u otro canal externo
+  queda sin definir (riesgo 11 del Sprint Backlog). Los nombres y rutas marcados «pendiente de #79» son tentativos hasta que se fusione.
+end note
+
+footer Diseño previo, 18/11/2026 · Base: criterios de aceptación de HU-15 y el código fusionado en develop (922edee): núcleo de avisos (#64), regla de vencimientos próximos (#65), avisos al cliente (#68) y pagos de HU-13. Lo marcado «pendiente de #79» no está en develop.
+@enduml

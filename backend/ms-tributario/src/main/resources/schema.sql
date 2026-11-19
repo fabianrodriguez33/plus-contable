@@ -306,6 +306,21 @@ CREATE TABLE IF NOT EXISTS tributario_schema.avisos_clientes (
 
 CREATE INDEX IF NOT EXISTS idx_avisos_bandeja ON tributario_schema.avisos(creado_en DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_avisos_clientes_cliente ON tributario_schema.avisos_clientes(cliente_id);
+
+-- HU-19: alertas escalonadas antes del plazo de respuesta de una notificacion del Buzon SOL (HU-18). Una fila por notificacion
+-- y por dia de alerta: el UNIQUE evita repetir una alerta el mismo dia. No se guarda ningun estado de la alerta ni los dias
+-- restantes: se calculan al consultar. El mensaje y el cliente quedan en el aviso compartido de HU-12 (aviso_id).
+CREATE TABLE IF NOT EXISTS tributario_schema.alertas_plazo_notificacion (
+    id              BIGSERIAL PRIMARY KEY,
+    notificacion_id BIGINT NOT NULL REFERENCES tributario_schema.notificaciones_sol(id) ON DELETE CASCADE,
+    dias_antes      INTEGER NOT NULL CHECK (dias_antes >= 0),
+    fecha_alerta    DATE NOT NULL,
+    aviso_id        BIGINT NOT NULL REFERENCES tributario_schema.avisos(id),
+    creada_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_alerta_plazo_notificacion_dias UNIQUE (notificacion_id, dias_antes)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_plazo_notificacion ON tributario_schema.alertas_plazo_notificacion(notificacion_id);
 -- HU-26 (Jeanpierre): pedidos especiales del cliente (constancia, certificacion o tramite) con su fecha de entrega, en
 -- seguimiento hasta que el estudio los marca atendidos. Diseño previo T182 (supuestos pendientes de confirmar con Beto).
 CREATE TABLE IF NOT EXISTS tributario_schema.solicitudes_especiales (
