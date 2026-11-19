@@ -86,10 +86,11 @@ describe('agruparEntradasPorDia', () => {
 })
 
 describe('situación visual', () => {
-  it('una obligación declarada se muestra como declarada aunque su fecha haya pasado', () => {
+  it('una declarada con la fecha futura es declarada; pasada y sin pago está vencida (se debe todo)', () => {
+    expect(situacionVisual(item(1, 1, '2026-11-20', {}, 'DECLARADO'))).toBe('DECLARADA')
     const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'DECLARADO')
-    expect(situacionVisual(it)).toBe('DECLARADA')
-    expect(etiquetaSituacion(it)).toBe('Declarada')
+    expect(situacionVisual(it)).toBe('VENCIDA')
+    expect(etiquetaSituacion(it)).toBe('Vencida hace 13 días')
   })
   it('una obligación pagada se muestra como pagada aunque su fecha haya pasado, y no como vencida', () => {
     const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGADO')
@@ -100,11 +101,12 @@ describe('situación visual', () => {
     const it = item(1, 1, '2026-10-20', { diasRestantes: -13, vencimientoPasado: true }, 'PAGO_PARCIAL')
     expect(situacionVisual(it)).toBe('VENCIDA')
   })
-  it('una pendiente con fecha pasada está vencida', () => {
-    expect(etiquetaSituacion(item(1, 1, '2026-11-01', { diasRestantes: -1, vencimientoPasado: true })))
-      .toBe('Vencida hace 1 día')
+  it('una sin declarar con fecha pasada no es vencida: va aparte como pendiente de atención', () => {
+    const it = item(1, 1, '2026-11-01', { diasRestantes: -1, vencimientoPasado: true })
+    expect(situacionVisual(it)).toBe('SIN_DECLARAR')
+    expect(etiquetaSituacion(it)).toBe('Sin declarar hace 1 día · pendiente de atención')
     expect(etiquetaSituacion(item(1, 1, '2026-10-30', { diasRestantes: -3, vencimientoPasado: true })))
-      .toBe('Vencida hace 3 días')
+      .toBe('Sin declarar hace 3 días · pendiente de atención')
   })
   it('hoy, mañana y días restantes', () => {
     expect(etiquetaSituacion(item(1, 1, '2026-11-04', { diasRestantes: 0 }))).toBe('Vence hoy')

@@ -1,3 +1,4 @@
+import { soles } from '../utils/societario'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TriangleAlert } from 'lucide-react'
@@ -33,6 +34,7 @@ const ESTILO: Record<SituacionVisual, string> = {
   DECLARADA: 'bg-emerald-50 text-emerald-700',
   PAGADA: 'bg-emerald-50 text-emerald-700',
   VENCIDA: 'bg-red-50 text-red-700',
+  SIN_DECLARAR: 'bg-amber-50 text-amber-700',
   HOY: 'bg-amber-50 text-amber-700',
   PROXIMA: 'bg-slate-100 text-slate-700',
 }
@@ -190,6 +192,11 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTILO[situacionVisual(e.item)]}`}>
                         {etiquetaSituacion(e.item)}
                       </span>
+                      {e.item.obligacion.estado === 'PAGO_PARCIAL' && e.item.obligacion.saldo !== undefined && (
+                        <span className="text-xs text-slate-600">
+                          Pagado {soles(e.item.obligacion.montoAcumuladoPagado ?? 0)} · Saldo {soles(e.item.obligacion.saldo)}
+                        </span>
+                      )}
                       {(e.item.obligacion.estado === 'DECLARADO' || e.item.obligacion.estado === 'PAGO_PARCIAL') && (
                         <Link className="text-xs font-medium text-brand-600 hover:underline" to={`/obligaciones/${e.item.obligacion.id}/pago`}>
                           Registrar pago
