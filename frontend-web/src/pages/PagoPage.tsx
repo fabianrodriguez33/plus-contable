@@ -11,6 +11,7 @@ import { soles } from '../utils/societario'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import { Input } from '../components/Input'
+import RecordatoriosPagoPanel from '../components/RecordatoriosPagoPanel'
 
 const mesPeriodo = (p: string) => p.slice(0, 7)
 
@@ -145,6 +146,8 @@ export default function PagoPage() {
           </table>
         </Card>
       )}
+
+      {obligacion && admitePagos && <RecordatoriosPagoPanel obligacionId={obligacion.id} fechaVencimiento={obligacion.fechaVencimiento} />}
     </section>
   )
 }
