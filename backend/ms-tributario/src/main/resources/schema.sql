@@ -465,9 +465,11 @@ CREATE TABLE IF NOT EXISTS tributario_schema.avisos_cliente (
 CREATE INDEX IF NOT EXISTS idx_avisos_cliente_cliente ON tributario_schema.avisos_cliente(cliente_id, fecha_aviso DESC, id DESC);
 
 -- HU-15 (Ricardo): recordatorios de pago que el contador programa para una fecha. El día elegido se entrega al cliente como un aviso
--- de pago (avisos_cliente, HU-33), solo si la obligación sigue declarada y sin ningún pago. Estados: PROGRAMADO (pendiente de su fecha),
--- ENVIADO, CANCELADO (lo canceló el contador) y OMITIDO (llegó su fecha y ya no correspondía enviarlo). Una obligación puede tener
--- varios recordatorios en fechas distintas; no se repite una fecha mientras siga programada.
+-- de pago con el saldo (avisos_cliente, HU-33), mientras la obligación siga declarada o con pago parcial, es decir, con saldo pendiente
+-- (decisión de Beto, 18/11). Si el sistema estuvo caído ese día, se envía al volver aunque la obligación ya haya vencido, uno solo por
+-- obligación. Estados: PROGRAMADO (pendiente de su fecha), ENVIADO, CANCELADO (lo canceló el contador, o la obligación se pagó por
+-- completo) y OMITIDO (llegó su fecha y ya no correspondía enviarlo: cliente inactivo, sin saldo, o había otro más reciente). Una
+-- obligación puede tener varios recordatorios en fechas distintas; no se repite una fecha mientras siga programada.
 CREATE TABLE IF NOT EXISTS tributario_schema.recordatorios_pago (
     id                 BIGSERIAL PRIMARY KEY,
     obligacion_id      BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
