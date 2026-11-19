@@ -463,3 +463,31 @@ CREATE TABLE IF NOT EXISTS tributario_schema.avisos_cliente (
 );
 
 CREATE INDEX IF NOT EXISTS idx_avisos_cliente_cliente ON tributario_schema.avisos_cliente(cliente_id, fecha_aviso DESC, id DESC);
+
+-- HU-25 (Ricardo): compras del cliente y su clasificación. Las compras las carga el contador, con el SIRE como referencia (decisión de
+-- Beto, 18/11); el cliente las clasifica como «mercadería o gasto» o «activo fijo», con una descripción. Una compra sin clasificar queda
+-- pendiente y avisa cerca del cierre del mes (días configurables, ver app.tributario.compras.alerta-dias-antes-cierre). Aislamiento por
+-- empresa: toda consulta y clasificación va por cliente_id. El proveedor se guarda solo como RUC y razón social (sin tabla de
+-- proveedores: HU-20 la podrá enlazar). El mismo comprobante de un proveedor no se repite en un cliente.
+CREATE TABLE IF NOT EXISTS tributario_schema.compras_cliente (
+    id                   BIGSERIAL PRIMARY KEY,
+    cliente_id           BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    periodo              DATE NOT NULL CHECK (EXTRACT(DAY FROM periodo) = 1),
+    proveedor_ruc        VARCHAR(11) NOT NULL CHECK (proveedor_ruc ~ '^[0-9]{11}$'),
+    proveedor_razon_social VARCHAR(200),
+    comprobante          VARCHAR(30) NOT NULL CHECK (length(btrim(comprobante)) > 0),
+    fecha_comprobante    DATE NOT NULL,
+    importe              NUMERIC(14,2) NOT NULL CHECK (importe > 0),
+    tipo_clasificacion   VARCHAR(30) CHECK (tipo_clasificacion IN ('MERCADERIA_O_GASTO', 'ACTIVO_FIJO')),
+    descripcion          VARCHAR(300),
+    clasificada_por      VARCHAR(150),
+    clasificada_en       TIMESTAMPTZ,
+    registrada_por       VARCHAR(150) NOT NULL,
+    registrada_en        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_compras_cliente_comprobante UNIQUE (cliente_id, proveedor_ruc, comprobante),
+    CONSTRAINT ck_compras_cliente_clasificacion CHECK (
+        (tipo_clasificacion IS NULL AND descripcion IS NULL AND clasificada_por IS NULL AND clasificada_en IS NULL)
+        OR (tipo_clasificacion IS NOT NULL AND length(btrim(descripcion)) > 0 AND clasificada_por IS NOT NULL AND clasificada_en IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_compras_cliente_periodo ON tributario_schema.compras_cliente(cliente_id, periodo DESC, id DESC);
