@@ -10,7 +10,7 @@ export const ENLACES = [
   { to: '/alertas-plazo', etiqueta: 'Alertas de plazo', icono: Bell },
   { to: '/estado-cuenta', etiqueta: 'Estado de cuenta', icono: FileText },
   { to: '/morosos', etiqueta: 'Clientes morosos', icono: TriangleAlert },
-  { to: '/vencidas-sin-pago', etiqueta: 'Vencidas sin pago', icono: AlertOctagon },
+  { to: '/vencidas', etiqueta: 'Obligaciones vencidas', icono: AlertOctagon },
   { to: '/clientes/nuevo', etiqueta: 'Nuevo cliente', icono: UserPlus },
 ]
 

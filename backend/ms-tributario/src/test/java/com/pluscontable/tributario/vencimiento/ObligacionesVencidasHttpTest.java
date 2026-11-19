@@ -28,14 +28,15 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * HU-16 · T47, de punta a punta por HTTP real con PostgreSQL desechable: la obligación vencida sin constancia aparece, deja de
- * aparecer cuando se registra su constancia con el endpoint de HU-13, y los permisos (estudio sí; cliente MYPE 403; sin sesión 401).
- * Usa el «hoy» real de Lima, por eso las fechas son relativas. Clientes y obligaciones ficticios que se borran al terminar.
+ * HU-16 · T47, de punta a punta por HTTP real con PostgreSQL desechable, con la definición de Beto: la declarada con la fecha pasada
+ * aparece como vencida; con un pago parcial (registrado con el endpoint de HU-13) sigue vencida y muestra lo pagado y el saldo; al
+ * pagarse todo deja de aparecer; la sin declarar va aparte; y los permisos (estudio sí; cliente MYPE 403; sin sesión 401). Usa el «hoy»
+ * real de Lima, por eso las fechas son relativas. Clientes y obligaciones ficticios que se borran al terminar.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class ObligacionesVencidasSinPagoHttpTest {
+class ObligacionesVencidasHttpTest {
 
-    private static final String RUTA = "/api/tributario/obligaciones-vencidas-sin-pago";
+    private static final String RUTA = "/api/tributario/obligaciones-vencidas";
     private static final int[] FACTORES = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
     private static final AtomicLong SECUENCIA = new AtomicLong(System.nanoTime() % 100_000_000L);
     private static final LocalDate HOY = LocalDate.now(ZoneId.of("America/Lima"));
@@ -90,11 +91,15 @@ class ObligacionesVencidasSinPagoHttpTest {
         return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private List<Long> ids(long cliente, String rol) throws Exception {
+    private JsonNode lista(long cliente, String rol) throws Exception {
         var r = consultar(RUTA + "?clienteId=" + cliente, rol);
         assertThat(r.statusCode()).isEqualTo(200);
+        return json.readTree(r.body());
+    }
+
+    private static List<Long> ids(JsonNode filas) {
         List<Long> ids = new ArrayList<>();
-        for (JsonNode n : json.readTree(r.body())) ids.add(n.get("obligacionId").asLong());
+        for (JsonNode n : filas) ids.add(n.get("obligacionId").asLong());
         return ids;
     }
 
@@ -114,40 +119,54 @@ class ObligacionesVencidasSinPagoHttpTest {
     }
 
     @Test
-    void laVencidaSinConstanciaApareceYDejaDeAparecerAlRegistrarSuConstancia() throws Exception {
+    void vencidaConPagoParcialSigueVencidaConSaldoYAlPagarTodoDejaDeAparecer() throws Exception {
         long c = cliente();
-        long vencida = obligacion(c, "DECLARADO", HOY.minusDays(5));
-        obligacion(c, "DECLARADO", HOY);                 // vence hoy: todavía no
-        obligacion(c, "DECLARADO", HOY.plusDays(3));     // futura
+        long vencida = obligacion(c, "DECLARADO", HOY.minusDays(5));       // monto determinado 1000.00
+        obligacion(c, "DECLARADO", HOY);                                   // vence hoy: todavía no
+        obligacion(c, "DECLARADO", HOY.plusDays(3));                       // futura
 
         for (String rol : List.of("CONTADOR", "ADMIN")) {
-            var r = consultar(RUTA + "?clienteId=" + c, rol);
-            assertThat(r.statusCode()).isEqualTo(200);
-            JsonNode lista = json.readTree(r.body());
-            assertThat(lista).hasSize(1);
-            assertThat(lista.get(0).get("obligacionId").asLong()).isEqualTo(vencida);
-            assertThat(lista.get(0).get("diasVencida").asLong()).isEqualTo(5);
-            assertThat(lista.get(0).get("razonSocial").asText()).isEqualTo("Cliente HU16 HTTP SAC");
+            JsonNode v = lista(c, rol).get("vencidas");
+            assertThat(ids(v)).containsExactly(vencida);
+            assertThat(v.get(0).get("diasVencida").asLong()).isEqualTo(5);
+            assertThat(v.get(0).get("razonSocial").asText()).isEqualTo("Cliente HU16 HTTP SAC");
+            assertThat(v.get(0).get("montoPagado").decimalValue()).isEqualByComparingTo("0");
+            assertThat(v.get(0).get("saldo").decimalValue()).isEqualByComparingTo("1000.00");
         }
 
         assertThat(pagar(vencida, "400.00", "C-VENC-1").statusCode()).isEqualTo(201);
+        JsonNode conParcial = lista(c, "CONTADOR").get("vencidas");
+        assertThat(ids(conParcial)).containsExactly(vencida);                // con pago parcial sigue vencida
+        assertThat(conParcial.get(0).get("estado").asText()).isEqualTo("PAGO_PARCIAL");
+        assertThat(conParcial.get(0).get("montoPagado").decimalValue()).isEqualByComparingTo("400.00");
+        assertThat(conParcial.get(0).get("saldo").decimalValue()).isEqualByComparingTo("600.00");
 
-        assertThat(ids(c, "CONTADOR")).isEmpty();
+        assertThat(pagar(vencida, "600.00", "C-VENC-2").statusCode()).isEqualTo(201);
+        assertThat(lista(c, "CONTADOR").get("vencidas")).isEmpty();          // pagada: nunca vencida
+    }
+
+    @Test
+    void laSinDeclararConFechaPasadaVaAparteComoPendienteDeAtencion() throws Exception {
+        long c = cliente();
+        long sinDeclarar = obligacion(c, "PENDIENTE", HOY.minusDays(2));
+        obligacion(c, "PENDIENTE", HOY.plusDays(2));
+
+        JsonNode r = lista(c, "CONTADOR");
+        assertThat(r.get("vencidas")).isEmpty();
+        assertThat(ids(r.get("sinDeclarar"))).containsExactly(sinDeclarar);
     }
 
     @Test
     void sinFiltroDevuelveLaCarteraYElFiltroPorClienteAisla() throws Exception {
         long a = cliente();
         long b = cliente();
-        long deA = obligacion(a, "PENDIENTE", HOY.minusDays(2));
+        long deA = obligacion(a, "DECLARADO", HOY.minusDays(2));
         long deB = obligacion(b, "DECLARADO", HOY.minusDays(9));
 
-        assertThat(ids(a, "CONTADOR")).containsExactly(deA);
-        assertThat(ids(b, "CONTADOR")).containsExactly(deB);
+        assertThat(ids(lista(a, "CONTADOR").get("vencidas"))).containsExactly(deA);
+        assertThat(ids(lista(b, "CONTADOR").get("vencidas"))).containsExactly(deB);
         var todos = json.readTree(consultar(RUTA, "CONTADOR").body());
-        List<Long> todosIds = new ArrayList<>();
-        for (JsonNode n : todos) todosIds.add(n.get("obligacionId").asLong());
-        assertThat(todosIds).contains(deA, deB);
+        assertThat(ids(todos.get("vencidas"))).contains(deA, deB);
     }
 
     @Test

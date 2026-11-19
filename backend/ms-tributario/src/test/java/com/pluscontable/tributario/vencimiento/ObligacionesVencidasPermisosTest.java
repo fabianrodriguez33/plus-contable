@@ -22,14 +22,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** HU-16 · permisos: solo CONTADOR y ADMIN; el cliente MYPE recibe 403 y sin sesión 401. */
-@WebMvcTest(ObligacionesVencidasSinPagoController.class)
+@WebMvcTest(ObligacionesVencidasController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
-class ObligacionesVencidasSinPagoPermisosTest {
-    private static final String RUTA = "/api/tributario/obligaciones-vencidas-sin-pago";
+class ObligacionesVencidasPermisosTest {
+    private static final String RUTA = "/api/tributario/obligaciones-vencidas";
 
     @Autowired MockMvc mvc;
     @Value("${app.jwt.secret}") String secreto;
-    @MockBean ObligacionesVencidasSinPagoService service;
+    @MockBean ObligacionesVencidasService service;
 
     private String bearer(String rol) {
         var key = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));

@@ -7,7 +7,7 @@ import FichaMaestraPage from './pages/FichaMaestraPage'
 import DeclaracionPage from './pages/DeclaracionPage'
 import EstadoCuentaPage from './pages/EstadoCuentaPage'
 import MorososPage from './pages/MorososPage'
-import VencidasSinPagoPage from './pages/VencidasSinPagoPage'
+import VencidasPage from './pages/VencidasPage'
 import PagoPage from './pages/PagoPage'
 import CalendarioPage from './pages/CalendarioPage'
 import TableroPage from './pages/TableroPage'
@@ -37,7 +37,7 @@ export default function App() {
           <Route path="/alertas-plazo" element={<AlertasPlazoPage />} />
           <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
           <Route path="/morosos" element={<MorososPage />} />
-          <Route path="/vencidas-sin-pago" element={<VencidasSinPagoPage />} />
+          <Route path="/vencidas" element={<VencidasPage />} />
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />
           <Route path="/clientes/:clienteId" element={<FichaMaestraPage />} />
           <Route path="/obligaciones/:obligacionId/declarar" element={<DeclaracionPage />} />
