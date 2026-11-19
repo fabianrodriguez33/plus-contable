@@ -15,6 +15,7 @@ import AlertasPlazoPage from './pages/AlertasPlazoPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
 import MiEmpresaPage from './pages/MiEmpresaPage'
+import MiEstadoCuentaPage from './pages/MiEstadoCuentaPage'
 import MisAvisosPage from './pages/MisAvisosPage'
 import MisComprasPage from './pages/MisComprasPage'
 import { esCliente } from './services/authService'
@@ -32,6 +33,7 @@ export default function App() {
         <Route element={<Navbar />}>
           <Route path="/" element={<Inicio />} />
           <Route path="/mi-empresa" element={<MiEmpresaPage />} />
+          <Route path="/mi-estado-cuenta" element={<MiEstadoCuentaPage />} />
           <Route path="/mis-avisos" element={<MisAvisosPage />} />
           <Route path="/mis-compras" element={<MisComprasPage />} />
           <Route path="/calendario" element={<CalendarioPage />} />

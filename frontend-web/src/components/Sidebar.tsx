@@ -17,6 +17,7 @@ export const ENLACES = [
 /** HU-35: la cuenta de un cliente solo ve su empresa; el resto del menú es del estudio. */
 const ENLACES_CLIENTE = [
   { to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase },
+  { to: '/mi-estado-cuenta', etiqueta: 'Mi estado de cuenta', icono: FileText },
   { to: '/mis-avisos', etiqueta: 'Avisos de pago', icono: Bell },
   { to: '/mis-compras', etiqueta: 'Mis compras', icono: ShoppingCart },
 ]
