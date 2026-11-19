@@ -3,6 +3,7 @@ package com.pluscontable.tributario.aviso;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.util.List;
+import java.util.Optional;
 import java.util.TreeSet;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,14 @@ public class AvisoInternoService {
             jdbc.update("INSERT INTO tributario_schema.avisos_clientes(aviso_id, cliente_id) VALUES (?, ?)", avisoId, id);
         }
         return buscar(avisoId);
+    }
+
+    /** Permite a una historia comprobar si su evento ya fue avisado antes de construir el mensaje. */
+    @Transactional(readOnly = true)
+    public Optional<AvisoInternoDto> buscarPorEvento(String origen, String claveEvento) {
+        List<Long> ids = jdbc.query("SELECT id FROM tributario_schema.avisos WHERE origen = ? AND clave_evento = ?",
+                (rs, fila) -> rs.getLong(1), texto(origen, 40, "origen"), texto(claveEvento, 160, "claveEvento"));
+        return ids.isEmpty() ? Optional.empty() : Optional.of(buscar(ids.getFirst()));
     }
 
     @Transactional(readOnly = true)

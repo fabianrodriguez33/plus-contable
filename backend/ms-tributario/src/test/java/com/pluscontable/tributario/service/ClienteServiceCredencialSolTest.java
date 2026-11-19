@@ -15,6 +15,7 @@ import com.pluscontable.tributario.model.Cliente;
 import com.pluscontable.tributario.model.CredencialSol;
 import com.pluscontable.tributario.repository.ClienteRepository;
 import com.pluscontable.tributario.repository.CredencialSolRepository;
+import com.pluscontable.tributario.ruc.AlertaCondicionRucService;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class ClienteServiceCredencialSolTest {
     private final ClienteRepository clientes = mock(ClienteRepository.class);
     private final CredencialSolRepository credenciales = mock(CredencialSolRepository.class);
     private final AesUtil aes = new AesUtil("clave-ficticia-de-prueba-32-byte", IV);
-    private final ClienteService service = new ClienteService(clientes, credenciales, aes);
+    private final ClienteService service = new ClienteService(clientes, credenciales, aes, mock(AlertaCondicionRucService.class));
 
     @BeforeEach
     void preparar() {
