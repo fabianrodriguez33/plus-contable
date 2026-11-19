@@ -1,0 +1,61 @@
+@startuml
+!pragma layout smetana
+title T202 · HU-33 · Modelo de datos de los avisos de pago al cliente
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+hide circle
+
+entity "tributario_schema.clientes" as clientes <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * ruc : VARCHAR(11)
+  * razon_social : VARCHAR(200)
+  * activo : BOOLEAN
+}
+
+entity "tributario_schema.obligaciones" as obl <<existe>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  tipo_obligacion : VARCHAR(30)
+  * fecha_vencimiento : DATE
+  * estado : PENDIENTE | DECLARADO | PAGO_PARCIAL | PAGADO
+  monto_determinado : NUMERIC(14,2)
+}
+
+entity "tributario_schema.pagos_obligacion" as pagos <<existe, HU-13>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * obligacion_id : BIGINT <<FK>>
+  * monto_pagado : NUMERIC(14,2)
+}
+
+entity "tributario_schema.avisos_cliente" as avisos <<nueva>> {
+  * id : BIGSERIAL <<PK>>
+  --
+  * cliente_id : BIGINT <<FK>>
+  * obligacion_id : BIGINT <<FK>>
+  * tributo : VARCHAR(30)
+  * monto : NUMERIC(14,2) (> 0)
+  * fecha_vencimiento : DATE
+  * fecha_aviso : DATE
+  * creado_en : TIMESTAMPTZ
+  UNIQUE (obligacion_id, fecha_aviso)
+  INDEX (cliente_id, fecha_aviso DESC, id DESC)
+}
+
+clientes ||--o{ obl : cliente_id, ON DELETE CASCADE
+obl ||--o{ pagos : obligacion_id, ON DELETE CASCADE
+clientes ||--o{ avisos : cliente_id, ON DELETE CASCADE
+obl ||--o{ avisos : obligacion_id, ON DELETE CASCADE
+
+note right of avisos
+  Un aviso por obligación y por día de aviso: el UNIQUE hace que repetir el proceso el mismo día no duplique.
+  monto es el saldo que se avisó (monto determinado - pagos) y se guarda tal cual; CHECK monto > 0.
+  tributo es el tipo de la obligación («OBLIGACION» si aún no tiene tipo).
+  La migración es idempotente: CREATE TABLE / INDEX IF NOT EXISTS en schema.sql.
+end note
+
+footer Documentado a partir del código, 17/11/2026 · rama feature/HU-33-recordatorios-cliente (PR #68). Código: schema.sql (avisos_cliente), AvisoClienteService. Pruebas: AvisoClientePostgresTest
+@enduml

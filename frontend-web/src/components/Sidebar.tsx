@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { esCliente } from '../services/authService'
-import { Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, TriangleAlert, UserPlus, X } from 'lucide-react'
+import { Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, LayoutGrid, TriangleAlert, UserPlus, X } from 'lucide-react'
 
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
   { to: '/calendario', etiqueta: 'Calendario', icono: CalendarDays },
+  { to: '/tablero', etiqueta: 'Tablero', icono: LayoutGrid },
+  { to: '/alertas-plazo', etiqueta: 'Alertas de plazo', icono: Bell },
   { to: '/estado-cuenta', etiqueta: 'Estado de cuenta', icono: FileText },
   { to: '/morosos', etiqueta: 'Clientes morosos', icono: TriangleAlert },
   { to: '/clientes/nuevo', etiqueta: 'Nuevo cliente', icono: UserPlus },
@@ -15,6 +17,7 @@ export const ENLACES = [
 const ENLACES_CLIENTE = [
   { to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase },
   { to: '/mi-estado-cuenta', etiqueta: 'Mi estado de cuenta', icono: FileText },
+  { to: '/mis-avisos', etiqueta: 'Avisos de pago', icono: Bell },
 ]
 
 function Enlaces({ onNavegar }: { onNavegar?: () => void }) {

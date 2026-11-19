@@ -1,0 +1,86 @@
+@startuml
+!pragma layout smetana
+title T26 · HU-14 · Clases del tablero Declarado vs. Pagado
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class TableroController <<nuevo>> {
+  +listar(clienteId?, periodo?, soloDeclaradoSinPago?): List<TableroFilaDto>
+}
+
+class TableroService <<nuevo>> {
+  ~ZONA = America/Lima
+  -clock: Clock (zona de Lima)
+  +listar(clienteId, periodo, soloDeclaradoSinPago): List<TableroFilaDto>
+}
+
+class TableroFilaDto <<record, nuevo>> {
+  obligacionId: Long
+  clienteId: Long
+  ruc: String
+  razonSocial: String
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Obligacion.Estado
+  montoDeterminado: BigDecimal
+  montoPagado: BigDecimal
+  saldo: BigDecimal
+  vencida: boolean
+}
+
+interface TableroRepository <<nuevo>> {
+  findAll(Specification<Obligacion>)
+}
+
+class Obligacion <<existe>> {
+  clienteId, tipoObligacion, periodo, fechaVencimiento
+  estado: PENDIENTE | DECLARADO | PAGO_PARCIAL | PAGADO
+  montoDeterminado
+}
+
+interface PagoObligacionRepository <<existe, ampliado>> {
+  sumasPagadas(obligacionIds): lo pagado por obligación
+}
+
+class PagoObligacion <<existe, HU-13>> {
+  obligacionId, fechaPago, montoPagado
+}
+
+interface ClienteRepository <<existe>> {
+  existsById / findAllById
+}
+
+class "TableroPage\n(frontend-web)" as TP <<nuevo>> {
+  filtros: cliente, mes, «declarado sin pago»
+  estado visible, «Vencida» solo si vencida
+}
+
+TP ..> TableroController : GET /api/tributario/tablero
+TableroController --> TableroService
+TableroService --> TableroRepository
+TableroService --> PagoObligacionRepository
+TableroService --> ClienteRepository
+TableroService ..> TableroFilaDto
+TableroRepository ..> Obligacion
+PagoObligacionRepository ..> PagoObligacion
+
+note bottom of TableroService
+  Criterio 1: cada obligación sale con su estado real (PENDIENTE, DECLARADO, PAGO_PARCIAL, PAGADO).
+  Criterio 2: filtros opcionales por cliente y por mes (periodo = primer día del mes tributario).
+  Criterio 3: monto determinado y fecha límite (fechaVencimiento); además lo pagado y el saldo (HU-13).
+  Criterio 4: «declarado sin pago» = estado DECLARADO (sin ningún pago); con pago parcial ya no.
+  vencida = estado PENDIENTE o PAGO_PARCIAL y fecha límite anterior a hoy; PAGADO y DECLARADO nunca
+  salen vencidos (misma regla del calendario). No se guarda ningún estado VENCIDA: se calcula con la fecha de hoy.
+  «Hoy» es el de Lima (America/Lima), aunque el servidor corra en UTC. Sin tablas nuevas.
+end note
+
+note right of TableroController
+  Criterio 5: solo el estudio (CONTADOR, ADMIN); sin token 401,
+  CLIENTE_MYPE o token sin rol 403 (SecurityConfig: ruta no listada = estudio).
+end note
+
+footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-14, el código de develop (a9bdff1), HU-13 (pagos de obligaciones) y la regla de estados del calendario. Supuestos por confirmar con Beto: mes = periodo tributario, «declarado sin pago» = DECLARADO, orden por fecha límite
+@enduml
