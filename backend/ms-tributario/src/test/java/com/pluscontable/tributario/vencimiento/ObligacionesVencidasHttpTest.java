@@ -80,14 +80,24 @@ class ObligacionesVencidasHttpTest {
     }
 
     private String token(String rol) {
+        return token(rol, null);
+    }
+
+    /** Como ms-auth: el claim clienteId solo va en el token de una cuenta de cliente. */
+    private String token(String rol, Long clienteId) {
         var key = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
-        return Jwts.builder().subject("usuario-prueba").claim("roles", List.of(rol)).issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
+        var b = Jwts.builder().subject("usuario-prueba").claim("roles", List.of(rol));
+        if (clienteId != null) b.claim("clienteId", clienteId);
+        return b.issuedAt(new Date()).expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
     }
 
     private HttpResponse<String> consultar(String ruta, String rol) throws Exception {
+        return consultarConToken(ruta, rol == null ? null : token(rol));
+    }
+
+    private HttpResponse<String> consultarConToken(String ruta, String token) throws Exception {
         var b = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + ruta)).GET();
-        if (rol != null) b.header("Authorization", "Bearer " + token(rol));
+        if (token != null) b.header("Authorization", "Bearer " + token);
         return http.send(b.build(), HttpResponse.BodyHandlers.ofString());
     }
 
@@ -170,12 +180,37 @@ class ObligacionesVencidasHttpTest {
     }
 
     @Test
-    void permisosClienteMype403SinSesion401() throws Exception {
-        long c = cliente();
-        obligacion(c, "DECLARADO", HOY.minusDays(5));
+    void elClienteVeSusVencidasConPagadoYSaldo_peroNoLasSinDeclararNiLasDeOtraEmpresa() throws Exception {
+        long suyo = cliente();
+        long ajeno = cliente();
+        long parcial = obligacion(suyo, "DECLARADO", HOY.minusDays(4));
+        assertThat(pagar(parcial, "250.00", "C-CLI-1").statusCode()).isEqualTo(201);
+        obligacion(suyo, "PENDIENTE", HOY.minusDays(6));               // sin declarar: es del estudio, no la ve el cliente
+        obligacion(ajeno, "DECLARADO", HOY.minusDays(8));
+        String ruta = RUTA + "?clienteId=" + suyo;
 
-        assertThat(consultar(RUTA + "?clienteId=" + c, "CLIENTE_MYPE").statusCode()).isEqualTo(403);
-        assertThat(consultar(RUTA, "CLIENTE_MYPE").statusCode()).isEqualTo(403);
-        assertThat(consultar(RUTA + "?clienteId=" + c, null).statusCode()).isEqualTo(401);
+        var r = consultarConToken(ruta, token("CLIENTE_MYPE", suyo));
+
+        assertThat(r.statusCode()).isEqualTo(200);
+        JsonNode cuerpo = json.readTree(r.body());
+        assertThat(ids(cuerpo.get("vencidas"))).containsExactly(parcial);                         // con pago parcial sigue vencida
+        assertThat(cuerpo.get("vencidas").get(0).get("montoPagado").decimalValue()).isEqualByComparingTo("250.00");
+        assertThat(cuerpo.get("vencidas").get(0).get("saldo").decimalValue()).isEqualByComparingTo("750.00");
+        assertThat(cuerpo.get("sinDeclarar")).isEmpty();
+        // el estudio sí ve las sin declarar de ese mismo cliente
+        assertThat(json.readTree(consultar(ruta, "CONTADOR").body()).get("sinDeclarar")).hasSize(1);
+    }
+
+    @Test
+    void elClienteNuncaVeLaCarteraNiOtraEmpresaYSinSesionEs401() throws Exception {
+        long suyo = cliente();
+        long ajeno = cliente();
+        obligacion(ajeno, "DECLARADO", HOY.minusDays(5));
+        String delCliente = token("CLIENTE_MYPE", suyo);
+
+        assertThat(consultarConToken(RUTA, delCliente).statusCode()).isEqualTo(403);                                  // sin clienteId = cartera
+        assertThat(consultarConToken(RUTA + "?clienteId=" + ajeno, delCliente).statusCode()).isEqualTo(403);
+        assertThat(consultarConToken(RUTA + "?clienteId=" + suyo, token("CLIENTE_MYPE", null)).statusCode()).isEqualTo(403);
+        assertThat(consultar(RUTA + "?clienteId=" + suyo, null).statusCode()).isEqualTo(401);
     }
 }

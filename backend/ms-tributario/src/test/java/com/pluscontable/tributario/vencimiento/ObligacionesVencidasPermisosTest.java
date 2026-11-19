@@ -37,20 +37,53 @@ class ObligacionesVencidasPermisosTest {
                 .expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
     }
 
+    private String bearer(String rol, Long clienteId) {
+        var key = Keys.hmacShaKeyFor(secreto.getBytes(StandardCharsets.UTF_8));
+        var b = Jwts.builder().subject("usuario-prueba").claim("roles", List.of(rol));
+        if (clienteId != null) b.claim("clienteId", clienteId);
+        return "Bearer " + b.expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
+    }
+
+    private static ObligacionesVencidasService.Resultado conUnaDeCadaLista() {
+        var o = new ObligacionVencidaDto(1L, 1L, "20100070970", "Acme", null, java.time.LocalDate.of(2026, 10, 1),
+                java.time.LocalDate.of(2026, 11, 1), 3, com.pluscontable.tributario.model.Obligacion.Estado.DECLARADO, null, null, null);
+        return new ObligacionesVencidasService.Resultado(List.of(o), List.of(o));
+    }
+
     @Test
-    void contadorYAdminConsultan() throws Exception {
+    void contadorYAdminConsultanLaCarteraConLasDosListas() throws Exception {
+        org.mockito.Mockito.when(service.listar(null)).thenReturn(conUnaDeCadaLista());
         for (String rol : List.of("CONTADOR", "ADMIN")) {
-            mvc.perform(get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(rol))).andExpect(status().isOk());
+            mvc.perform(get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer(rol)))
+                    .andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.vencidas.length()").value(1))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sinDeclarar.length()").value(1));
         }
         verify(service, org.mockito.Mockito.times(2)).listar(null);
     }
 
     @Test
-    void clienteMypeRecibe403YAnonimo401() throws Exception {
-        mvc.perform(get(RUTA).header(HttpHeaders.AUTHORIZATION, bearer("CLIENTE_MYPE"))).andExpect(status().isForbidden());
-        mvc.perform(get(RUTA + "?clienteId=1").header(HttpHeaders.AUTHORIZATION, bearer("CLIENTE_MYPE")))
-                .andExpect(status().isForbidden());
+    void elClienteVeSusVencidasPeroNoLaListaDeSinDeclarar() throws Exception {
+        org.mockito.Mockito.when(service.listar(7L)).thenReturn(conUnaDeCadaLista());
+        mvc.perform(get(RUTA + "?clienteId=7").header(HttpHeaders.AUTHORIZATION, bearer("CLIENTE_MYPE", 7L)))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.vencidas.length()").value(1))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sinDeclarar.length()").value(0));
+    }
+
+    @Test
+    void elClienteNuncaVeLaCarteraNiLaDeOtraEmpresaNiSinIndicarLaSuya() throws Exception {
+        String suyo = bearer("CLIENTE_MYPE", 7L);
+        mvc.perform(get(RUTA).header(HttpHeaders.AUTHORIZATION, suyo)).andExpect(status().isForbidden());                 // sin clienteId: sería la cartera
+        mvc.perform(get(RUTA + "?clienteId=8").header(HttpHeaders.AUTHORIZATION, suyo)).andExpect(status().isForbidden());
+        mvc.perform(get(RUTA + "?clienteId=7").header(HttpHeaders.AUTHORIZATION, bearer("CLIENTE_MYPE", null))).andExpect(status().isForbidden());
+        verify(service, never()).listar(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void sinSesion401() throws Exception {
         mvc.perform(get(RUTA)).andExpect(status().isUnauthorized());
+        mvc.perform(get(RUTA + "?clienteId=7")).andExpect(status().isUnauthorized());
         verify(service, never()).listar(org.mockito.ArgumentMatchers.any());
     }
 }
