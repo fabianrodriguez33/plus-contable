@@ -1,0 +1,51 @@
+# Blueprint de Render: los dos servicios web del plan gratuito. NO lleva valores secretos: las variables con "sync: false"
+# se piden al crear el servicio en el panel de Render. Pasos completos en docs/DESPLIEGUE.md.
+# Render entrega el puerto en la variable PORT (la imagen ya la lee).
+services:
+  - type: web
+    name: plus-contable-auth
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/ms-auth/Dockerfile
+    dockerContext: ./backend/ms-auth
+    healthCheckPath: /api/auth/health
+    envVars:
+      - key: DB_URL            # jdbc:postgresql://<host>/<base>?sslmode=require
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET        # el MISMO valor que en plus-contable-tributario
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD    # mínimo 16 caracteres, aleatoria (docs/DESPLIEGUE.md, sección 6)
+        sync: false
+      - key: TRIBUTARIO_URL    # https://<servicio tributario>.onrender.com
+        sync: false
+      - key: CORS_ORIGINS      # https://<proyecto>.pages.dev (varios, separados por coma)
+        sync: false
+
+  - type: web
+    name: plus-contable-tributario
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/ms-tributario/Dockerfile
+    dockerContext: ./backend/ms-tributario
+    healthCheckPath: /api/tributario/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET        # el MISMO valor que en plus-contable-auth
+        sync: false
+      - key: AES_SECRET_KEY    # exactamente 32 caracteres
+        sync: false
+      - key: AES_IV            # exactamente 16 caracteres
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
