@@ -1,0 +1,80 @@
+@startuml
+title T18 · HU-17 · Secuencia: registrar un fraccionamiento y ver sus cuotas en el calendario (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha y calendario)" as FE
+participant "FraccionamientoController" as FC
+participant "FraccionamientoService" as FS
+participant "ParametroSistemaService" as PS
+participant "FraccionamientoRepository" as FR
+participant "CuotaFraccionamientoRepository" as CR
+participant "CalendarioService" as CAL
+database "tributario_schema" as DB
+
+== Registrar el fraccionamiento ==
+U -> FE : indica tributo, monto total, número de cuotas y fecha de la primera cuota
+FE -> FC : POST /api/tributario/clientes/{clienteId}/fraccionamientos\nAuthorization: Bearer <JWT>
+FC -> FS : registrar(clienteId, dto)
+FS -> FS : buscar(clienteId)
+alt el cliente no existe
+  FS --> FE : 404 "Cliente no encontrado"
+end
+FS -> PS : entero("fraccionamiento.max_cuotas", 36)
+FS -> FS : valida y reúne los errores
+note right
+  Monto: obligatorio y mayor que cero. Número de cuotas: obligatorio, de 2 al máximo del parámetro.
+  Fecha de la primera cuota: obligatoria. Tributo: obligatorio.
+  Si falta el monto, el número de cuotas o las fechas, no se guarda.
+end note
+alt faltan o son inválidos
+  FS --> FE : 400 "Faltan o son inválidos: ..."
+else datos válidos
+  FS -> FS : genera las cuotas (mensuales; la última ajusta los centavos)
+  FS -> FR : save(fraccionamiento)
+  FR -> DB : INSERT fraccionamientos
+  FS -> CR : saveAll(cuotas PENDIENTE)
+  CR -> DB : INSERT cuotas_fraccionamiento
+  FS --> FE : 201 FraccionamientoDto con sus cuotas
+  FE --> U : muestra las cuotas generadas
+end
+
+== Ver las cuotas en el calendario de vencimientos ==
+U -> FE : abre el calendario del cliente
+FE -> CAL : GET /api/tributario/calendario?clienteId=...&desde=...&hasta=...
+CAL -> CAL : obligaciones del cliente (ya existente)
+CAL -> CR : findPorClienteYFechas(clienteId, desde, hasta)
+CR -> DB : SELECT cuotas_fraccionamiento
+CAL -> CAL : calcula diasRestantes y vencida de cada cuota
+CAL --> FE : 200 obligaciones y cuotas, ordenadas por fecha
+alt cuota PENDIENTE con fecha anterior a hoy
+  FE --> U : resalta la cuota en rojo: riesgo de perder el fraccionamiento
+else cuota al día o pagada
+  FE --> U : muestra la cuota con su fecha
+end
+
+== Marcar una cuota como pagada ==
+U -> FE : marca la cuota como pagada
+FE -> FC : PATCH /api/tributario/cuotas/{cuotaId}/pago
+FC -> FS : pagarCuota(cuotaId)
+FS -> CR : findById(cuotaId)
+alt la cuota no existe
+  FS --> FE : 404 "Cuota no encontrada"
+else la cuota ya estaba pagada
+  FS --> FE : 400 "La cuota ya fue pagada"
+else estaba pendiente
+  FS -> CR : save(cuota con estado PAGADA y fecha de pago de hoy)
+  CR -> DB : UPDATE cuotas_fraccionamiento
+  FS --> FE : 200 CuotaDto (ya sin riesgo)
+end
+
+note over FS
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas.
+  Supuesto (decisión de Beto, 06/11): el tributo puede ser ESSALUD, quinta o AFP además de IGV, renta y PLAME.
+  Supuesto: el máximo de cuotas viene de parametros_sistema y se edita desde el sistema.
+end note
+footer Diseño previo, 07/11/2026 · Base: criterios de aceptación de HU-17, el código y la base de develop (1b2ab18) y las respuestas de Beto del 06/11. Código existente: CalendarioService.listar, ObligacionService, ClienteService.buscar, GlobalExceptionHandler, SecurityConfig
+@enduml

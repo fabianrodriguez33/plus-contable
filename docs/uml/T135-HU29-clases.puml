@@ -1,0 +1,126 @@
+@startuml
+!pragma layout smetana
+title T135 · HU-29 · Clases del registro del pago de honorarios recibido
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class CobroHonorarioController <<existe, ampliado>> {
+  +programar(clienteId, dto): ProgramacionCobroDto
+  +pendientes(clienteId): List<CobroHonorarioDto>
+  +registrarPago(clienteId, cobroId, dto, autenticacion): CobroHonorarioDto
+}
+
+class PagoHonorarioService <<nuevo>> {
+  ~DETALLE_MAXIMO = 100
+  +registrar(clienteId, cobroId, dto, usuario): CobroHonorarioDto
+  -validar(dto, saldo)
+}
+
+class CobroHonorarioService <<existe, ampliado>> {
+  ~CON_SALDO = [PENDIENTE, PAGO_PARCIAL]
+  -CON_PAGO = [PAGO_PARCIAL, PAGADO]
+  +programar(clienteId, dto): ProgramacionCobroDto
+  +pendientes(clienteId): List<CobroHonorarioDto>
+}
+
+class CobroHonorario <<existe, ampliado>> {
+  id: Long
+  clienteId: Long
+  programacionId: Long
+  fechaCobro: LocalDate
+  monto: BigDecimal
+  estado: EstadoCobro
+  pagado: BigDecimal
+  +saldo(): BigDecimal
+}
+
+class PagoHonorario <<nuevo>> {
+  id: Long
+  cobroId: Long
+  fechaPago: LocalDate
+  monto: BigDecimal
+  medioPago: MedioPago
+  medioPagoDetalle: String
+  registradoPor: String
+  registradoEn: LocalDateTime
+}
+
+enum EstadoCobro <<existe, ampliado>> {
+  PENDIENTE
+  PAGO_PARCIAL
+  PAGADO
+}
+
+enum MedioPago <<nuevo>> {
+  EFECTIVO
+  TRANSFERENCIA
+  DEPOSITO
+  YAPE_PLIN
+  OTRO
+}
+
+class PagoHonorarioEntradaDto <<record, nuevo>> {
+  fechaPago: LocalDate
+  monto: BigDecimal
+  medioPago: MedioPago
+  medioPagoDetalle: String
+}
+
+class CobroHonorarioDto <<record, ampliado>> {
+  id: Long
+  fechaCobro: LocalDate
+  monto: BigDecimal
+  pagado: BigDecimal
+  saldo: BigDecimal
+  estado: EstadoCobro
+  +from(CobroHonorario): CobroHonorarioDto
+}
+
+interface CobroHonorarioRepository <<existe, ampliado>> {
+  findByClienteIdAndEstadoInOrderByFechaCobroAsc(clienteId, estados)
+  existsByClienteIdAndEstadoInAndFechaCobroGreaterThanEqual(clienteId, estados, desde)
+  buscarParaActualizar(id) <<PESSIMISTIC_WRITE>>
+}
+
+interface PagoHonorarioRepository <<nuevo>> {
+  save(PagoHonorario)
+}
+
+CobroHonorarioController --> PagoHonorarioService : registrarPago
+CobroHonorarioController --> CobroHonorarioService
+CobroHonorarioController ..> PagoHonorarioEntradaDto
+CobroHonorarioController ..> CobroHonorarioDto
+PagoHonorarioService --> CobroHonorarioRepository
+PagoHonorarioService --> PagoHonorarioRepository
+CobroHonorarioService --> CobroHonorarioRepository
+CobroHonorarioRepository ..> CobroHonorario
+PagoHonorarioRepository ..> PagoHonorario
+CobroHonorario --> EstadoCobro
+PagoHonorario --> MedioPago
+PagoHonorario "0..*" --> "1" CobroHonorario : cobro_id
+CobroHonorarioDto ..> CobroHonorario
+
+note bottom of PagoHonorarioService
+  registrar(): bloquea el cobro (buscarParaActualizar) para que dos pagos a la vez no superen el saldo.
+  404 si el cobro no existe o es de otro cliente; 400 si ya está PAGADO (criterio 4) o los datos son inválidos:
+  fecha futura, monto <= 0, más de 2 decimales, monto mayor al saldo, sin medio, o «Otro» sin especificar.
+  Guarda fecha, monto, medio y quién lo registró (criterio 1); suma a pagado y deja el cobro
+  PAGADO si el saldo llega a 0 (criterio 2) o PAGO_PARCIAL si queda saldo (criterio 3).
+end note
+
+note right of MedioPago
+  Lista confirmada por Beto (11/11). En pantalla: Efectivo, Transferencia bancaria,
+  Depósito bancario, Yape/Plin y Otro. Con OTRO se exige medioPagoDetalle (hasta 100);
+  con los demás se guarda vacío.
+end note
+
+note right of CobroHonorarioService
+  pendientes() incluye los PAGO_PARCIAL: siguen en la ficha con su saldo.
+  programar(): si hay cobros de este mes o posteriores con pagos (PAGO_PARCIAL o PAGADO),
+  no deja cambiar la periodicidad; si no, se perdería el pago o el mes se cobraría dos veces.
+end note
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-29-pago-honorarios. Código: CobroHonorarioController, PagoHonorarioService, CobroHonorarioService, CobroHonorario, PagoHonorario, EstadoCobro, MedioPago, PagoHonorarioEntradaDto, CobroHonorarioDto, CobroHonorarioRepository, PagoHonorarioRepository
+@enduml

@@ -1,6 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS tributario_schema;
 
--- =====================================================================================
+-- ==============================================================================
 -- Este script es idempotente y se ejecuta en cada arranque. Cubre dos casos:
 --   1) Base nueva: los CREATE TABLE crean todo.
 --   2) Base existente (anterior a la integracion): los ALTER ... IF NOT EXISTS de la
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS tributario_schema.clientes (
     id                 BIGSERIAL PRIMARY KEY,
     ruc                VARCHAR(11)  NOT NULL UNIQUE CHECK (ruc ~ '^[0-9]{11}$'),
     razon_social       VARCHAR(200) NOT NULL,
-    regimen_tributario VARCHAR(20)  NOT NULL CHECK (regimen_tributario IN ('MYPE', 'REMIPE', 'GENERAL')),
+    regimen_tributario VARCHAR(20)  NOT NULL CHECK (regimen_tributario IN ('MYPE', 'RER', 'GENERAL')),
     condicion_habido   VARCHAR(20)  NOT NULL DEFAULT 'HABIDO' CHECK (condicion_habido IN ('HABIDO', 'NO_HABIDO')),
     direccion          VARCHAR(250),
     activo             BOOLEAN      NOT NULL DEFAULT TRUE,
@@ -139,6 +139,227 @@ CREATE TABLE IF NOT EXISTS tributario_schema.vencimientos_historial (
     cambiado_en     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- HU-17 (Ricardo): fraccionamiento tributario vigente de un cliente y sus cuotas. El calendario lee las cuotas por fecha;
+-- una cuota PENDIENTE con fecha anterior a hoy es la que se resalta como riesgo (no se guarda un estado «vencida»).
+CREATE TABLE IF NOT EXISTS tributario_schema.fraccionamientos (
+    id                  BIGSERIAL PRIMARY KEY,
+    cliente_id          BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tributo             VARCHAR(30) NOT NULL
+                        CHECK (tributo IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP')),
+    monto_total         NUMERIC(14,2) NOT NULL CHECK (monto_total > 0),
+    numero_cuotas       INTEGER NOT NULL CHECK (numero_cuotas >= 2),
+    fecha_primera_cuota DATE NOT NULL,
+    registrado_en       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.cuotas_fraccionamiento (
+    id                 BIGSERIAL PRIMARY KEY,
+    fraccionamiento_id BIGINT NOT NULL REFERENCES tributario_schema.fraccionamientos(id) ON DELETE CASCADE,
+    numero             INTEGER NOT NULL CHECK (numero >= 1),
+    fecha_vencimiento  DATE NOT NULL,
+    monto              NUMERIC(14,2) NOT NULL CHECK (monto > 0),
+    estado             VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'PAGADA')),
+    fecha_pago         DATE,
+    CONSTRAINT uq_cuotas_fraccionamiento_numero UNIQUE (fraccionamiento_id, numero)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fraccionamientos_cliente ON tributario_schema.fraccionamientos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_cuotas_fraccionamiento_fecha ON tributario_schema.cuotas_fraccionamiento(fecha_vencimiento, estado);
+
+-- HU-18 (Julio): notificaciones del Buzón SOL (esquela, carta inductiva o comunicado) de un cliente.
+-- El plazo es obligatorio: sin plazo de respuesta no se guarda.
+CREATE TABLE IF NOT EXISTS tributario_schema.notificaciones_sol (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo             VARCHAR(20) NOT NULL CHECK (tipo IN ('ESQUELA', 'CARTA_INDUCTIVA', 'COMUNICADO')),
+    fecha_recepcion  DATE NOT NULL,
+    plazo_respuesta  DATE NOT NULL,
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA')),
+    fecha_atencion   DATE,
+    registrado_en    TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_notificaciones_plazo CHECK (plazo_respuesta >= fecha_recepcion)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificaciones_cliente_estado_plazo
+    ON tributario_schema.notificaciones_sol(cliente_id, estado, plazo_respuesta);
+
+-- HU-13 (Julio): pagos de una obligación ya declarada. Varios pagos parciales hasta saldar; cada pago guarda su
+-- comprobante (PDF en disco, como los documentos de HU-04) y el acumulado y el saldo que quedaron después de él.
+CREATE TABLE IF NOT EXISTS tributario_schema.pagos_obligacion (
+    id                  BIGSERIAL PRIMARY KEY,
+    obligacion_id       BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    fecha_pago          DATE NOT NULL,
+    monto_pagado        NUMERIC(14,2) NOT NULL CHECK (monto_pagado > 0),
+    numero_constancia   VARCHAR(30) NOT NULL,
+    nombre_archivo      VARCHAR(255),
+    content_type        VARCHAR(100),
+    tamano_bytes        BIGINT,
+    ruta_almacenamiento VARCHAR(400),
+    acumulado_despues   NUMERIC(14,2) NOT NULL,
+    saldo_despues       NUMERIC(14,2) NOT NULL CHECK (saldo_despues >= 0),
+    registrado_en       TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_pagos_obligacion_constancia UNIQUE (obligacion_id, numero_constancia)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_obligacion_fecha
+    ON tributario_schema.pagos_obligacion(obligacion_id, fecha_pago);
+
+-- HU-13 (alcance reducido de Beto, 10/11): el comprobante es el numero de constancia y el PDF es opcional. Bases existentes:
+-- CREATE TABLE IF NOT EXISTS no cambia una tabla ya creada, asi que se quita el NOT NULL de las columnas del archivo.
+-- Los pagos que ya tenian PDF conservan sus datos.
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN nombre_archivo DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN content_type DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN tamano_bytes DROP NOT NULL;
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN ruta_almacenamiento DROP NOT NULL;
+-- El archivo del comprobante va completo o no va: las cuatro columnas llenas o las cuatro vacias. Sin DEFAULT en content_type, un pago sin
+-- archivo no deja content_type='application/pdf' suelto. Bases existentes: se quita el DEFAULT y la unica fila que podria violar el CHECK es la que
+-- dejo ese DEFAULT (content_type lleno y las otras tres vacias): se vacia. Los pagos con PDF (las cuatro llenas) no se tocan; cualquier otra mezcla
+-- no la produce el codigo y hace fallar el arranque en vez de adivinar. Idempotente.
+ALTER TABLE tributario_schema.pagos_obligacion ALTER COLUMN content_type DROP DEFAULT;
+UPDATE tributario_schema.pagos_obligacion SET content_type = NULL
+    WHERE content_type IS NOT NULL AND nombre_archivo IS NULL AND tamano_bytes IS NULL AND ruta_almacenamiento IS NULL;
+ALTER TABLE tributario_schema.pagos_obligacion DROP CONSTRAINT IF EXISTS ck_pagos_obligacion_archivo;
+ALTER TABLE tributario_schema.pagos_obligacion ADD CONSTRAINT ck_pagos_obligacion_archivo CHECK (
+    (nombre_archivo IS NULL AND content_type IS NULL AND tamano_bytes IS NULL AND ruta_almacenamiento IS NULL)
+    OR (nombre_archivo IS NOT NULL AND content_type IS NOT NULL AND tamano_bytes IS NOT NULL AND ruta_almacenamiento IS NOT NULL));
+
+-- HU-23: incidencias del servicio contable. Una incidencia se asocia a los clientes que afecta (una fila por cliente en
+-- incidencias_clientes): la de un cliente tiene una fila y una general (caida del portal SOL) una por cada cliente activo.
+CREATE TABLE IF NOT EXISTS tributario_schema.incidencias (
+    id              BIGSERIAL PRIMARY KEY,
+    tipo            VARCHAR(40) NOT NULL
+                    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'PROBLEMA_SIRE',
+                                'PROBLEMA_SERVICIOS_EXTERNOS', 'FALLA_SISTEMA_INTERNO', 'PROBLEMA_CONEXION_INTERNET',
+                                'ERROR_PROCESO_CONTABLE', 'OTRO')),
+    fecha           DATE NOT NULL,
+    descripcion     VARCHAR(1000) NOT NULL CHECK (length(btrim(descripcion)) > 0),
+    observaciones   VARCHAR(1000),
+    registrada_por  VARCHAR(60) NOT NULL,
+    registrada_en   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.incidencias_clientes (
+    incidencia_id   BIGINT NOT NULL REFERENCES tributario_schema.incidencias(id) ON DELETE CASCADE,
+    cliente_id      BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    PRIMARY KEY (incidencia_id, cliente_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_incidencias_clientes_cliente ON tributario_schema.incidencias_clientes(cliente_id);
+
+-- HU-28 (Jeanpierre): programación del cobro periódico de honorarios (una por cliente) y los cobros que genera.
+-- HU-29 amplía el CHECK de estado con el pago y agrega la columna pagado (en la sección de actualización).
+CREATE TABLE IF NOT EXISTS tributario_schema.programaciones_cobro (
+    id              BIGSERIAL PRIMARY KEY,
+    cliente_id      BIGINT NOT NULL UNIQUE REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    periodicidad    VARCHAR(10) NOT NULL CHECK (periodicidad IN ('MENSUAL', 'QUINCENAL')),
+    creada_en       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.cobros_honorarios (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    programacion_id  BIGINT NOT NULL REFERENCES tributario_schema.programaciones_cobro(id) ON DELETE CASCADE,
+    fecha_cobro      DATE NOT NULL,
+    monto            NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE')),
+    CONSTRAINT uq_cobros_honorarios_cliente_fecha UNIQUE (cliente_id, fecha_cobro)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cobros_honorarios_pendientes
+    ON tributario_schema.cobros_honorarios(cliente_id, estado, fecha_cobro);
+
+-- HU-29 (Jeanpierre): pagos recibidos de un cobro de honorarios. Varios pagos parciales hasta saldar el cobro; el cobro
+-- guarda lo pagado (columna pagado, agregada abajo) y pasa a PAGO_PARCIAL o PAGADO.
+CREATE TABLE IF NOT EXISTS tributario_schema.pagos_honorarios (
+    id              BIGSERIAL PRIMARY KEY,
+    cobro_id        BIGINT NOT NULL REFERENCES tributario_schema.cobros_honorarios(id) ON DELETE CASCADE,
+    fecha_pago      DATE NOT NULL,
+    monto           NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+    medio_pago      VARCHAR(20) NOT NULL
+                    CHECK (medio_pago IN ('EFECTIVO', 'TRANSFERENCIA', 'DEPOSITO', 'YAPE_PLIN', 'OTRO')),
+    -- Decisión de Beto (11/11): con «Otro» se especifica el medio; con los demás queda vacío.
+    medio_pago_detalle VARCHAR(100),
+    registrado_por  VARCHAR(60) NOT NULL,
+    registrado_en   TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_pagos_honorarios_detalle CHECK (
+        (medio_pago = 'OTRO') = (medio_pago_detalle IS NOT NULL AND length(btrim(medio_pago_detalle)) > 0))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pagos_honorarios_cobro ON tributario_schema.pagos_honorarios(cobro_id, fecha_pago);
+
+-- HU-12: avisos internos compartidos. Cada historia define su propia clave estable de evento.
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos (
+    id BIGSERIAL PRIMARY KEY,
+    origen VARCHAR(40) NOT NULL CHECK (length(btrim(origen)) > 0),
+    clave_evento VARCHAR(160) NOT NULL CHECK (length(btrim(clave_evento)) > 0),
+    mensaje VARCHAR(500) NOT NULL CHECK (length(btrim(mensaje)) > 0),
+    creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leido_en TIMESTAMPTZ,
+    CONSTRAINT uq_avisos_origen_evento UNIQUE (origen, clave_evento)
+);
+
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos_clientes (
+    aviso_id BIGINT NOT NULL REFERENCES tributario_schema.avisos(id) ON DELETE CASCADE,
+    cliente_id BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE RESTRICT,
+    PRIMARY KEY (aviso_id, cliente_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_bandeja ON tributario_schema.avisos(creado_en DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_avisos_clientes_cliente ON tributario_schema.avisos_clientes(cliente_id);
+
+-- HU-19: alertas escalonadas antes del plazo de respuesta de una notificacion del Buzon SOL (HU-18). Una fila por notificacion
+-- y por dia de alerta: el UNIQUE evita repetir una alerta el mismo dia. No se guarda ningun estado de la alerta ni los dias
+-- restantes: se calculan al consultar. El mensaje y el cliente quedan en el aviso compartido de HU-12 (aviso_id).
+CREATE TABLE IF NOT EXISTS tributario_schema.alertas_plazo_notificacion (
+    id              BIGSERIAL PRIMARY KEY,
+    notificacion_id BIGINT NOT NULL REFERENCES tributario_schema.notificaciones_sol(id) ON DELETE CASCADE,
+    dias_antes      INTEGER NOT NULL CHECK (dias_antes >= 0),
+    fecha_alerta    DATE NOT NULL,
+    aviso_id        BIGINT NOT NULL REFERENCES tributario_schema.avisos(id),
+    creada_en       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_alerta_plazo_notificacion_dias UNIQUE (notificacion_id, dias_antes)
+);
+
+CREATE INDEX IF NOT EXISTS idx_alertas_plazo_notificacion ON tributario_schema.alertas_plazo_notificacion(notificacion_id);
+-- HU-26 (Jeanpierre): pedidos especiales del cliente (constancia, certificacion o tramite) con su fecha de entrega, en
+-- seguimiento hasta que el estudio los marca atendidos. Diseño previo T182 (supuestos pendientes de confirmar con Beto).
+CREATE TABLE IF NOT EXISTS tributario_schema.solicitudes_especiales (
+    id              BIGSERIAL PRIMARY KEY,
+    cliente_id      BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    tipo            VARCHAR(20) NOT NULL CHECK (tipo IN ('CONSTANCIA', 'CERTIFICACION', 'TRAMITE')),
+    descripcion     VARCHAR(500),
+    fecha_entrega   DATE NOT NULL,
+    estado          VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ATENDIDA')),
+    fecha_atencion  DATE,
+    registrada_por  VARCHAR(60) NOT NULL,
+    registrada_en   TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_solicitudes_especiales_atencion CHECK ((estado = 'ATENDIDA') = (fecha_atencion IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_solicitudes_especiales_cliente
+    ON tributario_schema.solicitudes_especiales(cliente_id, estado, fecha_entrega);
+
+-- HU-24 (Jeanpierre): documentos que el cliente debe entregar, con la fecha en que se le pidieron y su fecha limite.
+-- Se guarda PENDIENTE o ENTREGADO; SIN_RESPUESTA no se guarda: es un PENDIENTE con la fecha limite vencida (diseño previo T165).
+-- Un documento sin respuesta se puede registrar una vez como incidencia de HU-23 (incidencia_id).
+CREATE TABLE IF NOT EXISTS tributario_schema.documentos_faltantes (
+    id               BIGSERIAL PRIMARY KEY,
+    cliente_id       BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    documento        VARCHAR(150) NOT NULL CHECK (length(btrim(documento)) > 0),
+    fecha_solicitud  DATE NOT NULL,
+    fecha_limite     DATE NOT NULL,
+    estado           VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'ENTREGADO')),
+    fecha_entrega    DATE,
+    incidencia_id    BIGINT UNIQUE REFERENCES tributario_schema.incidencias(id) ON DELETE SET NULL,
+    registrado_por   VARCHAR(60) NOT NULL,
+    registrado_en    TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT ck_documentos_faltantes_limite CHECK (fecha_limite >= fecha_solicitud),
+    CONSTRAINT ck_documentos_faltantes_entrega CHECK ((estado = 'ENTREGADO') = (fecha_entrega IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_documentos_faltantes_cliente
+    ON tributario_schema.documentos_faltantes(cliente_id, estado, fecha_limite);
+
 -- ============================== ACTUALIZACION DE BASES EXISTENTES ==============================
 -- Columnas agregadas en versiones anteriores
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
@@ -149,12 +370,47 @@ ALTER TABLE tributario_schema.obligaciones ADD COLUMN IF NOT EXISTS tipo_obligac
 ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_tipo;
 ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_tipo
     CHECK (tipo_obligacion IN ('IGV', 'RENTA', 'PLAME', 'ESSALUD', 'RETENCION_QUINTA', 'AFP'));
+-- HU-13: el estado admite PAGO_PARCIAL y PAGADO. Se borra primero la restricción en línea sin nombre (la que PostgreSQL
+-- llamó obligaciones_estado_check) y se recrea con nombre estable, como ck_obligaciones_tipo.
+ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS obligaciones_estado_check;
+ALTER TABLE tributario_schema.obligaciones DROP CONSTRAINT IF EXISTS ck_obligaciones_estado;
+ALTER TABLE tributario_schema.obligaciones ADD CONSTRAINT ck_obligaciones_estado
+    CHECK (estado IN ('PENDIENTE', 'DECLARADO', 'PAGO_PARCIAL', 'PAGADO'));
+-- HU-29: el cobro guarda lo pagado (0 en los cobros anteriores) y su estado admite PAGO_PARCIAL y PAGADO. Igual que en
+-- HU-13, se borra la restricción en línea sin nombre (cobros_honorarios_estado_check) y se recrea con nombre estable.
+ALTER TABLE tributario_schema.cobros_honorarios ADD COLUMN IF NOT EXISTS pagado NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS cobros_honorarios_estado_check;
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS ck_cobros_honorarios_estado;
+ALTER TABLE tributario_schema.cobros_honorarios ADD CONSTRAINT ck_cobros_honorarios_estado
+    CHECK (estado IN ('PENDIENTE', 'PAGO_PARCIAL', 'PAGADO'));
+ALTER TABLE tributario_schema.cobros_honorarios DROP CONSTRAINT IF EXISTS ck_cobros_honorarios_pagado;
+ALTER TABLE tributario_schema.cobros_honorarios ADD CONSTRAINT ck_cobros_honorarios_pagado
+    CHECK (pagado >= 0 AND pagado <= monto);
+-- Régimen: RER (Régimen Especial del Impuesto a la Renta) reemplaza a REMIPE (decisión de Beto, 10/11). Orden obligatorio: primero se
+-- borra la restricción vieja (la en línea sin nombre, que PostgreSQL llamó clientes_regimen_tributario_check, o la ya renombrada),
+-- luego los clientes que estaban en REMIPE pasan a RER sin perder ningún otro dato y recién entonces se crea la restricción nueva
+-- con nombre estable. La condición (condicion_habido) es otra columna y no se toca. regimen_laboral de trabajadores no cambia.
+ALTER TABLE tributario_schema.clientes DROP CONSTRAINT IF EXISTS clientes_regimen_tributario_check;
+ALTER TABLE tributario_schema.clientes DROP CONSTRAINT IF EXISTS ck_clientes_regimen;
+UPDATE tributario_schema.clientes SET regimen_tributario = 'RER' WHERE regimen_tributario = 'REMIPE';
+ALTER TABLE tributario_schema.clientes ADD CONSTRAINT ck_clientes_regimen
+    CHECK (regimen_tributario IN ('MYPE', 'RER', 'GENERAL'));
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS email VARCHAR(150);
 -- HU-07: marca manual de buen contribuyente (BUEN_CONTRIB_UESP); los clientes existentes quedan en FALSE.
 ALTER TABLE tributario_schema.clientes ADD COLUMN IF NOT EXISTS buen_contribuyente BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.activos_fijos ADD COLUMN IF NOT EXISTS codigo VARCHAR(40);
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS essalud BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE tributario_schema.trabajadores ADD COLUMN IF NOT EXISTS quinta_categoria BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- HU-23: los tipos de incidencia de la lista de Beto y las observaciones. Se borra primero la restriccion en linea sin nombre
+-- (incidencias_tipo_check) y se recrea con nombre estable, como ck_obligaciones_tipo; las incidencias anteriores no cambian.
+ALTER TABLE tributario_schema.incidencias DROP CONSTRAINT IF EXISTS incidencias_tipo_check;
+ALTER TABLE tributario_schema.incidencias DROP CONSTRAINT IF EXISTS ck_incidencias_tipo;
+ALTER TABLE tributario_schema.incidencias ADD CONSTRAINT ck_incidencias_tipo
+    CHECK (tipo IN ('CAIDA_PORTAL_SOL', 'CLIENTE_NO_ENVIA_DOCUMENTOS', 'RECHAZO_FRACCIONAMIENTO', 'PROBLEMA_SIRE',
+                                'PROBLEMA_SERVICIOS_EXTERNOS', 'FALLA_SISTEMA_INTERNO', 'PROBLEMA_CONEXION_INTERNET',
+                                'ERROR_PROCESO_CONTABLE', 'OTRO'));
+ALTER TABLE tributario_schema.incidencias ADD COLUMN IF NOT EXISTS observaciones VARCHAR(1000);
 
 -- HU-02: aporte de cada socio (S/). Los socios anteriores quedan con aporte 0 hasta que se edite.
 ALTER TABLE tributario_schema.socios ADD COLUMN IF NOT EXISTS aporte NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (aporte >= 0);
@@ -191,3 +447,80 @@ CREATE INDEX IF NOT EXISTS idx_socios_cliente ON tributario_schema.socios(client
 CREATE INDEX IF NOT EXISTS idx_activos_cliente ON tributario_schema.activos_fijos(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_trabajadores_cliente ON tributario_schema.trabajadores(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_obligaciones_cliente ON tributario_schema.obligaciones(cliente_id);
+
+-- HU-33 (Jeanpierre): avisos que recibe el cliente antes de que venza el pago de una obligación. Un aviso por obligación y
+-- por día de envío (el reintento del mismo día no duplica). Guarda tributo, monto y fecha tal como se avisaron.
+CREATE TABLE IF NOT EXISTS tributario_schema.avisos_cliente (
+    id                BIGSERIAL PRIMARY KEY,
+    cliente_id        BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    obligacion_id     BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    tributo           VARCHAR(30) NOT NULL,
+    monto             NUMERIC(14,2) NOT NULL CHECK (monto > 0),
+    fecha_vencimiento DATE NOT NULL,
+    fecha_aviso       DATE NOT NULL,
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_avisos_cliente_obligacion_dia UNIQUE (obligacion_id, fecha_aviso)
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_cliente_cliente ON tributario_schema.avisos_cliente(cliente_id, fecha_aviso DESC, id DESC);
+
+-- HU-15 (Ricardo): recordatorios de pago que el contador programa para una fecha. El día elegido se entrega al cliente como un aviso
+-- de pago con el saldo (avisos_cliente, HU-33), mientras la obligación siga declarada o con pago parcial, es decir, con saldo pendiente
+-- (decisión de Beto, 18/11). Si el sistema estuvo caído ese día, se envía al volver aunque la obligación ya haya vencido, uno solo por
+-- obligación. Estados: PROGRAMADO (pendiente de su fecha), ENVIADO, CANCELADO (lo canceló el contador, o la obligación se pagó por
+-- completo) y OMITIDO (llegó su fecha y ya no correspondía enviarlo: cliente inactivo, sin saldo, o había otro más reciente). Una
+-- obligación puede tener varios recordatorios en fechas distintas; no se repite una fecha mientras siga programada.
+CREATE TABLE IF NOT EXISTS tributario_schema.recordatorios_pago (
+    id                 BIGSERIAL PRIMARY KEY,
+    obligacion_id      BIGINT NOT NULL REFERENCES tributario_schema.obligaciones(id) ON DELETE CASCADE,
+    fecha_recordatorio DATE NOT NULL,
+    estado             VARCHAR(20) NOT NULL DEFAULT 'PROGRAMADO' CHECK (estado IN ('PROGRAMADO', 'ENVIADO', 'CANCELADO', 'OMITIDO')),
+    programado_por     VARCHAR(150) NOT NULL,
+    programado_en      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resuelto_en        TIMESTAMPTZ,
+    CONSTRAINT ck_recordatorios_pago_resuelto CHECK ((estado = 'PROGRAMADO') = (resuelto_en IS NULL))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_recordatorios_pago_programado
+    ON tributario_schema.recordatorios_pago(obligacion_id, fecha_recordatorio) WHERE estado = 'PROGRAMADO';
+CREATE INDEX IF NOT EXISTS idx_recordatorios_pago_pendientes
+    ON tributario_schema.recordatorios_pago(fecha_recordatorio) WHERE estado = 'PROGRAMADO';
+
+-- HU-25 (Ricardo): compras del cliente y su clasificación. Las compras las carga el contador, con el SIRE como referencia (decisión de
+-- Beto, 18/11); el cliente propone «mercadería o gasto» o «activo fijo», con una descripción, y el contador la valida. Una compra sin
+-- validar queda pendiente y avisa solo al contador cerca del fin del mes (días configurables, ver
+-- app.tributario.compras.alerta-dias-antes-cierre). Aislamiento por
+-- empresa: toda consulta y clasificación va por cliente_id. El proveedor se guarda solo como RUC y razón social (sin tabla de
+-- proveedores: HU-20 la podrá enlazar). El mismo comprobante de un proveedor no se repite en un cliente.
+CREATE TABLE IF NOT EXISTS tributario_schema.compras_cliente (
+    id                   BIGSERIAL PRIMARY KEY,
+    cliente_id           BIGINT NOT NULL REFERENCES tributario_schema.clientes(id) ON DELETE CASCADE,
+    periodo              DATE NOT NULL CHECK (EXTRACT(DAY FROM periodo) = 1),
+    proveedor_ruc        VARCHAR(11) NOT NULL CHECK (proveedor_ruc ~ '^[0-9]{11}$'),
+    proveedor_razon_social VARCHAR(200),
+    comprobante          VARCHAR(30) NOT NULL CHECK (length(btrim(comprobante)) > 0),
+    fecha_comprobante    DATE NOT NULL,
+    importe              NUMERIC(14,2) NOT NULL CHECK (importe > 0),
+    tipo_clasificacion   VARCHAR(30) CHECK (tipo_clasificacion IN ('MERCADERIA_O_GASTO', 'ACTIVO_FIJO')),
+    descripcion          VARCHAR(300),
+    clasificada_por      VARCHAR(150),
+    clasificada_en       TIMESTAMPTZ,
+    validada_por         VARCHAR(150),
+    validada_en          TIMESTAMPTZ,
+    registrada_por       VARCHAR(150) NOT NULL,
+    registrada_en        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_compras_cliente_comprobante UNIQUE (cliente_id, proveedor_ruc, comprobante),
+    CONSTRAINT ck_compras_cliente_clasificacion CHECK (
+        (tipo_clasificacion IS NULL AND descripcion IS NULL AND clasificada_por IS NULL AND clasificada_en IS NULL)
+        OR (tipo_clasificacion IS NOT NULL AND length(btrim(descripcion)) > 0 AND clasificada_por IS NOT NULL AND clasificada_en IS NOT NULL))
+);
+
+-- Bases que ya tenían la tabla sin la validación del contador: columnas y restricción (idempotente).
+ALTER TABLE tributario_schema.compras_cliente ADD COLUMN IF NOT EXISTS validada_por VARCHAR(150);
+ALTER TABLE tributario_schema.compras_cliente ADD COLUMN IF NOT EXISTS validada_en TIMESTAMPTZ;
+ALTER TABLE tributario_schema.compras_cliente DROP CONSTRAINT IF EXISTS ck_compras_cliente_validacion;
+ALTER TABLE tributario_schema.compras_cliente ADD CONSTRAINT ck_compras_cliente_validacion CHECK (
+    (validada_por IS NULL AND validada_en IS NULL)
+    OR (validada_por IS NOT NULL AND validada_en IS NOT NULL AND tipo_clasificacion IS NOT NULL));
+
+CREATE INDEX IF NOT EXISTS idx_compras_cliente_periodo ON tributario_schema.compras_cliente(cliente_id, periodo DESC, id DESC);

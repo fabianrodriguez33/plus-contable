@@ -32,7 +32,7 @@ if (¿Existe un cliente con ese RUC?) then (sí)
   :400 "Ya existe un cliente registrado con el RUC ...";
   stop
 endif
-:Guarda el cliente\n(condición HABIDO si no se indica);
+:Guarda el cliente\n(condición HABIDO y buen contribuyente en falso si no se indican);
 if (¿Vienen usuario SOL y clave SOL?) then (los dos)
   :Cifra ambos con AesUtil (AES/GCM, prefijo v2:)
   y guarda en credenciales_sol;
@@ -53,5 +53,5 @@ endif
 |Contador|
 stop
 
-footer Fuente: ClienteService.crear, RucValidator, GlobalExceptionHandler, FichaMaestraPage (develop 6db0036)
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ClienteService.crear, RucValidator, GlobalExceptionHandler, FichaMaestraPage
 @enduml

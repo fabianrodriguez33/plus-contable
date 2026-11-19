@@ -1,0 +1,59 @@
+@startuml
+title T144 · HU-30 · Secuencia: emitir el estado de cuenta de honorarios de un cliente
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(EstadoCuentaPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "EstadoCuentaController" as EC
+participant "EstadoCuentaService" as ES
+participant "CobroHonorarioRepository" as CR
+participant "PagoHonorarioRepository" as PR
+database "tributario_schema" as DB
+
+U -> FE : abre «Estado de cuenta» en el menú
+FE -> FE : carga la lista de clientes; el periodo por defecto es el mes en curso
+U -> FE : elige el cliente y el periodo (desde, hasta) y pulsa "Ver estado de cuenta"
+note right : Criterio 2
+alt sin cliente, sin fechas o desde posterior a hasta
+  FE -> U : avisa sin consultar al servidor
+end
+FE -> SEC : GET /api/tributario/clientes/{clienteId}/estado-cuenta?desde=&hasta=\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else rol CLIENTE_MYPE
+  SEC --> FE : 403 (solo el estudio: CONTADOR o ADMIN)
+else fecha mal escrita
+  SEC --> FE : 400
+end
+SEC -> EC : emitir(clienteId, desde, hasta)
+EC -> ES : emitir(clienteId, desde, hasta)
+alt falta una fecha o desde > hasta
+  ES --> FE : 400 "Faltan o son inválidos: ..."
+end
+ES -> DB : SELECT clientes WHERE id = ?
+alt el cliente no existe
+  ES --> FE : 404 "Cliente no encontrado"
+end
+ES -> CR : cobradoAntesDe(clienteId, desde)
+ES -> PR : pagadoAntesDe(clienteId, desde)
+ES -> ES : saldoAnterior = cobrado antes - pagado antes
+ES -> CR : cobros con fecha_cobro en [desde, hasta]
+CR -> DB : SELECT cobros_honorarios
+ES -> PR : delPeriodo(clienteId, desde, hasta)
+PR -> DB : SELECT pagos_honorarios JOIN cobros_honorarios (del cliente)
+ES -> ES : totalCobrado, totalPagado,\nsaldo = saldoAnterior + cobrado - pagado,\nsinMovimientos = sin cobros ni pagos
+ES --> FE : 200 EstadoCuentaDto
+alt sinMovimientos
+  FE -> U : "El cliente no tiene cobros ni pagos en este periodo." y el resumen con el saldo
+  note right : Criterio 3
+else hay movimientos
+  FE -> U : resumen (saldo anterior, honorarios del periodo, pagos recibidos, saldo al cierre;\nun saldo negativo se muestra «a favor del cliente»), tabla de cobros con su estado de hoy\ny tabla de pagos
+  note right : Criterio 1
+end
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-30-estado-cuenta. Código: EstadoCuentaPage, expedienteService.ts, Sidebar, SecurityConfig, EstadoCuentaController, EstadoCuentaService, CobroHonorarioRepository, PagoHonorarioRepository. Pruebas: EstadoCuentaServiceTest, EstadoCuentaControllerTest, EstadoCuentaPostgresTest, EstadoCuentaPage.test.tsx
+@enduml

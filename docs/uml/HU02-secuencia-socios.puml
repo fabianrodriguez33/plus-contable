@@ -1,0 +1,70 @@
+@startuml
+title HU-02 · Secuencia: guardar los socios y editar un aporte, con el porcentaje calculado (código de develop)
+skinparam shadowing false
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(SociosTab, clienteService)" as FE
+participant "SocioController" as SC
+participant "SocioService" as SS
+participant "ClienteService" as CS
+participant "PorcentajesSocietarios" as PS
+participant "SocioRepository" as SR
+database "tributario_schema" as DB
+
+== Guardar la estructura societaria ==
+U -> FE : agrega socios con nombre, documento, aporte y cargo, y pulsa Guardar
+FE -> SC : clienteService.guardarSocios(): PUT /api/tributario/clientes/{id}/socios\n(lista sin porcentaje)
+SC -> SS : SocioService.reemplazar(clienteId, socios)
+SS -> CS : ClienteService.buscar(clienteId)
+alt el cliente no existe
+  CS --> FE : 404 "Cliente no encontrado"
+end
+alt la lista está vacía
+  SS --> FE : 400 "Debe registrar al menos un socio"
+end
+SS -> SS : exigirAportePositivo(socio, aporte) por cada socio
+alt algún aporte es 0 o negativo
+  SS --> FE : 400 "El aporte de X debe ser mayor a 0 ..."
+end
+SS -> PS : PorcentajesSocietarios.calcular(aportes)
+PS --> SS : porcentajes con 2 decimales (mayor resto), suma 100.00
+SS -> SS : calcularYVerificar(aportes)
+alt algún porcentaje sería menor a 0.01 %
+  SS --> FE : 400 "Hay un aporte demasiado pequeño ..."
+end
+SS -> SR : SocioRepository.deleteByClienteId(clienteId)\nflush y saveAll(socios con su porcentaje)
+SR -> DB : DELETE y INSERT socios
+SS -> SS : resumenDe(socios)
+SS --> SC : ResumenSocietarioDto\n(capitalSocialTotal, porcentajeTotal, completo, sociosSinAporte)
+SC --> FE : 200
+FE --> U : muestra los porcentajes calculados y el capital social
+
+== Editar el aporte de un socio ==
+U -> FE : edita el aporte de un socio ya guardado
+FE -> SC : clienteService.actualizarAporte(): PATCH .../socios/{socioId}/aporte {aporte}
+SC -> SS : SocioService.actualizarAporte(clienteId, socioId, aporte)
+SS -> CS : ClienteService.buscar(clienteId)
+SS -> SR : SocioRepository.findByIdAndClienteId(socioId, clienteId)
+alt el socio no existe o es de otro cliente
+  SS --> FE : 404 "Socio no encontrado"
+end
+SS -> SS : exigirAportePositivo(socio, aporte)
+alt el aporte es 0 o negativo
+  SS --> FE : 400 "El aporte de X debe ser mayor a 0 ..."
+end
+SS -> SR : SocioRepository.findByClienteIdOrderById(clienteId)
+alt todos los socios tienen aporte mayor a 0
+  SS -> PS : PorcentajesSocietarios.calcular(aportes)
+  SS -> SR : saveAll(todos los socios con el porcentaje recalculado)
+  SR -> DB : UPDATE socios
+else otro socio tiene aporte 0 (registro anterior a la regla)
+  SS -> SR : save(socio editado): solo cambia su aporte
+  SR -> DB : UPDATE socios
+end
+SS --> SC : ResumenSocietarioDto (completo = falso si queda algún socio sin aporte)
+SC --> FE : 200
+FE --> U : reemplaza la lista con los porcentajes recalculados de todos los socios
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: SocioController, SocioService, PorcentajesSocietarios, SocioRepository, SociosTab y clienteService.ts
+@enduml

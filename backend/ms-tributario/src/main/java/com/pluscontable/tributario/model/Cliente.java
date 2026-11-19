@@ -10,7 +10,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Cliente {
-    public enum Regimen { MYPE, REMIPE, GENERAL }
+    /** Régimen tributario del cliente. RER es el Régimen Especial del Impuesto a la Renta (decisión de Beto, 10/11: reemplaza a REMIPE). */
+    public enum Regimen { MYPE, RER, GENERAL }
 
     public enum CondicionHabido { HABIDO, NO_HABIDO }
 

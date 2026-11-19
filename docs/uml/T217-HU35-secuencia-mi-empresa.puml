@@ -1,0 +1,48 @@
+@startuml
+title T217 · HU-35 · Secuencia: el cliente consulta su empresa
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Cliente MYPE" as U
+participant "frontend-web\n(MiEmpresaPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "DatosEmpresaController" as DC
+participant "AccesoCliente" as AX
+participant "DatosEmpresaService" as DS
+database "tributario_schema" as DB
+
+U -> FE : abre «Mi empresa» (al entrar, «/» la abre sola; su menú también tiene «Avisos de pago», de HU-33)
+FE -> FE : clienteId = claim clienteId del token (jwtClienteId)
+alt la cuenta no tiene empresa en el token
+  FE -> U : "Su cuenta no está vinculada a una empresa. Comuníquese con el estudio." (no pide datos)
+end
+FE -> SEC : GET /api/tributario/clientes/{clienteId}/datos-empresa\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+end
+SEC -> DC : obtener(clienteId)
+DC -> AX : exigir(clienteId)
+alt CLIENTE_MYPE de otra empresa, o token sin clienteId
+  AX --> FE : 403
+  note right : el servidor vuelve a verificar la empresa
+end
+DC -> DS : obtener(clienteId)
+DS -> DB : clientes (razón social, RUC, régimen, dirección, teléfono, correo)
+DS -> DB : socios del cliente (nombre, cargo, porcentaje)
+DS -> DB : documentos_legales del cliente\n(la versión mayor de cada tipo: minuta, vigencia de poderes, ficha RUC)
+DS -> DS : texto vacío o en blanco -> null;\nun tipo sin documento -> id, versión y fecha nulos
+DS --> FE : 200 DatosEmpresaDto
+FE -> U : razón social, RUC, régimen, dirección, teléfono, correo,\nsocios (cargo y participación) y documentos vigentes (fecha y versión)
+note right of FE
+  Solo lectura: sin formularios ni botones.
+  Un dato que falta se muestra «Pendiente de registrar».
+end note
+
+== El cliente intenta cambiar algo (T219) ==
+U -> SEC : PUT / POST / PATCH / DELETE sobre datos, socios o documentos
+SEC --> U : 403 (esas rutas son solo del estudio)
+
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #69 fusionado). Código: MiEmpresaPage.tsx, jwtSession.ts, SecurityConfig, DatosEmpresaController, AccesoCliente, DatosEmpresaService. Pruebas: DatosEmpresaPostgresTest, DatosEmpresaPermisosTest, MiEmpresaPage.test.tsx
+@enduml

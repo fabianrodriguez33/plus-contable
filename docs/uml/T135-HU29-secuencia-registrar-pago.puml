@@ -1,0 +1,67 @@
+@startuml
+title T135 · HU-29 · Secuencia: registrar el pago de honorarios recibido de un cobro
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha del cliente,\npestaña Cobros)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "CobroHonorarioController" as CC
+participant "PagoHonorarioService" as PS
+participant "CobroHonorarioRepository" as CR
+participant "PagoHonorarioRepository" as PR
+database "tributario_schema" as DB
+
+U -> FE : en un cobro pendiente pulsa "Registrar pago"
+FE -> FE : abre el formulario con la fecha de hoy y el saldo del cobro
+U -> FE : ajusta fecha, monto y medio de pago\n(con "Otro", especifica el medio)
+FE -> SEC : POST /api/tributario/clientes/{clienteId}/cobros/{cobroId}/pagos\n{fechaPago, monto, medioPago, medioPagoDetalle}\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else rol CLIENTE_MYPE
+  SEC --> FE : 403 (solo el estudio: CONTADOR o ADMIN)
+else medioPago fuera de la lista
+  SEC --> FE : 400 (el cuerpo no se puede leer)
+end
+SEC -> CC : registrarPago(clienteId, cobroId, dto, autenticacion)
+CC -> PS : registrar(clienteId, cobroId, dto, usuario del token)
+PS -> CR : buscarParaActualizar(cobroId)
+CR -> DB : SELECT ... FROM cobros_honorarios WHERE id = ? FOR UPDATE
+alt no existe o es de otro cliente
+  PS --> FE : 404 "Cobro no encontrado"
+else estado PAGADO
+  PS --> FE : 400 "Solo se registran pagos sobre un cobro pendiente: este cobro ya está pagado"
+  note right : Criterio 4
+end
+PS -> PS : validar(dto, saldo = monto - pagado)
+alt datos inválidos
+  PS --> FE : 400 "Faltan o son inválidos: ..." (todos los errores juntos)
+  note right
+    fechaPago futura, monto <= 0, más de 2 decimales,
+    monto mayor al saldo, sin medioPago,
+    o medioPago OTRO sin medioPagoDetalle (o con más de 100).
+  end note
+end
+PS -> PR : save(PagoHonorario: fecha, monto, medio, detalle solo con OTRO, registradoPor)
+PR -> DB : INSERT pagos_honorarios
+note right : Criterio 1
+PS -> PS : pagado = pagado + monto
+alt saldo = 0
+  PS -> PS : estado = PAGADO
+  note right : Criterio 2
+else saldo > 0
+  PS -> PS : estado = PAGO_PARCIAL
+  note right : Criterio 3
+end
+PS -> CR : save(cobro)
+CR -> DB : UPDATE cobros_honorarios SET pagado, estado
+PS --> CC : CobroHonorarioDto {monto, pagado, saldo, estado}
+CC --> FE : 201
+FE -> FE : avisa "Pago registrado" o "Pago parcial registrado: queda un saldo de S/ ..."
+FE -> CC : GET /api/tributario/clientes/{clienteId}/cobros
+CC --> FE : 200 cobros PENDIENTE y PAGO_PARCIAL (el PAGADO ya no aparece)
+
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-29-pago-honorarios. Código: CobrosTab.tsx (PagoModal), expedienteService.ts, SecurityConfig, CobroHonorarioController.registrarPago, PagoHonorarioService.registrar, CobroHonorarioRepository.buscarParaActualizar, GlobalExceptionHandler
+@enduml

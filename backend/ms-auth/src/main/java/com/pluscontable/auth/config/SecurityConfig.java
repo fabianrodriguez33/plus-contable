@@ -34,6 +34,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/health").permitAll()
+                        // HU-37: solo el estudio crea la cuenta de un cliente
+                        .requestMatchers(HttpMethod.POST, "/api/auth/clientes/*/cuenta").hasAnyRole("CONTADOR", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/auth/clientes/*/cuenta/restablecer").hasAnyRole("CONTADOR", "ADMIN")
+                        // HU-41: el cliente que olvidó su contraseña la pide sin sesión; solo el estudio ve las solicitudes
+                        .requestMatchers(HttpMethod.POST, "/api/auth/restablecimiento/solicitar").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/restablecimiento/pendientes").hasAnyRole("CONTADOR", "ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

@@ -1,5 +1,6 @@
 server:
-  port: 8082
+  # Render entrega el puerto en PORT
+  port: ${PORT:8082}
 
 spring:
   config:
@@ -12,6 +13,16 @@ spring:
     # Usuario propio del servicio (HT-01); si no se define, usa DB_USER y DB_PASSWORD
     username: ${TRIBUTARIO_DB_USER:${DB_USER}}
     password: ${TRIBUTARIO_DB_PASSWORD:${DB_PASSWORD}}
+    # Despliegue gratis (Neon): la base se suspende tras ~5 min sin uso y corta las conexiones abiertas.
+    # Una conexion vive menos que eso y se valida antes de entregarse; con 0 inactivas el pool se vacia solo.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: 0
+      idle-timeout: 120000
+      max-lifetime: ${DB_MAX_LIFETIME_MS:240000}
+      connection-timeout: 30000
+      validation-timeout: 5000
+      keepalive-time: 0
   jpa:
     hibernate:
       ddl-auto: none
@@ -33,10 +44,14 @@ app:
     # IV fijo del cifrado antiguo (CBC): solo para leer valores sin prefijo v2:
     legacy-iv: ${AES_IV}
   cors:
-    allowed-origins: http://localhost:5173
+    # Varios origenes separados por coma (CORS_ORIGINS)
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
   storage:
-    dir: ./uploads
+    dir: ${STORAGE_DIR:./uploads}
   tributario:
+    # HU-25: días antes del último día del mes desde los que una compra sin validar avisa al contador. Propuesta de Beto (5); configurable.
+    compras:
+      alerta-dias-antes-cierre: ${APP_TRIBUTARIO_COMPRAS_ALERTA_DIAS:5}
     # UIT por anio, en soles, tomada del decreto supremo del MEF de cada anio. Sin montos en el repositorio:
     # se carga por entorno (por ejemplo APP_TRIBUTARIO_UIT_2026). Sin UIT de un anio no se evalua la quinta.
     # La quinta categoria sigue apagada hasta que Beto confirme unidad y formula de proyeccion
@@ -45,6 +60,9 @@ app:
     essalud-activo: false
     quinta-activa: false
     quinta-umbral-uit: 7
+    # HU-19: dias antes del plazo de respuesta de una notificacion en que llega cada alerta. Valor propuesto, por confirmar con
+    # Beto (la tarjeta no lo define): 5, 3, 1 y 0 dias antes. Lista de enteros >= 0, sin repetir.
+    alertas-carta-dias: 5,3,1,0
   ruc:
     # Proveedor de la consulta de RUC (HU-01). Para cambiarlo: otra implementacion de ConsultaRuc y este valor
     proveedor: openruc

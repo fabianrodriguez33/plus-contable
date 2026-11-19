@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,10 +16,13 @@ import com.pluscontable.auth.dto.LoginResponse;
 import com.pluscontable.auth.model.BitacoraSeguridad;
 import com.pluscontable.auth.model.Rol;
 import com.pluscontable.auth.model.Usuario;
+import com.pluscontable.auth.model.TokenRevocado;
 import com.pluscontable.auth.repository.BitacoraRepository;
+import com.pluscontable.auth.repository.TokenRevocadoRepository;
 import com.pluscontable.auth.repository.UsuarioRepository;
 import io.jsonwebtoken.Claims;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +43,7 @@ class AuthServiceTest {
 
     private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
     private final BitacoraRepository bitacora = mock(BitacoraRepository.class);
+    private final TokenRevocadoRepository revocados = mock(TokenRevocadoRepository.class);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final JwtProvider jwt = new JwtProvider("secreto-de-prueba-con-al-menos-32-bytes-ok", 8);
     private AuthService service;
@@ -45,7 +51,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(usuarios, bitacora, encoder, jwt, MAX_INTENTOS, MINUTOS_BLOQUEO);
+        service = new AuthService(usuarios, bitacora, revocados, encoder, jwt, MAX_INTENTOS, MINUTOS_BLOQUEO);
         Rol contador = new Rol();
         contador.setNombre("CONTADOR");
         ana = new Usuario();
@@ -195,5 +201,82 @@ class AuthServiceTest {
         ana.setClienteId(7L);
 
         assertThat(jwt.parse(entrar("Clave123*").token()).get("clienteId", Number.class).longValue()).isEqualTo(7L);
+    }
+
+    // ---- HU-36 (tarea 2): cierre de sesion
+
+    private TokenRevocado revocadoGuardado() {
+        ArgumentCaptor<TokenRevocado> c = ArgumentCaptor.forClass(TokenRevocado.class);
+        verify(revocados).save(c.capture());
+        return c.getValue();
+    }
+
+    @Test
+    void cerrarSesionGuardaElJtiConSuVencimientoYAnotaLogout() {
+        Instant exp = Instant.now().plus(Duration.ofHours(8));
+
+        service.logout("ana", "jti-1", exp, "10.0.0.1");
+
+        TokenRevocado t = revocadoGuardado();
+        assertThat(t.getJti()).isEqualTo("jti-1");
+        assertThat(t.getUsername()).isEqualTo("ana");
+        assertThat(t.getExpiraEn()).isAfter(LocalDateTime.now().plusHours(7));
+        ArgumentCaptor<BitacoraSeguridad> b = ArgumentCaptor.forClass(BitacoraSeguridad.class);
+        verify(bitacora).save(b.capture());
+        assertThat(b.getValue().getEvento()).isEqualTo("LOGOUT");
+        assertThat(b.getValue().getUsername()).isEqualTo("ana");
+        assertThat(b.getValue().getIp()).isEqualTo("10.0.0.1");
+        assertThat(b.getValue().getDetalle()).isNull();
+    }
+
+    @Test
+    void cerrarSesionDosVecesNoDuplicaLaRevocacionPeroSiAnotaElEvento() {
+        when(revocados.existsById("jti-1")).thenReturn(true);
+
+        service.logout("ana", "jti-1", Instant.now().plusSeconds(60), "10.0.0.1");
+
+        verify(revocados, never()).save(any());
+        assertThat(eventosRegistrados()).containsExactly("LOGOUT");
+    }
+
+    @Test
+    void unTokenSinJtiNoSePuedeRevocarPeroQuedaAnotado() {
+        service.logout("ana", null, Instant.now().plusSeconds(60), "10.0.0.1");
+        service.logout("ana", "  ", Instant.now().plusSeconds(60), "10.0.0.1");
+
+        verify(revocados, never()).save(any());
+        ArgumentCaptor<BitacoraSeguridad> b = ArgumentCaptor.forClass(BitacoraSeguridad.class);
+        verify(bitacora, times(2)).save(b.capture());
+        assertThat(b.getAllValues()).allSatisfy(e -> {
+            assertThat(e.getEvento()).isEqualTo("LOGOUT");
+            assertThat(e.getDetalle()).contains("sin jti");
+        });
+    }
+
+    @Test
+    void alCerrarSesionSeBorranLosRevocadosYaVencidos() {
+        service.logout("ana", "jti-2", Instant.now().plusSeconds(60), "10.0.0.1");
+
+        ArgumentCaptor<LocalDateTime> limite = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(revocados).deleteByExpiraEnBefore(limite.capture());
+        assertThat(limite.getValue()).isBetween(LocalDateTime.now().minusSeconds(30), LocalDateTime.now().plusSeconds(30));
+    }
+
+    @Test
+    void cerrarSesionDeUnUsuarioQueYaNoExisteIgualRevocaElToken() {
+        when(usuarios.findByUsername("fantasma")).thenReturn(Optional.empty());
+
+        service.logout("fantasma", "jti-4", Instant.now().plusSeconds(60), "10.0.0.1");
+
+        assertThat(revocadoGuardado().getJti()).isEqualTo("jti-4");
+    }
+
+    @Test
+    void cadaLoginEmiteUnTokenConUnJtiDistinto() {
+        String a = jwt.parse(entrar("Clave123*").token()).getId();
+        String b = jwt.parse(entrar("Clave123*").token()).getId();
+
+        assertThat(a).isNotBlank();
+        assertThat(b).isNotBlank().isNotEqualTo(a);
     }
 }

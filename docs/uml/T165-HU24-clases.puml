@@ -1,0 +1,97 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T165 · HU-24 · Clases de la verificación de documentos faltantes
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class DocumentoFaltanteController <<nuevo>> {
+  +registrar(clienteId, dto, autenticacion): DocumentoFaltanteDto
+  +listar(clienteId): List<DocumentoFaltanteDto>
+  +registrarEntrega(clienteId, documentoId): DocumentoFaltanteDto
+  +registrarComoIncidencia(clienteId, documentoId, autenticacion): DocumentoFaltanteDto
+}
+class DocumentoFaltanteService <<nuevo>> {
+  ~ZONA = America/Lima
+  ~MAX_DOCUMENTO = 150
+  +registrar(clienteId, dto, usuario): DocumentoFaltanteDto
+  +listar(clienteId): List<DocumentoFaltanteDto>
+  +registrarEntrega(clienteId, documentoId): DocumentoFaltanteDto
+  +registrarComoIncidencia(clienteId, documentoId, usuario): DocumentoFaltanteDto
+}
+class ClienteService <<existe>> {
+  +buscar(id): Cliente
+}
+class IncidenciaService <<existe, HU-23>> {
+  +registrar(dto, usuario): IncidenciaDto
+}
+class DocumentoFaltante <<nuevo>> {
+  id: Long
+  clienteId: Long
+  documento: String
+  fechaSolicitud: LocalDate
+  fechaLimite: LocalDate
+  estado: Estado
+  fechaEntrega: LocalDate
+  incidenciaId: Long
+  registradoPor: String
+  registradoEn: LocalDateTime
+}
+enum EstadoGuardado <<nuevo, DocumentoFaltante.Estado, se guarda>> {
+  PENDIENTE
+  ENTREGADO
+}
+enum EstadoDocumentoFaltante <<nuevo, se muestra>> {
+  PENDIENTE
+  ENTREGADO
+  SIN_RESPUESTA
+}
+class DocumentoFaltanteEntradaDto <<record, nuevo>> {
+  documento: String
+  fechaSolicitud: LocalDate
+  fechaLimite: LocalDate
+}
+class DocumentoFaltanteDto <<record, nuevo>> {
+  id: Long
+  clienteId: Long
+  documento: String
+  fechaSolicitud: LocalDate
+  fechaLimite: LocalDate
+  estado: EstadoDocumentoFaltante
+  fechaEntrega: LocalDate
+  incidenciaId: Long
+  +from(doc, hoy): DocumentoFaltanteDto
+  +estadoVisible(doc, hoy): EstadoDocumentoFaltante
+}
+interface DocumentoFaltanteRepository <<nuevo>> {
+  findByClienteIdOrderByFechaLimiteAscIdAsc(clienteId)
+}
+
+DocumentoFaltanteController --> DocumentoFaltanteService
+DocumentoFaltanteController ..> DocumentoFaltanteEntradaDto
+DocumentoFaltanteController ..> DocumentoFaltanteDto
+DocumentoFaltanteService --> ClienteService : buscar(clienteId)
+DocumentoFaltanteService --> DocumentoFaltanteRepository
+DocumentoFaltanteService --> IncidenciaService : tipo CLIENTE_NO_ENVIA_DOCUMENTOS
+DocumentoFaltanteRepository ..> DocumentoFaltante
+DocumentoFaltante --> EstadoGuardado
+DocumentoFaltanteDto --> EstadoDocumentoFaltante
+DocumentoFaltante "0..*" --> "1" Cliente : cliente_id
+
+note bottom of DocumentoFaltanteService
+  registrar(): guarda el documento que falta con su fecha límite, en estado PENDIENTE (criterio 1), y la fecha en que se solicitó (criterio 2).
+  registrarEntrega(): guarda la fecha de entrega y pasa a ENTREGADO (criterio 3). listar(): qué documentos faltan por cliente (criterio 5).
+  DocumentoFaltanteDto.estadoVisible(): un PENDIENTE con fecha límite anterior a hoy (hora de Lima) se muestra SIN_RESPUESTA, sin guardarlo (criterio 4).
+  registrarComoIncidencia(): crea una incidencia de HU-23 (tipo CLIENTE_NO_ENVIA_DOCUMENTOS) para un documento SIN_RESPUESTA (criterio 4).
+end note
+note right of DocumentoFaltante
+  Supuestos de T165, pendientes de confirmar con Beto:
+  documento es texto libre (hasta 150 caracteres); la lista de documentos y estados «validada con el cliente» no está en el repositorio.
+  Supuesto: SIN_RESPUESTA se calcula al consultar (como el vencimiento de HU-08); no hay tarea que lo guarde.
+  Supuesto: la fecha de solicitud es la de hoy si no se indica; no puede ser futura; la fecha límite no es anterior a la de solicitud.
+  Supuesto: registrar como incidencia solo se permite para un documento SIN_RESPUESTA y una sola vez (incidenciaId).
+  Supuesto: solo el estudio usa estas rutas.
+end note
+footer Documentado a partir del código · 11/11/2026 · rama feature/HU-24-documentos-faltantes (actualiza el diseño previo del 07/11). Código: DocumentoFaltanteController, DocumentoFaltanteService, DocumentoFaltante, EstadoDocumentoFaltante, DocumentoFaltanteEntradaDto, DocumentoFaltanteDto, DocumentoFaltanteRepository, ClienteService.buscar, IncidenciaService.registrar
+@enduml

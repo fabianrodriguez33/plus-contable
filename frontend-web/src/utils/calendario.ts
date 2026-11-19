@@ -1,4 +1,5 @@
 import type { CalendarioItem } from '../services/calendarioService'
+import type { CuotaCalendario } from '../services/fraccionamientoService'
 
 export interface Rango {
   desde: string
@@ -58,12 +59,52 @@ export function agruparPorDia(items: CalendarioItem[], nombreCliente: (clienteId
     }))
 }
 
-export type SituacionVisual = 'DECLARADA' | 'VENCIDA' | 'HOY' | 'PROXIMA'
+/** Lo que se lista en un día del calendario: una obligación o una cuota de fraccionamiento (HU-17). */
+export type Entrada =
+  | { tipo: 'OBLIGACION'; clienteId: number; fecha: string; item: CalendarioItem }
+  | { tipo: 'CUOTA'; clienteId: number; fecha: string; item: CuotaCalendario }
 
-/** Una obligación declarada nunca se muestra como vencida, aunque su fecha ya haya pasado. */
+export const entradaDeObligacion = (item: CalendarioItem): Entrada =>
+  ({ tipo: 'OBLIGACION', clienteId: item.obligacion.clienteId, fecha: item.obligacion.fechaVencimiento, item })
+
+export const entradaDeCuota = (clienteId: number, item: CuotaCalendario): Entrada =>
+  ({ tipo: 'CUOTA', clienteId, fecha: item.cuota.fechaVencimiento, item })
+
+export interface GrupoEntradas {
+  fecha: string
+  entradas: Entrada[]
+}
+
+const idDe = (e: Entrada) => (e.tipo === 'OBLIGACION' ? e.item.obligacion.id : e.item.cuota.id)
+const claveDe = (e: Entrada) =>
+  e.tipo === 'OBLIGACION' ? `0 ${e.item.obligacion.tipoObligacion ?? ''}` : `1 ${String(e.item.cuota.numero).padStart(4, '0')}`
+
+/** Agrupa por día de vencimiento; dentro del día, por cliente, obligaciones antes que cuotas, y por tributo o número de cuota. */
+export function agruparEntradasPorDia(entradas: Entrada[], nombreCliente: (clienteId: number) => string): GrupoEntradas[] {
+  const porDia = new Map<string, Entrada[]>()
+  for (const e of entradas) porDia.set(e.fecha, [...(porDia.get(e.fecha) ?? []), e])
+  return [...porDia.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([fecha, lista]) => ({
+      fecha,
+      entradas: [...lista].sort((x, y) =>
+        nombreCliente(x.clienteId).localeCompare(nombreCliente(y.clienteId))
+        || claveDe(x).localeCompare(claveDe(y))
+        || idDe(x) - idDe(y)),
+    }))
+}
+
+export type SituacionVisual = 'DECLARADA' | 'PAGADA' | 'VENCIDA' | 'SIN_DECLARAR' | 'HOY' | 'PROXIMA'
+
+/**
+ * «Vencida» (definición de Beto) = fecha pasada y saldo pendiente: la declarada sin pago y la de pago parcial. La pagada
+ * nunca; la sin declarar con fecha pasada va aparte como pendiente de atención.
+ */
 export function situacionVisual(item: CalendarioItem): SituacionVisual {
-  if (item.obligacion.estado === 'DECLARADO') return 'DECLARADA'
-  if (item.vencimientoPasado) return 'VENCIDA'
+  const { estado } = item.obligacion
+  if (estado === 'PAGADO') return 'PAGADA'
+  if (estado === 'DECLARADO' && !item.vencimientoPasado) return 'DECLARADA'
+  if (item.vencimientoPasado) return estado === 'PENDIENTE' ? 'SIN_DECLARAR' : 'VENCIDA'
   if (item.diasRestantes === 0) return 'HOY'
   return 'PROXIMA'
 }
@@ -72,7 +113,32 @@ export function etiquetaSituacion(item: CalendarioItem): string {
   const dias = item.diasRestantes
   switch (situacionVisual(item)) {
     case 'DECLARADA': return 'Declarada'
+    case 'PAGADA': return 'Pagada'
     case 'VENCIDA': return `Vencida hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
+    case 'SIN_DECLARAR': return `Sin declarar hace ${-dias} ${-dias === 1 ? 'día' : 'días'} · pendiente de atención`
+    case 'HOY': return 'Vence hoy'
+    default: return dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`
+  }
+}
+
+export type SituacionCuota = 'PAGADA' | 'RIESGO' | 'HOY' | 'PROXIMA'
+
+/**
+ * Una cuota pagada nunca sale vencida ni en riesgo, aunque su fecha ya haya pasado. Una pendiente con fecha
+ * anterior a hoy es riesgo de perder el fraccionamiento (HU-17, criterio 4).
+ */
+export function situacionCuota(c: CuotaCalendario): SituacionCuota {
+  if (c.cuota.estado === 'PAGADA') return 'PAGADA'
+  if (c.cuota.enRiesgo) return 'RIESGO'
+  if (c.diasRestantes === 0) return 'HOY'
+  return 'PROXIMA'
+}
+
+export function etiquetaCuota(c: CuotaCalendario): string {
+  const dias = c.diasRestantes
+  switch (situacionCuota(c)) {
+    case 'PAGADA': return 'Pagada'
+    case 'RIESGO': return `En riesgo: vencida hace ${-dias} ${-dias === 1 ? 'día' : 'días'}`
     case 'HOY': return 'Vence hoy'
     default: return dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`
   }

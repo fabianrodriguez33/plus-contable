@@ -1,0 +1,50 @@
+@startuml
+title T26 · HU-14 · Secuencia: ver el tablero Declarado vs. Pagado
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(TableroPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "TableroController" as TC
+participant "TableroService" as TS
+participant "TableroRepository" as TR
+participant "PagoObligacionRepository" as PR
+database "tributario_schema" as DB
+
+U -> FE : abre «Tablero» en el menú
+FE -> FE : el mes por defecto es el de hoy en Lima; carga la lista de clientes
+U -> FE : elige cliente, mes y, si quiere, «solo declaradas sin pago»
+note right : Criterios 2 y 4
+FE -> SEC : GET /api/tributario/tablero?clienteId=&periodo=&soloDeclaradoSinPago=\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else rol CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403
+  note right : Criterio 5: solo el estudio
+end
+SEC -> TC : listar(clienteId, periodo, soloDeclaradoSinPago)
+TC -> TS : listar(...)
+alt periodo no es el primer día del mes
+  TS --> FE : 400 "periodo debe ser el primer día del mes"
+end
+alt el cliente indicado no existe
+  TS --> FE : 404 "Cliente no encontrado"
+end
+TS -> TR : obligaciones por cliente, periodo y estado (DECLARADO si «sin pago»)
+TR -> DB : SELECT obligaciones
+TS -> PR : sumasPagadas(ids de las obligaciones)
+PR -> DB : SELECT obligacion_id, SUM(monto_pagado) FROM pagos_obligacion GROUP BY obligacion_id
+TS -> TS : por fila: montoPagado, saldo = monto determinado - pagado,\nvencida = (DECLARADO sin pago o PAGO_PARCIAL) y fecha límite < hoy (Lima);\nsinDeclarar = PENDIENTE y fecha límite < hoy (pendiente de atención, aparte)
+TS --> FE : 200 [TableroFilaDto] por fecha límite, cliente y tributo
+alt hay filas
+  FE -> U : tabla con cliente, tributo, mes, fecha límite, monto, pagado y saldo,\nestado (Pendiente, Declarada, Pago parcial, Pagada) «Vencida» solo si vencida y «Sin declarar» solo si sinDeclarar;\nresumen por estado y N vencidas · N sin declarar (pendientes de atención)
+  note right : Criterios 1 y 3
+else sin filas
+  FE -> U : "No hay obligaciones para este filtro."
+end
+
+footer Diseño previo, 17/11/2026 · actualizado el 18/11/2026 con el tablero ya fusionado (#67) en develop (61adf8b). Base: criterios de aceptación de HU-14, el código de develop y HU-13. Código existente: Obligacion, PagoObligacion, PagoObligacionRepository, ClienteRepository, SecurityConfig, GlobalExceptionHandler
+@enduml

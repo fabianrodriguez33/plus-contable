@@ -1,0 +1,126 @@
+@startuml
+!pragma layout smetana
+title HT-03 · Clases de la autenticación con JWT y la seguridad entre servicios (código de develop)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+package "ms-auth" {
+  class AuthController {
+    +login(request, http): LoginResponse
+    +me(principal): UserDto
+  }
+  class AuthService {
+    -MSG_INVALIDAS: String
+    +login(request, ip): LoginResponse
+    +me(username): UserDto
+    -log(usuarioId, username, evento, detalle, ip): void
+  }
+  class JwtProvider {
+    +getExpiration(): Duration
+    +generate(username, roles): String
+    +generate(username, roles, clienteId): String
+    +parse(token): Claims
+  }
+  class "JwtFilter (ms-auth)" as AuthJwtFilter {
+    #doFilterInternal(request, response, chain): void
+  }
+  class "SecurityConfig (ms-auth)" as AuthSecurityConfig {
+    +filterChain(http, jwtFilter): SecurityFilterChain
+    +passwordEncoder(): PasswordEncoder
+  }
+  class DataSeeder {
+    +run(args): void
+  }
+  class LoginRequest <<record>> {
+    username: String
+    password: String
+  }
+  class LoginResponse <<record>> {
+    token: String
+    tipo: String
+    expiraEnSegundos: long
+    usuario: UserDto
+  }
+  class UserDto <<record>> {
+    id: Long
+    username: String
+    nombreCompleto: String
+    roles: List<String>
+  }
+  class Usuario {
+    username: String
+    passwordHash: String
+    activo: boolean
+    intentosFallidos: int
+    bloqueadoHasta: LocalDateTime
+    clienteId: Long
+    roles: Set<Rol>
+  }
+  class Rol {
+    nombre: String
+  }
+  class BitacoraSeguridad {
+    usuarioId: Long
+    username: String
+    evento: String
+    detalle: String
+    ip: String
+  }
+  interface UsuarioRepository {
+    +findByUsername(username): Optional<Usuario>
+    +existsByUsername(username): boolean
+  }
+  interface RolRepository {
+    +findByNombre(nombre): Optional<Rol>
+  }
+  interface BitacoraRepository
+}
+
+package "ms-tributario" {
+  class "JwtFilter (ms-tributario)" as TribJwtFilter {
+    #doFilterInternal(request, response, chain): void
+  }
+  class "SecurityConfig (ms-tributario)" as TribSecurityConfig {
+    ~ESTUDIO: String[]
+    ~ESTUDIO_Y_CLIENTE: String[]
+    +filterChain(http, jwtFilter): SecurityFilterChain
+  }
+}
+
+AuthController --> AuthService
+AuthController ..> LoginRequest
+AuthController ..> LoginResponse
+AuthService --> UsuarioRepository
+AuthService --> BitacoraRepository
+AuthService --> JwtProvider : generate(username, roles, clienteId)
+AuthService ..> LoginResponse
+LoginResponse o-- UserDto
+UsuarioRepository ..> Usuario
+RolRepository ..> Rol
+BitacoraRepository ..> BitacoraSeguridad
+Usuario "*" -- "*" Rol : usuario_roles
+AuthSecurityConfig --> AuthJwtFilter
+AuthJwtFilter ..> JwtProvider : parse(token)
+DataSeeder --> UsuarioRepository : crea el administrador inicial
+DataSeeder --> RolRepository
+TribSecurityConfig --> TribJwtFilter
+TribJwtFilter ..> AuthJwtFilter : mismo secreto JWT_SECRET,\nsin llamada entre servicios
+
+note bottom of AuthService
+  login(): rechaza usuario inexistente (401), inactivo (403) o bloqueado (423); suma intentos fallidos
+  y bloquea la cuenta al llegar al máximo; escribe cada evento en bitacora_seguridad
+  (LOGIN_EXITOSO, LOGIN_FALLIDO, LOGIN_RECHAZADO, LOGIN_BLOQUEADO, CUENTA_BLOQUEADA).
+end note
+
+note bottom of JwtProvider
+  Firma HS256 con JWT_SECRET (mínimo 32 bytes). El token expira a las 8 horas y lleva sub y roles;
+  clienteId solo en la cuenta de un cliente.
+end note
+
+note bottom of TribJwtFilter
+  ms-tributario valida la firma y el vencimiento por su cuenta y convierte los roles en ROLE_<rol>.
+  Un token inválido deja la petición sin autenticar (401).
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: ms-auth (controller, service, config, model, dto, repository) y ms-tributario (JwtFilter, SecurityConfig)
+@enduml

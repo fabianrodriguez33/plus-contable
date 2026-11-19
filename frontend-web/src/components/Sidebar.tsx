@@ -1,17 +1,31 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Building2, CalendarDays, LayoutDashboard, UserPlus, X } from 'lucide-react'
+import { esCliente } from '../services/authService'
+import { AlertOctagon, Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, LayoutGrid, ShoppingCart, TriangleAlert, UserPlus, X } from 'lucide-react'
 
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
   { to: '/calendario', etiqueta: 'Calendario', icono: CalendarDays },
+  { to: '/tablero', etiqueta: 'Tablero', icono: LayoutGrid },
+  { to: '/alertas-plazo', etiqueta: 'Alertas de plazo', icono: Bell },
+  { to: '/estado-cuenta', etiqueta: 'Estado de cuenta', icono: FileText },
+  { to: '/morosos', etiqueta: 'Clientes morosos', icono: TriangleAlert },
+  { to: '/vencidas', etiqueta: 'Obligaciones vencidas', icono: AlertOctagon },
   { to: '/clientes/nuevo', etiqueta: 'Nuevo cliente', icono: UserPlus },
+]
+
+/** HU-35: la cuenta de un cliente solo ve su empresa; el resto del menú es del estudio. */
+const ENLACES_CLIENTE = [
+  { to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase },
+  { to: '/mi-estado-cuenta', etiqueta: 'Mi estado de cuenta', icono: FileText },
+  { to: '/mis-avisos', etiqueta: 'Avisos de pago', icono: Bell },
+  { to: '/mis-compras', etiqueta: 'Mis compras', icono: ShoppingCart },
 ]
 
 function Enlaces({ onNavegar }: { onNavegar?: () => void }) {
   return (
     <nav className="flex flex-col gap-1 px-3">
-      {ENLACES.map(({ to, etiqueta, icono: Icono }) => (
+      {(esCliente() ? ENLACES_CLIENTE : ENLACES).map(({ to, etiqueta, icono: Icono }) => (
         <NavLink key={to} to={to} end onClick={onNavegar}
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${

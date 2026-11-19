@@ -34,7 +34,7 @@ public final class GeneradorObligaciones {
 
     /**
      * Decide qué se genera. Confirmado por Beto (02/11/2026): IGV y RENTA siempre, con el mismo cronograma en
-     * MYPE, REMIPE y GENERAL (solo cambia el cálculo del impuesto, no la fecha); PLAME si hay trabajadores.
+     * MYPE, RER y GENERAL (solo cambia el cálculo del impuesto, no la fecha); PLAME si hay trabajadores.
      * PLAME: los "otros sujetos a declarar" no existen como dato; hoy solo cuentan los trabajadores.
      * SIN CONFIRMAR: ESSALUD está apagado. Su código (trabajadores con remuneración mayor que 0, que NO equivale
      * a "asegurado") se conserva para cuando se confirme la regla y se encienda {@code essaludActivo}.

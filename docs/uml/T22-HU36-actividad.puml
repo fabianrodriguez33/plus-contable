@@ -1,55 +1,56 @@
 @startuml
-title T22 · HU-36 · Actividad: iniciar sesión (código de develop)
+title T22 · HU-36 · Login y sesión protegida
 skinparam shadowing false
-
 |Usuario|
 start
-:Escribe usuario y contraseña
-y pulsa Ingresar;
-
+:Introduce usuario y contraseña;
 |frontend-web|
-:authService.login() envía
-POST /api/auth/login;
-
+:LoginPage llama authService.login();
+:POST /api/auth/login;
 |ms-auth|
-if (¿Existe el usuario?) then (no)
-  :Bitácora LOGIN_FALLIDO\n401 "Usuario o contraseña incorrectos";
+if (¿Usuario existente y activo?) then (no)
+  :Rechaza con 401 o 403;
   stop
 endif
-if (¿Está activo?) then (no)
-  :Bitácora LOGIN_RECHAZADO\n403 "Usuario inactivo";
+if (¿Cuenta bloqueada?) then (sí)
+  :Rechaza con 423;
   stop
 endif
-if (¿Tiene bloqueo vigente?) then (sí)
-  :Bitácora LOGIN_BLOQUEADO\n423 con los minutos restantes;
+if (¿Contraseña BCrypt válida?) then (no)
+  :Incrementa intentos fallidos;
+  :Rechaza con 401 o 423;
   stop
 endif
-:Si el bloqueo ya venció,\nreinicia el contador de intentos;
-if (¿La contraseña coincide con el hash BCrypt?) then (no)
-  :Suma 1 al contador de intentos fallidos;
-  if (¿Llegó a 5 intentos?) then (sí)
-    :Bloquea la cuenta 15 minutos\nBitácora CUENTA_BLOQUEADA\n423;
-  else (no)
-    :Bitácora LOGIN_FALLIDO\n401 "Usuario o contraseña incorrectos";
-  endif
-  stop
-endif
-:Reinicia intentos y bloqueo\nBitácora LOGIN_EXITOSO;
-:Genera el JWT con usuario y roles\n(HS256, vence en 8 horas);
-:Responde 200 con token y usuario;
-
+:Reinicia intentos y bloqueo;
+:Emite JWT firmado con usuario, roles y exp;
+:Responde token y usuario;
 |frontend-web|
-:Guarda el token y el usuario en localStorage;
-:Navega a la pantalla principal "/";
-
+:Guarda token y usuario en localStorage;
+:Navega a la ruta "/";
+:PrivateRoute consulta isAuthenticated();
+if (¿JWT local con exp vigente?) then (no)
+  :Borra token y usuario;
+  :Redirige a /login;
+  stop
+endif
+:Muestra ruta protegida;
+:apiClient adjunta el JWT como Bearer a las solicitudes;
+:Programa comprobación al vencimiento y al volver a mostrar la pestaña;
 |Usuario|
-stop
-
+:Mantiene abierta la pantalla;
 |frontend-web|
+if (¿JWT local expirado?) then (sí)
+  :PrivateRoute borra sesión local;
+  :Oculta ruta protegida y redirige a /login;
+else (no)
+  :Conserva la ruta;
+endif
+stop
 note right
-  Ante cualquier error LoginPage muestra el mensaje
-  del servidor y no guarda sesión.
+  El frontend lee exp para gestionar la sesión,
+  sin verificar la firma. El backend valida el JWT
+  en las solicitudes protegidas. Un HTTP 401 ajeno
+  al login también limpia la sesión y redirige.
 end note
-
-footer Fuente: AuthService.login, JwtProvider, LoginPage.tsx, authService.ts (develop 6db0036)
+footer Contraste: origin/develop fc1a225582b620c6cf46c36695190549ace1f9b2 · LoginPage, authService, jwtSession, PrivateRoute, apiClient, AuthService, JwtProvider
 @enduml

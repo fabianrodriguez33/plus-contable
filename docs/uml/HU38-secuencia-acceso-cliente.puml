@@ -1,0 +1,54 @@
+@startuml
+title HU-38 · Secuencia: una cuenta de cliente consulta los documentos de su empresa (código de develop)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "Cuenta CLIENTE_MYPE" as C
+participant AuthController as AC
+participant AuthService as AS
+participant UsuarioRepository as UR
+participant JwtProvider as JP
+participant JwtFilter as JF
+participant "Spring Security\n(SecurityConfig)" as SS
+participant DocumentoController as DC
+participant AccesoCliente as ACC
+participant ExpedienteService as ES
+
+== Inicio de sesión (ms-auth) ==
+C -> AC : POST /api/auth/login {username, password}
+AC -> AS : AuthService.login(request, ip)
+AS -> UR : UsuarioRepository.findByUsername(username)
+UR --> AS : Usuario con sus roles y su clienteId
+AS -> JP : JwtProvider.generate(username, roles, clienteId)
+JP --> AS : JWT con sub, roles ["CLIENTE_MYPE"] y clienteId
+AS --> AC : LoginResponse(token, "Bearer", expiración, usuario)
+AC --> C : 200 con el token
+
+== Consulta de documentos (ms-tributario) ==
+C -> JF : GET /api/tributario/clientes/{clienteId}/documentos\nAuthorization: Bearer <token>
+JF -> JF : JwtFilter.doFilterInternal(): verifica la firma,\ntoma los roles y el clienteId y guarda DatosToken
+JF -> SS : la petición sigue la cadena de filtros
+SS -> SS : ¿ROLE_CLIENTE_MYPE puede leer esta ruta? (ESTUDIO_Y_CLIENTE)
+alt la ruta no es de lectura del cliente, o no hay token válido
+  SS --> C : 403 o 401, sin cuerpo
+else ruta permitida
+  SS -> DC : DocumentoController.listar(clienteId)
+  DC -> ACC : AccesoCliente.exigir(clienteId)
+  alt el clienteId del token es el pedido
+    ACC --> DC : sin error
+    DC -> ES : ExpedienteService.listar(clienteId)
+    ES --> DC : List<DocumentoDto>
+    DC --> C : 200 con los documentos de su empresa
+  else es otra empresa, o el token no trae clienteId
+    ACC --> SS : AccessDeniedException
+    SS --> C : 403 (ExceptionTranslationFilter), sin cuerpo
+  end
+end
+
+note over ACC
+  El estudio (CONTADOR, ADMIN) pasa por AccesoCliente.exigir sin comparar el cliente.
+  Las seis rutas de lectura del cliente hacen esta misma comprobación al empezar.
+end note
+
+footer Documentado el 05/11/2026 a partir del código de develop (commit 0406de0) · Fuente: AuthController, AuthService, JwtProvider, JwtFilter, SecurityConfig, DocumentoController, AccesoCliente, ExpedienteService
+@enduml

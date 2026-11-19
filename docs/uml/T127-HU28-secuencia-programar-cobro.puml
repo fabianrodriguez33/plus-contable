@@ -1,0 +1,72 @@
+@startuml
+title T127 · HU-28 · Secuencia: programar el cobro periódico de honorarios de un cliente (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as U
+participant "frontend-web\n(ficha del cliente,\npestaña Cobros)" as FE
+participant "CobroHonorarioController" as CC
+participant "CobroHonorarioService" as CS
+participant "AcuerdoService" as AS
+participant "ProgramacionCobroRepository" as PR
+participant "CobroHonorarioRepository" as CR
+database "tributario_schema" as DB
+
+== Programar el cobro ==
+U -> FE : en la ficha del cliente elige "Programar cobro" y escoge mensual o quincenal
+FE -> CC : POST /api/tributario/clientes/{clienteId}/cobros/programacion\n{periodicidad}\nAuthorization: Bearer <JWT>
+CC -> CS : programar(clienteId, dto)
+CS -> CS : valida la periodicidad
+alt periodicidad ausente o distinta de MENSUAL y QUINCENAL
+  CS --> FE : 400 "Faltan o son inválidos: periodicidad"
+end
+CS -> AS : vigente(clienteId)
+AS -> DB : SELECT acuerdos_servicio
+alt el cliente no existe
+  AS --> FE : 404 "Cliente no encontrado"
+else el cliente no tiene acuerdo de honorarios
+  CS --> FE : 400 "Registre primero el acuerdo de honorarios del cliente"
+  note right
+    Criterio 3: sin acuerdo se pide registrarlo primero.
+    Supuesto: respuesta 400 con ese mensaje (hoy AcuerdoService.vigente responde 404).
+  end note
+end
+CS -> PR : save(programación del cliente con su periodicidad)
+PR -> DB : INSERT o UPDATE programaciones_cobro
+CS -> CS : calcula las fechas de cobro de los próximos 12 meses
+note right
+  MENSUAL: el día de fecha_inicio de cada mes (último día si no existe).
+  QUINCENAL: los días 15 y último de cada mes.
+  Supuesto: monto mensual = honorario mensual; quincenal = honorario mensual / 2.
+end note
+loop cada fecha de cobro
+  CS -> CR : existsByClienteIdAndFechaCobro(clienteId, fecha)
+  alt ya existe un cobro en esa fecha
+    CS -> CS : lo cuenta como ya existente (no se duplica)
+  else no existe
+    CS -> CR : save(cobro PENDIENTE con fecha y monto)
+    CR -> DB : INSERT cobros_honorarios
+  end
+end
+CS --> CC : ProgramacionCobroDto {cobros generados y ya existentes}
+CC --> FE : 201
+FE --> U : muestra los cobros pendientes generados
+
+== Ver los cobros pendientes en la ficha ==
+U -> FE : abre la pestaña Cobros de la ficha
+FE -> CC : GET /api/tributario/clientes/{clienteId}/cobros?estado=PENDIENTE
+CC -> CS : pendientes(clienteId)
+CS -> CR : findByClienteIdAndEstadoOrderByFechaCobroAsc(clienteId, PENDIENTE)
+CR -> DB : SELECT cobros_honorarios
+CS --> FE : 200 lista de CobroHonorarioDto (fecha, monto, estado)
+FE --> U : muestra los cobros pendientes del cliente
+
+note over CS
+  Supuesto: solo el estudio (CONTADOR, ADMIN) usa estas rutas. El sistema programa los cobros; no emite comprobantes.
+  Supuesto: cambiar el acuerdo después no modifica los cobros ya generados.
+end note
+
+footer Diseño previo, 06/11/2026 · Base: criterios de aceptación de HU-28 y el código y la base de develop (de04c4f). Código existente: AcuerdoService.vigente, ClienteController y FichaMaestraPage, GlobalExceptionHandler, SecurityConfig
+@enduml

@@ -1,0 +1,126 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+title T6 · HU-13 · Clases del registro de la constancia de pago (comprobante = número) y varios pagos parciales (diseño actualizado)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class PagoObligacionController <<existe>> {
+  +registrar(obligacionId, fechaPago, montoPagado, numeroConstancia, archivo?): ObligacionDto
+  +listar(obligacionId): List<PagoDto>  <<nuevo>>
+}
+class ObligacionController <<existe>> {
+  +buscar(id): ObligacionDto
+  +declarar(id, dto): ObligacionDto
+}
+class PagoObligacionService <<existe>> {
+  +registrar(obligacionId, dto, archivo?): ObligacionDto
+  +listar(obligacionId): List<PagoDto>  <<nuevo>>
+  -validar(obligacionId, dto, archivo?, saldo): void
+}
+class AlmacenComprobantes <<existe; opcional>> {
+  +guardar(clienteId, archivo): RutaAlmacenada
+  +borrar(ruta): void
+}
+class Obligacion <<cambia>> {
+  id: Long
+  clienteId: Long
+  tipoObligacion: TipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  fechaDeclaracion: LocalDate
+  numeroFormulario: String
+  montoDeterminado: BigDecimal
+}
+enum "Obligacion.Estado" as Estado <<cambia>> {
+  PENDIENTE
+  DECLARADO
+  PAGO_PARCIAL  <<nuevo>>
+  PAGADO  <<nuevo>>
+}
+class PagoObligacion <<nuevo>> {
+  id: Long
+  obligacionId: Long
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+  acumuladoDespues: BigDecimal
+  saldoDespues: BigDecimal
+  registradoEn: LocalDateTime
+  nombreArchivo: String  <<opcional, nulo>>
+  contentType: String  <<opcional, nulo>>
+  tamanoBytes: Long  <<opcional, nulo>>
+  rutaAlmacenamiento: String  <<opcional, nulo>>
+}
+class PagoEntradaDto <<record, nuevo>> {
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+}
+class PagoDto <<record, nuevo>> {
+  id: Long
+  fechaPago: LocalDate
+  montoPagado: BigDecimal
+  numeroConstancia: String
+  acumuladoDespues: BigDecimal
+  saldoDespues: BigDecimal
+  +{static} from(p): PagoDto
+}
+class ObligacionDto <<record, cambia>> {
+  id: Long
+  estado: Estado
+  montoDeterminado: BigDecimal
+  montoAcumuladoPagado: BigDecimal  <<nuevo>>
+  saldo: BigDecimal  <<nuevo>>
+  numeroPagos: int  <<nuevo>>
+}
+interface ObligacionRepository <<existe>> {
+  buscarParaActualizar(id)
+  existsById(id)
+}
+interface PagoObligacionRepository <<nuevo>> {
+  findByObligacionIdOrderByFechaPagoAscIdAsc(obligacionId)
+  sumaPagada(obligacionId): BigDecimal
+  existsByObligacionIdAndNumeroConstancia(obligacionId, numero): boolean
+}
+class PagoPage <<frontend-web, nuevo>> {
+  ruta: /obligaciones/:id/pago
+  validarPago(datos, saldo, hoy, pagos)
+  resumenDePagos(obligacion, pagos)
+}
+
+PagoPage ..> PagoObligacionController : POST (formulario sin archivo) y GET
+PagoObligacionController --> PagoObligacionService
+PagoObligacionController ..> PagoEntradaDto
+PagoObligacionService --> ObligacionRepository
+PagoObligacionService --> PagoObligacionRepository
+PagoObligacionService ..> AlmacenComprobantes : solo si llega un archivo
+PagoObligacionService ..> ObligacionDto
+PagoObligacionService ..> PagoDto
+ObligacionRepository ..> Obligacion
+PagoObligacionRepository ..> PagoObligacion
+Obligacion --> Estado
+PagoObligacion "0..*" --> "1" Obligacion : obligacion_id
+
+note bottom of PagoObligacionService
+  registrar(): solo sobre una obligación DECLARADO o PAGO_PARCIAL (criterio 3). Cada pago suma al acumulado y bloquea la obligación mientras suma. Con el
+  acumulado igual al monto determinado pasa a PAGADO (criterio 1) y si es menor queda PAGO_PARCIAL con su saldo (criterio 2). Puede haber varios pagos parciales.
+  La constancia queda asociada a la obligación y se puede consultar con listar() (criterio 4). No se verifica el pago en SUNAT ni en el banco (acordado con Beto).
+end note
+note right of PagoEntradaDto
+  Decisión de Beto (10/11, alcance reducido): el comprobante es el número de constancia (obligatorio, hasta 30 caracteres, único en la obligación).
+  No hay carga de archivos ni almacenamiento adicional: la pantalla no envía archivo. El servidor conserva la carga de un PDF como opcional (si llega,
+  se valida y se guarda como en HU-04) y las columnas del archivo admiten nulo.
+  Decisión de Beto (06/11): una obligación admite varios pagos parciales; saldo = monto determinado menos el acumulado.
+  Supuesto: no se admite un pago mayor que el saldo, ni fecha futura, ni más de dos decimales en el monto en la pantalla.
+  Supuesto: solo el estudio registra y consulta los pagos; el acceso del cliente MYPE lo definen HU-14 y HU-32.
+end note
+note right of PagoPage
+  Hasta #81 esta pantalla seguía la regla anterior del calendario («Declarada», nunca «Vencida», aunque la fecha hubiera pasado). Desde #81 usa la misma
+  regla que el tablero: la pagada nunca sale «Vencida»; la declarada sin pago o con pago parcial con la fecha pasada sale «Vencida» (con pago parcial,
+  «Pago parcial · Vencida…»); la sin declarar se muestra «Pendiente de declarar».
+end note
+footer Diseño actualizado tras decisión de Beto del 10/11 · Base: criterios de aceptación de HU-13, el código de develop y el PR #56 (comprobante = número de constancia, sin carga de archivos; consulta GET .../pagos)
+@enduml

@@ -16,8 +16,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Obligacion {
-    // DECLARADO lo consume HU-13 (constancia de pago); no renombrar
-    public enum Estado { PENDIENTE, DECLARADO }
+    // DECLARADO lo consume HU-13 (constancia de pago); no renombrar. PAGO_PARCIAL y PAGADO los fija HU-13 según la suma de pagos
+    public enum Estado { PENDIENTE, DECLARADO, PAGO_PARCIAL, PAGADO }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,0 +1,97 @@
+@startuml
+!pragma layout smetana
+title T232 · HU-34 · Clases de la consulta sin conexión del cliente (solo frontend-web)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class "MiEmpresaPage" as Pagina <<existe, HU-35, ampliado>> {
+  usa useConsultaConCache('datos-empresa:{clienteId}')
+  muestra EstadoConexion sobre los datos
+}
+
+class "useConsultaConCache<T>(clave, cargar)" as Hook <<nuevo>> {
+  estado: cargando | en-linea | sin-conexion | primera-vez | error
+  datos, actualizadoEn, error
+  -consultar()
+  evento «online»: vuelve a consultar
+  evento «offline»: en-linea pasa a sin-conexion
+}
+
+class "cacheLocal.ts" as Cache <<nuevo>> {
+  guardar(clave, datos): actualizadoEn (ISO)
+  leer(clave): Guardado | null
+  limpiarCache()
+  fechaHora(iso): dd/MM/aaaa HH:mm (America/Lima)
+  PREFIJO = "pc_cache:"
+}
+
+class "EstadoConexion" as Estado <<nuevo>> {
+  sin-conexion con copia: aviso con la fecha
+  primera-vez: «Conéctese a internet la primera vez»
+}
+
+class "authService.logout()" as Logout <<existe, ampliado>> {
+  borra token, usuario y limpiarCache()
+}
+
+class "apiClient (interceptor 401)" as Api <<existe, ampliado>> {
+  401 fuera del login: borra token y usuario, limpiarCache() y va a /login
+}
+
+class "main.tsx" as Main <<ampliado>> {
+  registra /sw.js?v=__BUILD_ID__ solo en producción
+}
+
+class "vite.config.ts" as Vite <<ampliado>> {
+  define __BUILD_ID__ = id de la compilación (Date.now en base 36)
+}
+
+class "public/sw.js\n(service worker)" as SW <<nuevo>> {
+  CACHE = "pc-shell-" + versión de la compilación (parámetro ?v=)
+  install: skipWaiting · activate: borra los cachés de otras versiones y claim()
+  fetch: primero la red; si falla, la copia
+}
+
+class "localStorage" as LS <<navegador>> {
+  pc_cache:datos-empresa:{clienteId}
+  = { datos, actualizadoEn }
+}
+
+class "Cache Storage" as CS <<navegador>> {
+  la página y los archivos propios (la app)
+  nunca /api ni otros orígenes
+}
+
+Pagina --> Hook
+Pagina --> Estado
+Hook --> Cache
+Estado ..> Cache : fechaHora
+Cache --> LS
+Logout ..> Cache : limpiarCache()
+Api ..> Cache : limpiarCache() en el 401
+Vite ..> Main : __BUILD_ID__
+Main ..> SW : register('/sw.js?v=' + __BUILD_ID__)
+SW --> CS
+
+note bottom of Hook
+  Solo la falta de respuesta del servidor cuenta como «sin conexión» (error de red sin response).
+  Un 401, 403 o 500 se muestra como error y nunca se tapa con la copia.
+  Cada vez que el servidor responde se guarda la copia con su fecha; la clave lleva la empresa de la cuenta
+  (otra cuenta en el mismo equipo no ve la copia de otra empresa).
+end note
+
+note bottom of SW
+  Qué guarda: solo GET del mismo origen que no empiecen por /api/; toda navegación se guarda y se sirve como «/».
+  Cuándo se actualiza: cada vez que hay internet se pide a la red y se guarda lo nuevo; el service worker nuevo se activa al instante.
+  El nombre del caché lleva la versión de la compilación: al activarse una versión nueva se borran los cachés de las versiones anteriores.
+  Los datos de las cuentas (/api) viven solo en la copia local, no en el service worker.
+end note
+
+note right of Api
+  La copia local se borra en logout() y también cuando el 401 cierra la sesión por vencimiento: no queda en el equipo.
+end note
+
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #71 fusionado). Código: useConsultaConCache.ts, cacheLocal.ts, EstadoConexion.tsx, MiEmpresaPage.tsx, authService.ts, apiClient.ts, main.tsx, vite.config.ts, public/sw.js. Pruebas: cacheLocal.test.ts, MiEmpresaSinConexion.test.tsx, apiClient.test.ts
+@enduml

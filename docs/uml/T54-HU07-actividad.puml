@@ -1,57 +1,74 @@
 @startuml
-title T54 · HU-07 · Actividad: de la obligación a la fecha límite (código de develop)
+title T54 · HU-07 · Alta manual y programación mensual
 skinparam shadowing false
-
 |Cliente de la API|
 start
-:POST /api/tributario/obligaciones
-{clienteId, tipoObligacion, periodo, fechaVencimiento};
-
-|ms-tributario · alta (conectado)|
-if (¿JWT válido y rol CONTADOR o ADMIN?) then (no)
-  :401 sin token válido
-  403 rol no permitido;
+if (¿Flujo?) then (Alta manual)
+  :POST /api/tributario/obligaciones;
+  |ms-tributario · alta manual|
+  if (¿JWT y rol CONTADOR o ADMIN válidos?) then (no)
+    :Rechaza con 401 o 403;
+    stop
+  endif
+  :ObligacionProgramacionService.crear();
+  if (¿Cliente, tipo, periodo y fecha explícita válidos?) then (no)
+    :Rechaza datos inválidos;
+    stop
+  endif
+  if (¿Cliente existe?) then (no)
+    :Rechaza cliente inexistente;
+    stop
+  endif
+  if (¿Existe cliente + tipo + periodo?) then (sí)
+    :Rechaza duplicado con 409;
+    stop
+  endif
+  :Guarda PENDIENTE con la fecha recibida;
+  :Devuelve ObligacionDto;
+  stop
+else (Programación mensual)
+  :POST /api/tributario/obligaciones/programacion;
+  :Envía clienteId y periodo;
+  |ms-tributario · programación mensual|
+  if (¿JWT y rol CONTADOR o ADMIN válidos?) then (no)
+    :Rechaza con 401 o 403;
+    stop
+  endif
+  :ProgramacionMensualService.programar();
+  if (¿clienteId positivo y periodo informado?) then (no)
+    :Rechaza solicitud inválida;
+    stop
+  endif
+  :CronogramaConsultaService.buscar(clienteId, periodo);
+  :Selecciona el grupo del cronograma: último dígito del RUC o, si el cliente está marcado «buen contribuyente», BUEN_CONTRIB_UESP;
+:GrupoRucCronograma.paraCliente(ruc, buenContribuyente);
+  if (¿Cliente y cronograma disponibles?) then (no)
+    :Rechaza cliente inexistente o periodo sin fecha;
+    stop
+  endif
+  :Lee obligaciones existentes y trabajadores del periodo;
+  :GeneradorObligaciones.tiposDelMes();
+  :Incluye IGV y RENTA siempre;
+  if (¿Hay trabajadores ingresados al cierre del mes?) then (sí)
+    :Incluye PLAME;
+  else (no)
+    :Omite PLAME;
+  endif
+  :Por defecto omite ESSALUD y quinta; AFP siempre omitida;
+  :GeneradorObligaciones.preparar evita duplicados;
+  :Guarda nuevas obligaciones PENDIENTE con fecha del cronograma;
+  :Devuelve creadas, ya existentes y omitidas;
   stop
 endif
-if (¿clienteId > 0, tipo informado\ny periodo con día 1?) then (no)
-  :400 con el motivo (ObligacionInputValidator);
-  stop
-endif
-if (¿fechaVencimiento informada y no\nanterior al periodo?) then (no)
-  :400 "fecha_vencimiento es obligatoria\ny no puede ser anterior al periodo";
-  stop
-endif
-if (¿Existe el cliente?) then (no)
-  :404 "Cliente no encontrado";
-  stop
-endif
-if (¿Ya existe cliente + tipo + periodo?) then (sí)
-  :409 "Ya existe esta obligación para el\ncliente, tipo y período";
-  stop
-endif
-:Guarda la obligación en estado PENDIENTE
-con la fecha recibida;
-:Responde 200 con el ObligacionDto;
-stop
-
-|Piezas existentes, sin conectar al alta|
-start
-:CronogramaConsultaService.buscar(clienteId, periodo);
-:Lee el RUC del cliente;
-:GrupoRucCronograma.paraRuc(ruc)
-último dígito → grupo "0", "1", "2-3", "4-5", "6-7" u "8-9";
-:SELECT fecha_vencimiento FROM cronograma_tributario
-WHERE periodo_tributario = periodo y ultimo_digito_ruc = grupo;
-:Devuelve la fecha (Optional);
-:Si hay más de una fila, lanza un error;
-note right
-  El régimen tributario del cliente no participa en este camino ni en
-  ningún otro: no hay selección de fecha por régimen en el código.
-  Ningún controlador ni servicio de producción llama a buscar();
-  solo lo usan las pruebas. Por eso esta rama no es el flujo
-  de la historia sino el material disponible para construirlo.
-end note
-stop
-
-footer Fuente: ObligacionProgramacionService.crear, CronogramaConsultaService, GrupoRucCronograma (develop 6db0036)
+legend bottom
+  ESSALUD y quinta están apagadas por defecto
+  hasta confirmar sus reglas; el código admite
+  activarlas por parámetros. AFP carece de su
+  propio cronograma y siempre se omite.
+  No se distingue fecha por régimen tributario.
+  El cliente «buen contribuyente» (marca manual en la
+  ficha) usa el cronograma BUEN_CONTRIB_UESP en lugar
+  del último dígito del RUC.
+endlegend
+footer Corregido el 05/11/2026 contra develop (commit 0406de0): cronograma de buen contribuyente. Contraste original: origin/develop fc1a225582b620c6cf46c36695190549ace1f9b2 · ObligacionProgramacionService, ProgramacionMensualController, ProgramacionMensualService, CronogramaConsultaService, GeneradorObligaciones
 @enduml

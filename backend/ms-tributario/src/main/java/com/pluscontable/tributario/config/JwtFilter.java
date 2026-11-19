@@ -23,6 +23,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
+    /** Mismo claim que pone ms-auth en el token del primer ingreso. */
+    static final String CLAIM_CAMBIAR_PASSWORD = "cambiarPassword";
+
     private final SecretKey key;
 
     public JwtFilter(@Value("${app.jwt.secret}") String secret) {
@@ -37,6 +40,15 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 Claims claims = Jwts.parser().verifyWith(key).build()
                         .parseSignedClaims(header.substring(7)).getPayload();
+                // HU-37: el token restringido del primer ingreso (contraseña temporal) solo sirve en ms-auth para cambiarla.
+                // Aquí se rechaza por su claim, sin depender de que no tenga roles: una ruta futura con authenticated() no lo deja pasar
+                if (Boolean.TRUE.equals(claims.get(CLAIM_CAMBIAR_PASSWORD, Boolean.class))) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setCharacterEncoding("UTF-8");
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"mensaje\":\"Debe cambiar la contraseña temporal antes de usar el sistema\"}");
+                    return;
+                }
                 List<?> roles = claims.get("roles", List.class);
                 var authorities = (roles == null ? List.<SimpleGrantedAuthority>of()
                         : roles.stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r)).toList());

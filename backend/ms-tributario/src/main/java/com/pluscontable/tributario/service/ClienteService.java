@@ -7,6 +7,7 @@ import com.pluscontable.tributario.model.Cliente;
 import com.pluscontable.tributario.model.CredencialSol;
 import com.pluscontable.tributario.repository.ClienteRepository;
 import com.pluscontable.tributario.repository.CredencialSolRepository;
+import com.pluscontable.tributario.ruc.AlertaCondicionRucService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.time.LocalDateTime;
@@ -20,12 +21,14 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
     private final CredencialSolRepository credencialRepository;
     private final AesUtil aesUtil;
+    private final AlertaCondicionRucService alertaCondicion;
 
     public ClienteService(ClienteRepository clienteRepository, CredencialSolRepository credencialRepository,
-                          AesUtil aesUtil) {
+                          AesUtil aesUtil, AlertaCondicionRucService alertaCondicion) {
         this.clienteRepository = clienteRepository;
         this.credencialRepository = credencialRepository;
         this.aesUtil = aesUtil;
+        this.alertaCondicion = alertaCondicion;
     }
 
     @Transactional(readOnly = true)
@@ -61,14 +64,23 @@ public class ClienteService {
         if (!c.getRuc().equals(dto.ruc()) && clienteRepository.existsByRuc(dto.ruc())) {
             throw new ValidationException("Ya existe un cliente registrado con el RUC " + dto.ruc());
         }
+        Cliente.CondicionHabido condicionAnterior = c.getCondicionHabido();
         aplicar(c, dto);
         clienteRepository.save(c);
+        // HU-22 T80: misma transacción; si el aviso falla, el cambio de condición también se revierte.
+        alertaCondicion.registrarCambio(c, condicionAnterior);
         guardarSolSiViene(id, dto);
         return obtener(id);
     }
 
+    /** Largo de las columnas usuario_sol_cifrado y clave_sol_cifrada (CredencialSol). */
+    static final int COLUMNA_CIFRADA = 300;
+    public static final int MAX_SOL_BYTES = AesUtil.maxBytesCifrables(COLUMNA_CIFRADA);
+
+    /** 400 si el usuario o la clave, ya cifrados, no caben en su columna; 404 si el cliente no existe. */
     @Transactional
     public void guardarCredencialSol(Long clienteId, CredencialSolDto dto) {
+        validarLargoSol(dto);
         buscar(clienteId);
         CredencialSol cred = credencialRepository.findByClienteId(clienteId).orElseGet(() -> {
             CredencialSol n = new CredencialSol();
@@ -79,6 +91,20 @@ public class ClienteService {
         cred.setClaveSolCifrada(aesUtil.encrypt(dto.claveSol()));
         cred.setActualizadoEn(LocalDateTime.now());
         credencialRepository.save(cred);
+    }
+
+    private static void validarLargoSol(CredencialSolDto dto) {
+        List<String> largos = new java.util.ArrayList<>();
+        if (dto.usuarioSol() != null && dto.usuarioSol().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_SOL_BYTES) {
+            largos.add("usuarioSol");
+        }
+        if (dto.claveSol() != null && dto.claveSol().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_SOL_BYTES) {
+            largos.add("claveSol");
+        }
+        if (!largos.isEmpty()) {
+            throw new ValidationException("Son demasiado largos: " + String.join(" y ", largos) + " (máximo " + MAX_SOL_BYTES
+                    + " bytes cada uno; una letra con tilde o ñ ocupa 2)");
+        }
     }
 
     /** Recupera las credenciales descifradas solo en memoria para la respuesta; nunca se persisten en claro. */

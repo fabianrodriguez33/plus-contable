@@ -6,6 +6,7 @@ import com.pluscontable.tributario.dto.ObligacionDto;
 import com.pluscontable.tributario.model.Obligacion;
 import com.pluscontable.tributario.model.VencimientoHistorial;
 import com.pluscontable.tributario.repository.ObligacionRepository;
+import com.pluscontable.tributario.repository.PagoObligacionRepository;
 import com.pluscontable.tributario.repository.VencimientoHistorialRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
@@ -23,9 +24,12 @@ public class ObligacionService {
 
     private final ObligacionRepository obligacionRepository;
     private final VencimientoHistorialRepository historialRepository;
+    private final PagoObligacionRepository pagoRepository;
 
     public ObligacionService(ObligacionRepository obligacionRepository,
-                             VencimientoHistorialRepository historialRepository) {
+                             VencimientoHistorialRepository historialRepository,
+                             PagoObligacionRepository pagoRepository) {
+        this.pagoRepository = pagoRepository;
         this.obligacionRepository = obligacionRepository;
         this.historialRepository = historialRepository;
     }
@@ -86,7 +90,11 @@ public class ObligacionService {
 
         List<String> rechazos = new ArrayList<>();
         for (Obligacion o : lista) {
-            if (o.getEstado() == Obligacion.Estado.DECLARADO) {
+            if (o.getEstado() == Obligacion.Estado.PAGADO) {
+                rechazos.add("obligación " + o.getId() + " ya pagada");
+            } else if (o.getEstado() == Obligacion.Estado.PAGO_PARCIAL) {
+                rechazos.add("obligación " + o.getId() + " con pago parcial");
+            } else if (o.getEstado() == Obligacion.Estado.DECLARADO) {
                 rechazos.add("obligación " + o.getId() + " ya declarada");
             } else if (dto.nuevaFecha().isBefore(o.getPeriodo())) {
                 rechazos.add("obligación " + o.getId() + ": la fecha es anterior al periodo " + o.getPeriodo().toString().substring(0, 7));
@@ -108,10 +116,14 @@ public class ObligacionService {
         return obligacionRepository.saveAll(lista).stream().map(ObligacionDto::from).toList();
     }
 
-    /** PROVISIONAL hasta HU-07. */
+    /** PROVISIONAL hasta HU-07. Con pago parcial trae lo pagado y el saldo, para mostrarlos en el calendario. */
     @Transactional(readOnly = true)
     public List<ObligacionDto> listar(Long clienteId) {
-        return obligacionRepository.findByClienteIdOrderByPeriodoDesc(clienteId).stream().map(ObligacionDto::from).toList();
+        return obligacionRepository.findByClienteIdOrderByPeriodoDesc(clienteId).stream()
+                .map(o -> o.getEstado() == Obligacion.Estado.PAGO_PARCIAL
+                        ? ObligacionDto.from(o, pagoRepository.sumaPagada(o.getId()), (int) pagoRepository.countByObligacionId(o.getId()))
+                        : ObligacionDto.from(o))
+                .toList();
     }
 
     private Obligacion obtener(Long obligacionId) {
