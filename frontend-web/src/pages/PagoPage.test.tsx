@@ -253,12 +253,11 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     expect(screen.queryByLabelText('Monto pagado (S/) *')).toBeNull()
   })
 
-  it('una obligación DECLARADA con la fecha pasada tampoco sale «Vencida»', async () => {
+  it('una obligación DECLARADA sin pago y con la fecha pasada sale «Vencida» (se debe todo)', async () => {
     obtener.mockResolvedValue(obligacion({ estado: 'DECLARADO', fechaVencimiento: '2026-11-03' }))
     pantalla()
 
-    expect((await screen.findByTestId('estado')).textContent).toBe('Declarada')
-    expect(screen.queryByText(/Vencida/)).toBeNull()
+    expect((await screen.findByTestId('estado')).textContent).toBe('Vencida hace 6 días')
   })
 
   it('con pago parcial y la fecha pasada todavía se debe saldo: dice «Pago parcial · Vencida hace…» y sigue admitiendo pagos', async () => {
