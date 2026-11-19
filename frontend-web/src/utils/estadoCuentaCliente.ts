@@ -38,3 +38,33 @@ export function delMes(obligaciones: Obligacion[], mes: string): Obligacion[] {
 export function mesesDisponibles(obligaciones: Obligacion[], mesActual: string): string[] {
   return [...new Set([...obligaciones.map((o) => o.periodo.slice(0, 7)), mesActual])].sort().reverse()
 }
+
+/** Hoy en Lima como AAAA-MM-DD (para comparar con las fechas límite, que también vienen así). */
+export function hoyEnLima(ahora: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).format(ahora)
+}
+
+/**
+ * «Vencida» (definición de Beto, la misma del tablero, del calendario y de la lista del estudio) = fecha límite pasada y saldo
+ * pendiente: declarada sin pago o con pago parcial (con pago parcial sigue vencida). La pagada nunca, y la sin declarar con fecha
+ * pasada no se marca como vencida: es un pendiente de atención del estudio. El día de la fecha límite todavía no está vencida.
+ */
+export function estaVencida(o: Pick<Obligacion, 'estado' | 'fechaVencimiento'>, hoy: string): boolean {
+  return (o.estado === 'DECLARADO' || o.estado === 'PAGO_PARCIAL') && o.fechaVencimiento < hoy
+}
+
+/**
+ * Lo pagado y el saldo para mostrar. El servidor los trae con el pago parcial (suma de los pagos de HU-13); en los demás estados se
+ * derivan del estado: pagada = todo pagado y saldo cero; declarada sin pago = nada pagado y saldo igual al monto; sin declarar o
+ * sin monto determinado = no hay cifra (nulo).
+ */
+export function montosDe(o: Obligacion): { pagado: number | null; saldo: number | null } {
+  const monto = o.montoDeterminado ?? null
+  if (o.estado === 'PAGO_PARCIAL') {
+    return { pagado: o.montoAcumuladoPagado ?? null, saldo: o.saldo ?? (monto !== null && o.montoAcumuladoPagado != null ? monto - o.montoAcumuladoPagado : null) }
+  }
+  if (monto === null) return { pagado: null, saldo: null }
+  if (o.estado === 'PAGADO') return { pagado: monto, saldo: 0 }
+  if (o.estado === 'DECLARADO') return { pagado: 0, saldo: monto }
+  return { pagado: null, saldo: null }
+}

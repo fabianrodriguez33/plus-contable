@@ -26,8 +26,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * HU-32 · T201, de punta a punta por HTTP real con PostgreSQL desechable: lo que consulta la pantalla «Mi estado de cuenta»
- * (GET /obligaciones?clienteId=) con el token de una cuenta de cliente. Ve los tributos de su empresa con estado, monto y fecha
- * límite; nunca los de otra empresa (403, también al pedir una obligación suelta); sin sesión 401; el estudio ve ambas.
+ * (GET /obligaciones?clienteId=) con el token de una cuenta de cliente. Ve los tributos de su empresa con estado, monto, fecha
+ * límite y, con pago parcial, lo pagado y el saldo; nunca los de otra empresa (403, también al pedir una obligación suelta); sin sesión 401; el estudio ve ambas.
  * Clientes y obligaciones ficticios que se borran al terminar.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -91,6 +91,9 @@ class EstadoCuentaClienteHttpTest {
         long ajeno = cliente();
         long igv = obligacion(suyo, "IGV", "2026-10-01", "2026-11-18", "DECLARADO", "1500.50");
         long renta = obligacion(suyo, "RENTA", "2026-10-01", "2026-11-18", "PAGO_PARCIAL", "800.00");
+        jdbc.update("""
+                INSERT INTO tributario_schema.pagos_obligacion(obligacion_id, fecha_pago, monto_pagado, numero_constancia, acumulado_despues, saldo_despues)
+                VALUES (?, '2026-11-10', 300.00, 'C-HU32-1', 300.00, 500.00)""", renta);
         obligacion(ajeno, "IGV", "2026-10-01", "2026-11-18", "PENDIENTE", "99.00");
 
         var r = get("/api/tributario/obligaciones?clienteId=" + suyo, token("CLIENTE_MYPE", suyo));
@@ -109,6 +112,9 @@ class EstadoCuentaClienteHttpTest {
             } else {
                 assertThat(o.get("id").asLong()).isEqualTo(renta);
                 assertThat(o.get("estado").asText()).isEqualTo("PAGO_PARCIAL");
+                // Beto (18/11): con pago parcial sigue vencida y el cliente ve lo pagado y el saldo (los trae ObligacionService.listar, #81)
+                assertThat(o.get("montoAcumuladoPagado").decimalValue()).isEqualByComparingTo("300.00");
+                assertThat(o.get("saldo").decimalValue()).isEqualByComparingTo("500.00");
             }
         }
     }
