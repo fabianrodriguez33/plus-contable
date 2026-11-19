@@ -1,0 +1,74 @@
+@startuml
+title T42 · HU-16 · Secuencia: ver las obligaciones vencidas sin pago y las sin declarar (diseño previo)
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+autonumber
+
+actor "Contador" as CO
+actor "Cliente MYPE" as CL
+participant "frontend-web\n(TableroPage)" as FE
+participant "SecurityConfig\n+ JwtFilter" as SEC
+participant "TableroController" as TC
+participant "TableroService" as TS
+participant "TableroRepository" as TR
+participant "PagoObligacionRepository" as PR
+participant "Vista del cliente\n<<pendiente de #77>>" as VC
+participant "AccesoCliente" as AX
+database "tributario_schema" as DB
+
+== El estudio ve el tablero con las vencidas (ya en develop, #67) ==
+CO -> FE : abre «Tablero» y elige el mes (periodo tributario) o todos
+FE -> SEC : GET /api/tributario/tablero?periodo=AAAA-MM-01\nAuthorization: Bearer <JWT>
+alt sin token
+  SEC --> FE : 401
+else CLIENTE_MYPE o token sin rol
+  SEC --> FE : 403
+end
+SEC -> TC : listar(clienteId, periodo, soloDeclaradoSinPago)
+TC -> TS : listar(...)
+alt clienteId no positivo o periodo que no es el primer día del mes
+  TS --> FE : 400
+else el cliente indicado no existe
+  TS --> FE : 404
+end
+TS -> TR : findAll(Specification: cliente, periodo, estado)
+TR -> DB : SELECT obligaciones
+TS -> PR : sumasPagadas(ids)
+PR -> DB : SELECT SUM(monto_pagado) por obligación (pagos_obligacion)
+loop cada obligación
+  TS -> TS : saldo = monto determinado - suma de pagos
+  TS -> TS : pasada = fecha límite anterior a hoy (hoy = Lima)
+  alt estado DECLARADO sin pago, o PAGO_PARCIAL, y pasada
+    TS -> TS : vencida = true (el pago parcial sigue vencida: trae pagado y saldo)
+  else estado PENDIENTE (sin declarar) y pasada
+    TS -> TS : sinDeclarar = true (pendiente de atención, aparte de las vencidas)
+  else PAGADO, o fecha límite vigente
+    TS -> TS : ni vencida ni sinDeclarar
+  end
+end
+TS --> FE : 200 [TableroFilaDto] ordenadas por fecha límite, cliente y tributo
+FE -> CO : tabla con estado, monto, pagado, saldo y fecha límite;\nbadge «Vencida» solo si vencida y badge «Sin declarar» solo si sinDeclarar;\nresumen: N vencidas · N sin declarar (pendientes de atención)
+note right of TS
+  Ni «vencida» ni «sinDeclarar» se guardan: se calculan al consultar. El tablero solo lee: no cambia pagos ni obligaciones.
+end note
+
+== El cliente ve sus vencidas, pagadas y saldos (pendiente de #77) ==
+CL -> FE : abre su pantalla de obligaciones (nombre y ruta tentativos)
+FE -> VC : GET (ruta por confirmar en #77)\nAuthorization: Bearer <JWT>
+VC -> AX : exigir(clienteId del token)
+alt CLIENTE_MYPE de otra empresa, o token sin clienteId
+  AX --> FE : 403
+end
+VC -> TS : misma regla de fila() para las obligaciones de su empresa
+TS --> VC : [obligación: estado, monto, pagado, saldo, fecha límite, vencida, sinDeclarar]
+VC --> FE : 200
+FE -> CL : sus vencidas (con pagado y saldo), sus pagadas y sus saldos;\nlas sin declarar aparte, como «pendientes de atención»
+note over VC
+  Regla de Beto: el cliente SÍ ve sus vencidas, pagadas y saldos. Hoy el tablero le responde 403, y GET /api/tributario/obligaciones?clienteId=
+  (con AccesoCliente) le devuelve estado, monto y fecha límite, pero el saldo y lo pagado solo se llenan al registrar un pago y no trae vencida
+  ni sinDeclarar. Lo marcado «pendiente de #77» no está en develop y sus nombres son tentativos.
+end note
+
+footer Diseño previo, 18/11/2026 · Base: criterios de aceptación de HU-16 y el código fusionado en develop (61adf8b): tablero de HU-14 (#67) y pagos de HU-13. Lo marcado «pendiente de #77» no está en develop.
+@enduml

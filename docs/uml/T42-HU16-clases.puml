@@ -1,0 +1,130 @@
+@startuml
+!pragma layout smetana
+title T42 · HU-16 · Clases de las obligaciones vencidas sin pago (diseño previo)
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class TableroController <<existe, #67>> {
+  +listar(clienteId, periodo, soloDeclaradoSinPago): List<TableroFilaDto>
+}
+class TableroService <<existe, #67>> {
+  {static} ZONA = America/Lima
+  +listar(clienteId, periodo, soloDeclaradoSinPago): List<TableroFilaDto>
+  -fila(obligacion, cliente, pagado, hoy): TableroFilaDto
+}
+class TableroFilaDto <<record, existe, #67>> {
+  obligacionId, clienteId, ruc, razonSocial
+  tipoObligacion, periodo, fechaVencimiento
+  estado: Estado
+  montoDeterminado, montoPagado, saldo: BigDecimal
+  vencida: boolean
+  sinDeclarar: boolean
+}
+class TableroRepository <<existe, #67>> {
+  findAll(Specification): List<Obligacion>
+}
+class PagoObligacionRepository <<existe, HU-13>> {
+  +sumasPagadas(ids): List<PagadoPorObligacionDto>
+}
+class PagadoPorObligacionDto <<record, existe>> {
+  obligacionId: Long
+  pagado: BigDecimal
+}
+class Obligacion <<existe>> {
+  id, clienteId, tipoObligacion
+  periodo: LocalDate
+  fechaVencimiento: LocalDate
+  estado: Estado
+  montoDeterminado: BigDecimal
+}
+enum "Obligacion.Estado" as Estado <<existe>> {
+  PENDIENTE
+  DECLARADO
+  PAGO_PARCIAL
+  PAGADO
+}
+class PagoObligacion <<existe, HU-13>> {
+  obligacionId: Long
+  montoPagado: BigDecimal
+}
+class CalendarioService <<existe>> {
+  +Situacion { PROXIMO, VENCIDO }
+}
+class VencimientoTributario <<existe>> {
+  +vencido(clock): boolean
+}
+class SecurityConfig <<existe>> {
+  /api/tributario/tablero: sin regla propia, solo CONTADOR y ADMIN
+  GET .../obligaciones: CONTADOR, ADMIN, CLIENTE_MYPE
+}
+class ObligacionController <<existe>> {
+  +listar(clienteId): List<ObligacionDto>
+}
+class AccesoCliente <<existe>> {
+  {static} exigir(clienteIdPedido)
+}
+class "TableroPage\n(frontend-web)" as Pagina <<existe, #67>> {
+  badge «Vencida» y badge «Sin declarar»
+  resumen: N vencidas · N sin declarar (pendientes de atención)
+}
+class "tableroService.ts · utils/tablero.ts" as Srv <<existe, #67>> {
+  consultarTablero(filtro)
+  resumenTablero(filas)
+  periodoDeMes(mes) · hoyLima()
+}
+
+class "Regla de vencidas" as RegladeVencidas <<pendiente de #77, nombre tentativo>> {
+  debe aplicar la regla de TableroService.fila
+}
+class "Lista de vencidas del estudio\n(controlador, servicio, pantalla)" as ListaEstudio <<pendiente de #77, nombres tentativos>> {
+  obligaciones vencidas, con pagado y saldo
+  aparte: sin declarar · pendientes de atención
+}
+class "Vista del cliente\n(ruta y pantalla)" as VistaCliente <<pendiente de #77, nombres tentativos>> {
+  solo su empresa: vencidas, pagadas, saldos
+}
+
+TableroController --> TableroService
+TableroService --> TableroRepository
+TableroService --> PagoObligacionRepository : suma de pagos
+TableroService ..> TableroFilaDto
+PagoObligacionRepository ..> PagadoPorObligacionDto
+TableroRepository ..> Obligacion
+PagoObligacionRepository ..> PagoObligacion
+Obligacion --> Estado
+Obligacion "1" o-- "0..*" PagoObligacion
+SecurityConfig ..> TableroController : solo el estudio
+SecurityConfig ..> ObligacionController : estudio y cliente
+ObligacionController ..> AccesoCliente : exigir(clienteId)
+Pagina --> Srv
+Srv ..> TableroController : GET /api/tributario/tablero
+CalendarioService --> VencimientoTributario
+RegladeVencidas ..> TableroService : misma regla de fila()
+ListaEstudio ..> RegladeVencidas
+VistaCliente ..> RegladeVencidas
+VistaCliente ..> AccesoCliente : exigir(clienteId)
+
+note bottom of TableroService
+  Regla de Beto, ya en develop (#67): vencida = fecha límite anterior a hoy (Lima) y saldo pendiente, es decir estado DECLARADO sin pago o
+  PAGO_PARCIAL. El pago parcial sigue vencida y la fila trae montoPagado y saldo (monto determinado - suma de pagos). Una obligación PAGADO
+  nunca es vencida. Una PENDIENTE (sin declarar) con fecha pasada no se mezcla: va aparte con sinDeclarar = true («pendiente de atención»).
+  Ninguno de los dos estados se guarda: se calculan con la fecha de hoy. Sin monto determinado el saldo es nulo y la regla se decide por el estado.
+  «Mes» = periodo tributario de la obligación (supuesto por confirmar con Beto), no el mes de su fecha límite.
+end note
+note right of VencimientoTributario
+  El calendario marca VENCIDO a cualquier obligación con fecha límite pasada, sin mirar pagos ni estado: no es la regla de HU-16.
+  Una obligación pagada con fecha pasada aparece vencida en el calendario y no vencida en el tablero.
+end note
+note right of SecurityConfig
+  Hoy el cliente MYPE no puede usar el tablero (403). Lee sus obligaciones con GET /obligaciones?clienteId= (AccesoCliente: solo la suya),
+  pero esa respuesta solo trae montoAcumuladoPagado y saldo después de registrar un pago y no trae «vencida» ni «sinDeclarar».
+end note
+note right of VistaCliente
+  Regla de Beto: el cliente SÍ ve sus vencidas, sus pagadas y sus saldos. No está en develop: queda pendiente de #77.
+  Lo marcado «pendiente de #77» tiene nombres tentativos hasta que se fusione.
+end note
+
+footer Diseño previo, 18/11/2026 · Base: criterios de aceptación de HU-16 y el código fusionado en develop (61adf8b): tablero de HU-14 (#67), pagos de HU-13 y calendario. Lo marcado «pendiente de #77» no está en develop. T26 (HU-14) aún describe la regla anterior de vencida.
+@enduml
