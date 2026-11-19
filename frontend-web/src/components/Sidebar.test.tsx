@@ -13,8 +13,8 @@ const menuDe = (rol: string) => {
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('Menú lateral por rol (HU-35)', () => {
-  it('la cuenta de un cliente solo tiene «Mi empresa» y «Avisos de pago»', () => {
-    expect(menuDe('CLIENTE_MYPE')).toEqual(['Mi empresa', 'Avisos de pago'])
+  it('la cuenta de un cliente solo tiene «Mi empresa», «Mi estado de cuenta» y «Avisos de pago»', () => {
+    expect(menuDe('CLIENTE_MYPE')).toEqual(['Mi empresa', 'Mi estado de cuenta', 'Avisos de pago'])
   })
 
   it('el estudio ve su menú completo y no «Mi empresa»', () => {
