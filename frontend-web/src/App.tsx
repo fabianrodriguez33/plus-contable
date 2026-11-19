@@ -15,6 +15,7 @@ import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
 import MiEmpresaPage from './pages/MiEmpresaPage'
 import MisAvisosPage from './pages/MisAvisosPage'
+import MisComprasPage from './pages/MisComprasPage'
 import { esCliente } from './services/authService'
 
 /** HU-35: se decide al renderizar la ruta, no al montar la app: así sirve también tras iniciar sesión sin recargar. */
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/" element={<Inicio />} />
           <Route path="/mi-empresa" element={<MiEmpresaPage />} />
           <Route path="/mis-avisos" element={<MisAvisosPage />} />
+          <Route path="/mis-compras" element={<MisComprasPage />} />
           <Route path="/calendario" element={<CalendarioPage />} />
           <Route path="/tablero" element={<TableroPage />} />
           <Route path="/alertas-plazo" element={<AlertasPlazoPage />} />

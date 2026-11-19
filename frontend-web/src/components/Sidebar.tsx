@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { esCliente } from '../services/authService'
-import { Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, LayoutGrid, TriangleAlert, UserPlus, X } from 'lucide-react'
+import { Bell, Building2, Briefcase, CalendarDays, FileText, LayoutDashboard, LayoutGrid, ShoppingCart, TriangleAlert, UserPlus, X } from 'lucide-react'
 
 export const ENLACES = [
   { to: '/', etiqueta: 'Clientes', icono: LayoutDashboard },
@@ -17,6 +17,7 @@ export const ENLACES = [
 const ENLACES_CLIENTE = [
   { to: '/mi-empresa', etiqueta: 'Mi empresa', icono: Briefcase },
   { to: '/mis-avisos', etiqueta: 'Avisos de pago', icono: Bell },
+  { to: '/mis-compras', etiqueta: 'Mis compras', icono: ShoppingCart },
 ]
 
 function Enlaces({ onNavegar }: { onNavegar?: () => void }) {
