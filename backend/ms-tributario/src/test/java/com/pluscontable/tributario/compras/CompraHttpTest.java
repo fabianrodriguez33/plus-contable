@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * HU-25 · T216, de punta a punta por HTTP real con PostgreSQL desechable: el contador carga una compra, el cliente la ve sin clasificar y
- * la clasifica con una descripción, el contador la ve ya clasificada, y otra empresa no ve ni toca nada. Clientes y compras ficticios que
+ * propone la clasificación con una descripción, el contador la valida, y otra empresa no ve ni toca nada. Clientes y compras ficticios que
  * se borran al terminar.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -77,55 +77,71 @@ class CompraHttpTest {
     }
 
     @Test
-    void elContadorCargaElClienteClasificaYElContadorLaVeClasificada() throws Exception {
+    void elContadorCargaElClienteProponeYElContadorValida() throws Exception {
         long suyo = cliente();
         String ruta = "/api/tributario/clientes/" + suyo + "/compras";
         String contador = token("CONTADOR", null);
         String cliente = token("CLIENTE_MYPE", suyo);
-        // periodo = mes de hoy en Lima: es el que cierra pronto o ya cerró según el día
         LocalDate periodo = LocalDate.now(ZoneId.of("America/Lima")).withDayOfMonth(1);
 
         var creada = llamar("POST", ruta, contador, compra("F001-" + UUID.randomUUID().toString().substring(0, 6), periodo));
         assertThat(creada.statusCode()).isEqualTo(201);
         long compraId = json.readTree(creada.body()).get("id").asLong();
-        assertThat(json.readTree(creada.body()).get("clasificada").asBoolean()).isFalse();
+        assertThat(json.readTree(creada.body()).get("estado").asText()).isEqualTo("SIN_CLASIFICAR");
 
         JsonNode vista = json.readTree(llamar("GET", ruta, cliente, null).body());
         assertThat(vista).hasSize(1);
-        assertThat(vista.get(0).get("id").asLong()).isEqualTo(compraId);
-        assertThat(vista.get(0).get("clasificada").asBoolean()).isFalse();
+        assertThat(vista.get(0).get("estado").asText()).isEqualTo("SIN_CLASIFICAR");
         assertThat(vista.get(0).get("importe").decimalValue()).isEqualByComparingTo("1180.00");
+        assertThat(vista.get(0).get("alertaCierre").asBoolean()).isFalse();           // la alerta es solo del contador
 
-        var clasificada = llamar("PATCH", ruta + "/" + compraId + "/clasificacion", cliente,
-                "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"Laptop del área contable\"}");
-        assertThat(clasificada.statusCode()).isEqualTo(200);
+        // validar antes de que el cliente proponga: 400
+        assertThat(llamar("POST", ruta + "/" + compraId + "/validacion", contador, null).statusCode()).isEqualTo(400);
 
-        JsonNode delContador = json.readTree(llamar("GET", ruta + "?clasificada=true", contador, null).body());
+        var propuesta = llamar("PATCH", ruta + "/" + compraId + "/clasificacion", cliente, "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"Laptop del área contable\"}");
+        assertThat(propuesta.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(propuesta.body()).get("estado").asText()).isEqualTo("PROPUESTA");
+        // el cliente puede cambiar su propuesta mientras no se valide
+        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", cliente, "{\"tipo\":\"MERCADERIA_O_GASTO\",\"descripcion\":\"Insumos\"}").statusCode()).isEqualTo(200);
+
+        JsonNode delContador = json.readTree(llamar("GET", ruta + "?estado=PROPUESTA", contador, null).body());
         assertThat(delContador).hasSize(1);
-        assertThat(delContador.get(0).get("tipo").asText()).isEqualTo("ACTIVO_FIJO");
-        assertThat(delContador.get(0).get("descripcion").asText()).isEqualTo("Laptop del área contable");
-        assertThat(delContador.get(0).get("alertaCierre").asBoolean()).isFalse();    // clasificada: no avisa
-        assertThat(json.readTree(llamar("GET", ruta + "?clasificada=false", contador, null).body())).isEmpty();
-        // una clasificada no se cambia
-        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", cliente, "{\"tipo\":\"MERCADERIA_O_GASTO\",\"descripcion\":\"x\"}").statusCode()).isEqualTo(400);
+        assertThat(delContador.get(0).get("tipo").asText()).isEqualTo("MERCADERIA_O_GASTO");
+        assertThat(delContador.get(0).get("descripcion").asText()).isEqualTo("Insumos");
+
+        var validada = llamar("POST", ruta + "/" + compraId + "/validacion", contador, null);
+        assertThat(validada.statusCode()).isEqualTo(200);
+        assertThat(json.readTree(validada.body()).get("estado").asText()).isEqualTo("VALIDADA");
+        assertThat(json.readTree(validada.body()).get("validadaPor").asText()).isEqualTo("contador1");
+        assertThat(json.readTree(llamar("GET", ruta + "?estado=VALIDADA", contador, null).body())).hasSize(1);
+        assertThat(json.readTree(llamar("GET", ruta + "?estado=PROPUESTA", contador, null).body())).isEmpty();
+        // validada: el cliente ya no la cambia y el contador no la valida dos veces; el cliente no ve quién validó
+        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", cliente, "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"x\"}").statusCode()).isEqualTo(400);
+        assertThat(llamar("POST", ruta + "/" + compraId + "/validacion", contador, null).statusCode()).isEqualTo(400);
+        JsonNode delCliente = json.readTree(llamar("GET", ruta, cliente, null).body());
+        assertThat(delCliente.get(0).get("estado").asText()).isEqualTo("VALIDADA");
+        assertThat(delCliente.get(0).has("validadaPor") && !delCliente.get(0).get("validadaPor").isNull()).isFalse();
     }
 
     @Test
-    void otraEmpresaNoVeNiClasificaYElClienteNoCargaNiElContadorClasifica() throws Exception {
+    void otraEmpresaNoVeNiProponeNiValidaYElClienteNoCargaNiValidaYElContadorNoPropone() throws Exception {
         long suyo = cliente();
         long ajeno = cliente();
         String ruta = "/api/tributario/clientes/" + suyo + "/compras";
         var creada = llamar("POST", ruta, token("CONTADOR", null), compra("F001-" + UUID.randomUUID().toString().substring(0, 6), LocalDate.of(2026, 11, 1)));
         long compraId = json.readTree(creada.body()).get("id").asLong();
         String delAjeno = token("CLIENTE_MYPE", ajeno);
+        String suyoToken = token("CLIENTE_MYPE", suyo);
+        String propuesta = "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"x\"}";
 
         assertThat(llamar("GET", ruta, delAjeno, null).statusCode()).isEqualTo(403);
-        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", delAjeno, "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"x\"}").statusCode()).isEqualTo(403);
-        // el mismo id de compra pedido por el cliente correcto pero dentro de la ruta de otra empresa: 403 (no su empresa)
-        assertThat(llamar("PATCH", "/api/tributario/clientes/" + ajeno + "/compras/" + compraId + "/clasificacion", delAjeno,
-                "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"x\"}").statusCode()).isEqualTo(404);
-        assertThat(llamar("POST", ruta, token("CLIENTE_MYPE", suyo), compra("F001-999", LocalDate.of(2026, 11, 1))).statusCode()).isEqualTo(403);
-        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", token("CONTADOR", null), "{\"tipo\":\"ACTIVO_FIJO\",\"descripcion\":\"x\"}").statusCode()).isEqualTo(403);
+        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", delAjeno, propuesta).statusCode()).isEqualTo(403);
+        // el id de compra de otra empresa pedido dentro de la ruta de la propia empresa: 404
+        assertThat(llamar("PATCH", "/api/tributario/clientes/" + ajeno + "/compras/" + compraId + "/clasificacion", delAjeno, propuesta).statusCode()).isEqualTo(404);
+        assertThat(llamar("POST", "/api/tributario/clientes/" + ajeno + "/compras/" + compraId + "/validacion", token("CONTADOR", null), null).statusCode()).isEqualTo(404);
+        assertThat(llamar("POST", ruta, suyoToken, compra("F001-999", LocalDate.of(2026, 11, 1))).statusCode()).isEqualTo(403);
+        assertThat(llamar("POST", ruta + "/" + compraId + "/validacion", suyoToken, null).statusCode()).isEqualTo(403);
+        assertThat(llamar("PATCH", ruta + "/" + compraId + "/clasificacion", token("CONTADOR", null), propuesta).statusCode()).isEqualTo(403);
         assertThat(llamar("GET", ruta, null, null).statusCode()).isEqualTo(401);
         assertThat(jdbc.queryForObject("SELECT tipo_clasificacion IS NULL FROM tributario_schema.compras_cliente WHERE id = ?", Boolean.class, compraId)).isTrue();
     }

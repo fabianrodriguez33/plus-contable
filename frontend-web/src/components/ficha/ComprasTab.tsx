@@ -1,9 +1,10 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { mensajeError } from '../../services/apiClient'
-import { listarCompras, registrarCompra, type Compra } from '../../services/compraService'
-import { TIPOS_COMPRA, nombrePeriodo, pendientesPrimero } from '../../utils/compras'
+import { listarCompras, registrarCompra, validarCompra, type Compra } from '../../services/compraService'
+import { ETIQUETA_ESTADO_CONTADOR, TIPOS_COMPRA, nombrePeriodo, ordenar } from '../../utils/compras'
 import { fechaCorta } from '../../utils/programacion'
 import { soles } from '../../utils/societario'
+import Aviso from '../Aviso'
 import Button from '../Button'
 import { Input } from '../Input'
 import Table, { Td } from '../Table'
@@ -14,9 +15,16 @@ interface Props {
   setOk: (m: string) => void
 }
 
+const COLOR_ESTADO = {
+  SIN_CLASIFICAR: 'bg-amber-50 text-amber-700',
+  PROPUESTA: 'bg-sky-50 text-sky-700',
+  VALIDADA: 'bg-emerald-50 text-emerald-700',
+} as const
+
 /**
- * HU-25 · T211: el contador carga las compras del cliente (con el SIRE como referencia) y las ve ya clasificadas o pendientes. Solo
- * el cliente clasifica: aquí no hay botón para hacerlo. La alerta marca las que siguen sin clasificar cerca del cierre del mes.
+ * HU-25 · T211: el contador carga las compras del cliente (con el SIRE como referencia), ve la clasificación que el cliente propuso y
+ * la <b>valida</b>. Solo el cliente propone: aquí no hay forma de clasificar. La alerta de fin de mes es solo del contador: marca las
+ * compras que siguen sin validar cuando falta poco para el último día del mes.
  */
 export default function ComprasTab({ clienteId, setError, setOk }: Props) {
   const [compras, setCompras] = useState<Compra[] | null>(null)
@@ -48,7 +56,7 @@ export default function ComprasTab({ clienteId, setError, setOk }: Props) {
         periodo: `${mes}-01`, proveedorRuc: ruc.trim(), comprobante: comprobante.trim(), fechaComprobante: fecha, importe: monto,
         ...(razon.trim() && { proveedorRazonSocial: razon.trim() }),
       })
-      setOk(`Compra ${comprobante.trim()} registrada: queda sin clasificar hasta que el cliente la clasifique`)
+      setOk(`Compra ${comprobante.trim()} registrada: queda sin clasificar hasta que el cliente proponga su clasificación`)
       setRuc(''); setRazon(''); setComprobante(''); setFecha(''); setImporte('')
       cargar()
     } catch (err) {
@@ -58,10 +66,28 @@ export default function ComprasTab({ clienteId, setError, setOk }: Props) {
     }
   }
 
+  const validar = async (c: Compra) => {
+    setError('')
+    setOk('')
+    try {
+      await validarCompra(clienteId, c.id)
+      setOk(`Compra ${c.comprobante} validada como ${TIPOS_COMPRA[c.tipo!]}`)
+      cargar()
+    } catch (err) {
+      setError(mensajeError(err))
+    }
+  }
+
   if (compras === null) return <p className="text-sm text-slate-500">Cargando...</p>
-  const lista = pendientesPrimero(compras)
+  const lista = ordenar(compras, 'contador')
+  const conAlerta = lista.filter((c) => c.alertaCierre).length
   return (
     <div className="space-y-5">
+      {conAlerta > 0 && (
+        <Aviso tipo="advertencia">
+          {conAlerta === 1 ? '1 compra sin validar' : `${conAlerta} compras sin validar`} y falta poco para el último día del mes.
+        </Aviso>
+      )}
       <form onSubmit={registrar} noValidate className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
           <Input label="Mes tributario" type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
@@ -74,7 +100,7 @@ export default function ComprasTab({ clienteId, setError, setOk }: Props) {
         <Button type="submit" disabled={guardando}>{guardando ? 'Guardando...' : 'Registrar compra'}</Button>
       </form>
 
-      <Table columnas={['Mes', 'Proveedor', 'Comprobante', 'Fecha', 'Importe', 'Clasificación', 'Descripción']} hayFilas={lista.length > 0}
+      <Table columnas={['Mes', 'Proveedor', 'Comprobante', 'Fecha', 'Importe', 'Estado', 'Clasificación', 'Descripción', '']} hayFilas={lista.length > 0}
         vacio="No hay compras registradas para este cliente.">
         {lista.map((c) => (
           <tr key={c.id}>
@@ -84,14 +110,14 @@ export default function ComprasTab({ clienteId, setError, setOk }: Props) {
             <Td>{fechaCorta(c.fechaComprobante)}</Td>
             <Td>{soles(c.importe)}</Td>
             <Td>
-              {c.clasificada
-                ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{TIPOS_COMPRA[c.tipo!]}</span>
-                : <span className="flex flex-wrap gap-1">
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Sin clasificar</span>
-                    {c.alertaCierre && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">Cierre cerca</span>}
-                  </span>}
+              <span className="flex flex-wrap gap-1">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO[c.estado]}`}>{ETIQUETA_ESTADO_CONTADOR[c.estado]}</span>
+                {c.alertaCierre && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">Fin de mes cerca</span>}
+              </span>
             </Td>
+            <Td>{c.tipo ? TIPOS_COMPRA[c.tipo] : '—'}</Td>
             <Td>{c.descripcion ?? '—'}</Td>
+            <Td>{c.estado === 'PROPUESTA' && <Button variant="secondary" onClick={() => validar(c)}>Validar</Button>}</Td>
           </tr>
         ))}
       </Table>

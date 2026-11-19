@@ -3,6 +3,7 @@ import { tributarioApi } from './apiClient'
 // ---- HU-25 ----
 /** Catálogo acordado con Beto (18/11): «Mercadería o gasto» y «Activo fijo». */
 export type TipoCompra = 'MERCADERIA_O_GASTO' | 'ACTIVO_FIJO'
+export type EstadoCompra = 'SIN_CLASIFICAR' | 'PROPUESTA' | 'VALIDADA'
 
 export interface Compra {
   id: number
@@ -14,11 +15,14 @@ export interface Compra {
   comprobante: string
   fechaComprobante: string
   importe: number
-  clasificada: boolean
+  /** SIN_CLASIFICAR · PROPUESTA (el cliente propuso; pendiente de validación del contador) · VALIDADA. */
+  estado: EstadoCompra
   tipo: TipoCompra | null
   descripcion: string | null
   clasificadaEn: string | null
-  /** El servidor la marca cuando la compra sigue sin clasificar y el cierre del mes está cerca (días configurables). */
+  validadaPor: string | null
+  validadaEn: string | null
+  /** Solo para el contador: la compra sigue sin validar y falta poco para el último día del mes. Al cliente siempre le llega falso. */
   alertaCierre: boolean
 }
 
@@ -41,6 +45,10 @@ export const listarCompras = (clienteId: number) =>
 export const registrarCompra = (clienteId: number, c: CompraEntrada) =>
   tributarioApi.post<Compra>(ruta(clienteId), c).then((r) => r.data)
 
-/** Solo el cliente clasifica, y solo en su empresa. Una compra clasificada no se cambia. */
-export const clasificarCompra = (clienteId: number, compraId: number, tipo: TipoCompra, descripcion: string) =>
+/** Solo el cliente propone la clasificación, y solo en su empresa. Queda pendiente de validación del contador; se puede cambiar hasta que la valide. */
+export const proponerClasificacion = (clienteId: number, compraId: number, tipo: TipoCompra, descripcion: string) =>
   tributarioApi.patch<Compra>(`${ruta(clienteId)}/${compraId}/clasificacion`, { tipo, descripcion }).then((r) => r.data)
+
+/** Solo el contador valida la propuesta del cliente tal como está. */
+export const validarCompra = (clienteId: number, compraId: number) =>
+  tributarioApi.post<Compra>(`${ruta(clienteId)}/${compraId}/validacion`).then((r) => r.data)

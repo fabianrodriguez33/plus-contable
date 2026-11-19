@@ -1,20 +1,23 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { clienteIdActual } from '../services/authService'
 import { mensajeError } from '../services/apiClient'
-import { clasificarCompra, listarCompras, type Compra, type TipoCompra } from '../services/compraService'
-import { TIPOS_COMPRA, DESCRIPCION_MAXIMO, nombrePeriodo, pendientesPrimero, validarClasificacion, type ErroresClasificacion } from '../utils/compras'
+import { proponerClasificacion, listarCompras, type Compra, type TipoCompra } from '../services/compraService'
+import { TIPOS_COMPRA, DESCRIPCION_MAXIMO, ETIQUETA_ESTADO_CLIENTE, nombrePeriodo, ordenar, validarClasificacion, type ErroresClasificacion } from '../utils/compras'
 import { fechaCorta } from '../utils/programacion'
 import { soles } from '../utils/societario'
-import Aviso from '../components/Aviso'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import { Select } from '../components/Input'
 
-export const ETIQUETA_CIERRE = 'Cierre del mes cerca'
+const COLOR_ESTADO = {
+  SIN_CLASIFICAR: 'bg-amber-50 text-amber-700',
+  PROPUESTA: 'bg-sky-50 text-sky-700',
+  VALIDADA: 'bg-emerald-50 text-emerald-700',
+} as const
 
-function FormularioClasificar({ compra, onListo, onError }: { compra: Compra; onListo: () => void; onError: (m: string) => void }) {
-  const [tipo, setTipo] = useState('')
-  const [descripcion, setDescripcion] = useState('')
+function FormularioProponer({ compra, onListo, onError }: { compra: Compra; onListo: () => void; onError: (m: string) => void }) {
+  const [tipo, setTipo] = useState<string>(compra.tipo ?? '')
+  const [descripcion, setDescripcion] = useState(compra.descripcion ?? '')
   const [errores, setErrores] = useState<ErroresClasificacion>({})
   const [guardando, setGuardando] = useState(false)
 
@@ -26,7 +29,7 @@ function FormularioClasificar({ compra, onListo, onError }: { compra: Compra; on
     if (v.tipo || v.descripcion) return
     setGuardando(true)
     try {
-      await clasificarCompra(compra.clienteId, compra.id, tipo as TipoCompra, descripcion.trim())
+      await proponerClasificacion(compra.clienteId, compra.id, tipo as TipoCompra, descripcion.trim())
       onListo()
     } catch (err) {
       onError(mensajeError(err))
@@ -35,7 +38,7 @@ function FormularioClasificar({ compra, onListo, onError }: { compra: Compra; on
   }
 
   return (
-    <form onSubmit={enviar} noValidate className="mt-3 space-y-3 border-t border-slate-200 pt-3" aria-label={`Clasificar ${compra.comprobante}`}>
+    <form onSubmit={enviar} noValidate className="mt-3 space-y-3 border-t border-slate-200 pt-3" aria-label={`Proponer clasificación de ${compra.comprobante}`}>
       <div>
         <Select label="Tipo de compra" value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="">Elija…</option>
@@ -50,15 +53,16 @@ function FormularioClasificar({ compra, onListo, onError }: { compra: Compra; on
           className="w-full rounded-campo border border-slate-300 bg-white/90 px-3 py-2 text-sm focus:border-acento focus:outline-none" />
         {errores.descripcion && <p role="alert" className="mt-1 text-xs text-peligro-texto">{errores.descripcion}</p>}
       </div>
-      <Button type="submit" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar clasificación'}</Button>
+      <Button type="submit" disabled={guardando}>{guardando ? 'Guardando...' : 'Guardar propuesta'}</Button>
     </form>
   )
 }
 
 /**
- * HU-25 · T210 y T213: el cliente ve las compras de su empresa que el contador cargó, las sin clasificar primero, y las clasifica
- * como «mercadería o gasto» o «activo fijo» con una descripción. Una compra clasificada no se cambia. Solo ve las suyas: la empresa
- * sale de su propio token y el servidor vuelve a verificarla. Cerca del cierre del mes, las pendientes se marcan.
+ * HU-25 · T210 y T213: el cliente ve las compras de su empresa que el contador cargó, las que debe clasificar primero, y <b>propone</b>
+ * cómo clasificarlas («mercadería o gasto» o «activo fijo», con descripción). La propuesta queda pendiente de validación del contador y
+ * el cliente puede cambiarla hasta que la valide. Solo ve las suyas: la empresa sale de su token y el servidor vuelve a verificarla.
+ * La alerta del fin de mes es solo del contador: aquí no se muestra.
  */
 export default function MisComprasPage() {
   const clienteId = clienteIdActual()
@@ -76,55 +80,47 @@ export default function MisComprasPage() {
   if (clienteId === null) {
     return <Card title="Mis compras"><p role="alert" className="text-sm text-red-600">Su cuenta no está vinculada a una empresa. Comuníquese con el estudio.</p></Card>
   }
-  const lista = pendientesPrimero(compras ?? [])
-  const porClasificar = lista.filter((c) => !c.clasificada)
-  const cercaDelCierre = porClasificar.filter((c) => c.alertaCierre).length
+  const lista = ordenar(compras ?? [], 'cliente')
 
   return (
     <Card title="Mis compras">
       {error && <p role="alert" className="mb-4 text-sm text-red-600">{error}</p>}
       {compras === null ? (
         <p className="text-sm text-slate-500">Cargando...</p>
+      ) : lista.length === 0 ? (
+        <p className="text-sm text-slate-500">Todavía no hay compras registradas por su contador.</p>
       ) : (
-        <div className="space-y-4">
-          {cercaDelCierre > 0 && (
-            <Aviso tipo="advertencia">
-              {cercaDelCierre === 1 ? 'Tiene 1 compra sin clasificar' : `Tiene ${cercaDelCierre} compras sin clasificar`} y el cierre del mes está cerca o ya pasó. Clasifíquelas lo antes posible.
-            </Aviso>
-          )}
-          {lista.length === 0 ? (
-            <p className="text-sm text-slate-500">Todavía no hay compras registradas por su contador.</p>
-          ) : (
-            <ul className="space-y-3">
-              {lista.map((c) => (
-                <li key={c.id} className="panel-solido rounded-campo p-4 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">{c.proveedorRazonSocial ?? c.proveedorRuc}</span>
-                    <span className="flex flex-wrap items-center gap-1">
-                      {c.clasificada
-                        ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{TIPOS_COMPRA[c.tipo!]}</span>
-                        : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Sin clasificar</span>}
-                      {!c.clasificada && c.alertaCierre && <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">{ETIQUETA_CIERRE}</span>}
-                    </span>
-                  </div>
-                  <dl className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
-                    <div><dt className="text-slate-500">Comprobante</dt><dd>{c.comprobante}</dd></div>
-                    <div><dt className="text-slate-500">Fecha</dt><dd>{fechaCorta(c.fechaComprobante)}</dd></div>
-                    <div><dt className="text-slate-500">Importe</dt><dd>{soles(c.importe)}</dd></div>
-                    <div><dt className="text-slate-500">Mes</dt><dd>{nombrePeriodo(c.periodo)}</dd></div>
-                  </dl>
-                  {c.clasificada ? (
-                    <p className="mt-2 text-slate-700"><span className="text-slate-500">Descripción: </span>{c.descripcion}</p>
-                  ) : abierta === c.id ? (
-                    <FormularioClasificar compra={c} onError={setError} onListo={() => { setAbierta(null); setError(''); cargar() }} />
-                  ) : (
-                    <div className="mt-3"><Button variant="secondary" onClick={() => { setError(''); setAbierta(c.id) }}>Clasificar</Button></div>
-                  )}
-                </li>
+        <ul className="space-y-3">
+          {lista.map((c) => (
+            <li key={c.id} className="panel-solido rounded-campo p-4 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold">{c.proveedorRazonSocial ?? c.proveedorRuc}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO[c.estado]}`}>{ETIQUETA_ESTADO_CLIENTE[c.estado]}</span>
+              </div>
+              <dl className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div><dt className="text-slate-500">Comprobante</dt><dd>{c.comprobante}</dd></div>
+                <div><dt className="text-slate-500">Fecha</dt><dd>{fechaCorta(c.fechaComprobante)}</dd></div>
+                <div><dt className="text-slate-500">Importe</dt><dd>{soles(c.importe)}</dd></div>
+                <div><dt className="text-slate-500">Mes</dt><dd>{nombrePeriodo(c.periodo)}</dd></div>
+              </dl>
+              {c.tipo && (
+                <p className="mt-2 text-slate-700">
+                  <span className="text-slate-500">{c.estado === 'VALIDADA' ? 'Clasificación: ' : 'Su propuesta: '}</span>{TIPOS_COMPRA[c.tipo]}
+                  <span className="block"><span className="text-slate-500">Descripción: </span>{c.descripcion}</span>
+                </p>
+              )}
+              {c.estado !== 'VALIDADA' && (abierta === c.id ? (
+                <FormularioProponer compra={c} onError={setError} onListo={() => { setAbierta(null); setError(''); cargar() }} />
+              ) : (
+                <div className="mt-3">
+                  <Button variant="secondary" onClick={() => { setError(''); setAbierta(c.id) }}>
+                    {c.estado === 'PROPUESTA' ? 'Cambiar propuesta' : 'Proponer clasificación'}
+                  </Button>
+                </div>
               ))}
-            </ul>
-          )}
-        </div>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   )

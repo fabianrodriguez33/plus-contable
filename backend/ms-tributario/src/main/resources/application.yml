@@ -49,7 +49,7 @@ app:
   storage:
     dir: ${STORAGE_DIR:./uploads}
   tributario:
-    # HU-25: días antes del cierre del mes desde los que una compra sin clasificar avisa. Propuesta de Beto (5); configurable.
+    # HU-25: días antes del último día del mes desde los que una compra sin validar avisa al contador. Propuesta de Beto (5); configurable.
     compras:
       alerta-dias-antes-cierre: ${APP_TRIBUTARIO_COMPRAS_ALERTA_DIAS:5}
     # UIT por anio, en soles, tomada del decreto supremo del MEF de cada anio. Sin montos en el repositorio:

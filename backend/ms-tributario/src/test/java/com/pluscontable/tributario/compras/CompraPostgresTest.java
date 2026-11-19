@@ -3,6 +3,7 @@ package com.pluscontable.tributario.compras;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.pluscontable.tributario.compras.ReglaClasificacionCompra.Estado;
 import com.pluscontable.tributario.compras.ReglaClasificacionCompra.Tipo;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
@@ -19,7 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** HU-25 con PostgreSQL desechable: cargar, listar, clasificar, aislamiento por empresa y la alerta cerca del cierre. */
+/** HU-25 con PostgreSQL desechable: cargar, proponer, validar, aislamiento por empresa y la alerta cerca del fin de mes. */
 @SpringBootTest
 class CompraPostgresTest {
     private static final ZoneId LIMA = ZoneId.of("America/Lima");
@@ -61,12 +62,13 @@ class CompraPostgresTest {
         var r = servicio(LocalDate.of(2026, 11, 10)).registrar(c, compra("F001-100", "1180.00"), "contador1");
 
         assertThat(r.clienteId()).isEqualTo(c);
-        assertThat(r.clasificada()).isFalse();
+        assertThat(r.estado()).isEqualTo(Estado.SIN_CLASIFICAR);
         assertThat(r.tipo()).isNull();
         assertThat(r.descripcion()).isNull();
+        assertThat(r.validadaPor()).isNull();
         assertThat(r.importe()).isEqualByComparingTo("1180.00");
         assertThat(r.proveedorRuc()).isEqualTo(RUC_PROVEEDOR);
-        assertThat(r.alertaCierre()).isFalse();   // faltan 20 días para el cierre
+        assertThat(r.alertaCierre()).isFalse();   // faltan 20 días para el último día del mes
         assertThat(jdbc.queryForObject("SELECT registrada_por FROM tributario_schema.compras_cliente WHERE id = ?", String.class, r.id())).isEqualTo("contador1");
     }
 
@@ -88,66 +90,113 @@ class CompraPostgresTest {
     }
 
     @Test
-    void elClienteClasificaConDescripcionYQuedaRegistradoQuienYCuando() {
+    void elClienteProponeConDescripcionYQuedaPendienteDeValidacion() {
         long c = cliente();
         var s = servicio(LocalDate.of(2026, 11, 10));
         var compra = s.registrar(c, compra("F001-7", "3500.00"), "contador1");
 
-        var r = s.clasificar(c, compra.id(), new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "  Laptop para el área contable  "), "cliente@example.test");
+        var r = s.proponer(c, compra.id(), new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "  Laptop para el área contable  "), "cliente@example.test");
 
-        assertThat(r.clasificada()).isTrue();
+        assertThat(r.estado()).isEqualTo(Estado.PROPUESTA);
         assertThat(r.tipo()).isEqualTo(Tipo.ACTIVO_FIJO);
         assertThat(r.descripcion()).isEqualTo("Laptop para el área contable");
         assertThat(r.clasificadaEn()).isNotNull();
+        assertThat(r.validadaEn()).isNull();
         assertThat(jdbc.queryForObject("SELECT clasificada_por FROM tributario_schema.compras_cliente WHERE id = ?", String.class, compra.id()))
                 .isEqualTo("cliente@example.test");
-        assertThat(s.listar(c, true)).extracting(CompraDto::id).containsExactly(compra.id());
-        assertThat(s.listar(c, false)).isEmpty();
+        assertThat(s.listar(c, Estado.PROPUESTA)).extracting(CompraDto::id).containsExactly(compra.id());
+        assertThat(s.listar(c, Estado.SIN_CLASIFICAR)).isEmpty();
+        assertThat(s.listar(c, Estado.VALIDADA)).isEmpty();
     }
 
     @Test
-    void laDescripcionYElTipoSonObligatoriosYUnaClasificadaNoSeCambia() {
+    void elClientePuedeCambiarSuPropuestaMientrasElContadorNoLaValide() {
         long c = cliente();
         var s = servicio(LocalDate.of(2026, 11, 10));
         long id = s.registrar(c, compra("F001-8", "100.00"), "c").id();
+        s.proponer(c, id, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Útiles"), "u");
 
-        assertThatThrownBy(() -> s.clasificar(c, id, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "  "), "u")).hasMessageContaining("descripción");
-        assertThatThrownBy(() -> s.clasificar(c, id, new ClasificacionEntradaDto(null, "algo"), "u")).hasMessageContaining("tipo es obligatorio");
-        assertThatThrownBy(() -> s.clasificar(c, id, new ClasificacionEntradaDto(null, null), "u"))
-                .hasMessageContaining("tipo es obligatorio").hasMessageContaining("descripción");
-        assertThatThrownBy(() -> s.clasificar(c, id, null, "u")).isInstanceOf(ValidationException.class);
-        assertThat(s.listar(c, null).get(0).clasificada()).isFalse();
+        var corregida = s.proponer(c, id, new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "Impresora"), "u");
 
-        s.clasificar(c, id, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Útiles de oficina"), "u");
-        assertThatThrownBy(() -> s.clasificar(c, id, new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "Otra"), "u")).hasMessageContaining("ya está clasificada");
+        assertThat(corregida.estado()).isEqualTo(Estado.PROPUESTA);
+        assertThat(corregida.tipo()).isEqualTo(Tipo.ACTIVO_FIJO);
+        assertThat(corregida.descripcion()).isEqualTo("Impresora");
+    }
+
+    @Test
+    void elContadorValidaYQuedaRegistradoQuienYCuando_yUnaValidadaYaNoSeCambia() {
+        long c = cliente();
+        var s = servicio(LocalDate.of(2026, 11, 10));
+        long id = s.registrar(c, compra("F001-9", "100.00"), "c").id();
+        s.proponer(c, id, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Útiles de oficina"), "u");
+
+        var r = s.validar(c, id, "contador1");
+
+        assertThat(r.estado()).isEqualTo(Estado.VALIDADA);
+        assertThat(r.validadaPor()).isEqualTo("contador1");
+        assertThat(r.validadaEn()).isNotNull();
+        assertThat(r.tipo()).isEqualTo(Tipo.MERCADERIA_O_GASTO);   // se valida la propuesta tal como está
+        assertThat(s.listar(c, Estado.VALIDADA)).extracting(CompraDto::id).containsExactly(id);
+        assertThatThrownBy(() -> s.proponer(c, id, new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "Otra"), "u")).hasMessageContaining("ya fue validada");
+        assertThatThrownBy(() -> s.validar(c, id, "contador1")).hasMessageContaining("ya está validada");
         assertThat(s.listar(c, null).get(0).tipo()).isEqualTo(Tipo.MERCADERIA_O_GASTO);
     }
 
     @Test
-    void unaEmpresaNuncaVeNiClasificaLasComprasDeOtra_T213() {
-        long suyo = cliente();
-        long ajeno = cliente();
+    void noSeValidaSinPropuestaDelCliente() {
+        long c = cliente();
         var s = servicio(LocalDate.of(2026, 11, 10));
-        long deAjeno = s.registrar(ajeno, compra("F001-9", "50.00"), "c").id();
-        s.registrar(suyo, compra("F001-10", "60.00"), "c");
-
-        assertThat(s.listar(suyo, null)).extracting(CompraDto::clienteId).containsOnly(suyo).hasSize(1);
-        assertThatThrownBy(() -> s.clasificar(suyo, deAjeno, new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "x"), "u")).isInstanceOf(EntityNotFoundException.class);
-        assertThat(s.listar(ajeno, false)).hasSize(1);   // la de la otra empresa no se tocó
+        long id = s.registrar(c, compra("F001-10", "100.00"), "c").id();
+        assertThatThrownBy(() -> s.validar(c, id, "contador1")).hasMessageContaining("todavía no propuso");
+        assertThat(s.listar(c, null).get(0).estado()).isEqualTo(Estado.SIN_CLASIFICAR);
     }
 
     @Test
-    void laAlertaApareceCercaDelCierreEnLasSinClasificarYLosDiasSonConfigurables() {
+    void laDescripcionYElTipoSonObligatoriosAlProponer() {
         long c = cliente();
-        long sin = servicio(NOVIEMBRE).registrar(c, compra("F001-20", "10.00"), "c").id();
-        long con = servicio(NOVIEMBRE).registrar(c, compra("F001-21", "10.00"), "c").id();
-        servicio(NOVIEMBRE).clasificar(c, con, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Insumos"), "u");
+        var s = servicio(LocalDate.of(2026, 11, 10));
+        long id = s.registrar(c, compra("F001-11", "100.00"), "c").id();
+
+        assertThatThrownBy(() -> s.proponer(c, id, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "  "), "u")).hasMessageContaining("descripción");
+        assertThatThrownBy(() -> s.proponer(c, id, new ClasificacionEntradaDto(null, "algo"), "u")).hasMessageContaining("tipo es obligatorio");
+        assertThatThrownBy(() -> s.proponer(c, id, new ClasificacionEntradaDto(null, null), "u"))
+                .hasMessageContaining("tipo es obligatorio").hasMessageContaining("descripción");
+        assertThatThrownBy(() -> s.proponer(c, id, null, "u")).isInstanceOf(ValidationException.class);
+        assertThat(s.listar(c, null).get(0).estado()).isEqualTo(Estado.SIN_CLASIFICAR);
+    }
+
+    @Test
+    void unaEmpresaNuncaVeNiProponeNiValidaLasComprasDeOtra_T213() {
+        long suyo = cliente();
+        long ajeno = cliente();
+        var s = servicio(LocalDate.of(2026, 11, 10));
+        long deAjeno = s.registrar(ajeno, compra("F001-12", "50.00"), "c").id();
+        s.registrar(suyo, compra("F001-13", "60.00"), "c");
+
+        assertThat(s.listar(suyo, null)).extracting(CompraDto::clienteId).containsOnly(suyo).hasSize(1);
+        assertThatThrownBy(() -> s.proponer(suyo, deAjeno, new ClasificacionEntradaDto(Tipo.ACTIVO_FIJO, "x"), "u")).isInstanceOf(EntityNotFoundException.class);
+        assertThatThrownBy(() -> s.validar(suyo, deAjeno, "c")).isInstanceOf(EntityNotFoundException.class);
+        assertThat(s.listar(ajeno, Estado.SIN_CLASIFICAR)).hasSize(1);   // la de la otra empresa no se tocó
+    }
+
+    @Test
+    void laAlertaEsDelUltimoDiaDelMesCalendarioAvisaSinClasificarYPropuestasPeroNoValidadasYLosDiasSonConfigurables() {
+        long c = cliente();
+        var inicio = servicio(NOVIEMBRE);
+        long sin = inicio.registrar(c, compra("F001-20", "10.00"), "c").id();
+        long propuesta = inicio.registrar(c, compra("F001-21", "10.00"), "c").id();
+        long validada = inicio.registrar(c, compra("F001-22", "10.00"), "c").id();
+        inicio.proponer(c, propuesta, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Insumos"), "u");
+        inicio.proponer(c, validada, new ClasificacionEntradaDto(Tipo.MERCADERIA_O_GASTO, "Insumos"), "u");
+        inicio.validar(c, validada, "contador1");
 
         assertThat(alerta(servicio(LocalDate.of(2026, 11, 24)), c, sin)).isFalse();
-        assertThat(alerta(servicio(LocalDate.of(2026, 11, 25)), c, sin)).isTrue();           // 5 días antes del cierre (30/11)
-        assertThat(alerta(servicio(LocalDate.of(2026, 11, 25)), c, con)).isFalse();          // la clasificada no avisa
+        assertThat(alerta(servicio(LocalDate.of(2026, 11, 25)), c, sin)).isTrue();           // 5 días antes del 30/11
+        assertThat(alerta(servicio(LocalDate.of(2026, 11, 25)), c, propuesta)).isTrue();     // pendiente de validación: también
+        assertThat(alerta(servicio(LocalDate.of(2026, 11, 25)), c, validada)).isFalse();     // la validada no avisa
         assertThat(alerta(servicio(LocalDate.of(2026, 11, 20), 10), c, sin)).isTrue();       // con 10 días de anticipación
-        assertThat(alerta(servicio(LocalDate.of(2026, 12, 4)), c, sin)).isTrue();            // pasado el cierre sigue pendiente
+        assertThat(alerta(servicio(LocalDate.of(2026, 12, 4)), c, sin)).isFalse();           // el mes siguiente la cuenta empieza de nuevo
+        assertThat(alerta(servicio(LocalDate.of(2026, 12, 26)), c, sin)).isTrue();           // 5 días antes del 31/12
     }
 
     private boolean alerta(CompraService s, long cliente, long compra) {
@@ -155,13 +204,13 @@ class CompraPostgresTest {
     }
 
     @Test
-    void listaLaMasRecientePrimeroYFiltraPorClasificada() {
+    void listaLaMasRecientePrimero() {
         long c = cliente();
         var s = servicio(LocalDate.of(2026, 11, 10));
         var octubre = s.registrar(c, new CompraEntradaDto(LocalDate.of(2026, 10, 1), RUC_PROVEEDOR, null, "F001-30", LocalDate.of(2026, 10, 3), new BigDecimal("5.00")), "c");
         var noviembre = s.registrar(c, compra("F001-31", "6.00"), "c");
         assertThat(s.listar(c, null)).extracting(CompraDto::id).containsExactly(noviembre.id(), octubre.id());
-        assertThat(s.listar(c, false)).hasSize(2);
-        assertThat(s.listar(c, true)).isEmpty();
+        assertThat(s.listar(c, Estado.SIN_CLASIFICAR)).hasSize(2);
+        assertThat(s.listar(c, Estado.VALIDADA)).isEmpty();
     }
 }
