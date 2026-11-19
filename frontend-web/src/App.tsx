@@ -9,8 +9,15 @@ import EstadoCuentaPage from './pages/EstadoCuentaPage'
 import MorososPage from './pages/MorososPage'
 import PagoPage from './pages/PagoPage'
 import CalendarioPage from './pages/CalendarioPage'
+import AlertasPlazoPage from './pages/AlertasPlazoPage'
 import CambiarPasswordPage from './pages/CambiarPasswordPage'
 import RestablecerPage from './pages/RestablecerPage'
+import MiEmpresaPage from './pages/MiEmpresaPage'
+import MisAvisosPage from './pages/MisAvisosPage'
+import { esCliente } from './services/authService'
+
+/** HU-35: se decide al renderizar la ruta, no al montar la app: así sirve también tras iniciar sesión sin recargar. */
+const Inicio = () => (esCliente() ? <Navigate to="/mi-empresa" replace /> : <DashboardPage />)
 
 export default function App() {
   return (
@@ -20,8 +27,11 @@ export default function App() {
       <Route path="/restablecer" element={<RestablecerPage />} />
       <Route element={<PrivateRoute />}>
         <Route element={<Navbar />}>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<Inicio />} />
+          <Route path="/mi-empresa" element={<MiEmpresaPage />} />
+          <Route path="/mis-avisos" element={<MisAvisosPage />} />
           <Route path="/calendario" element={<CalendarioPage />} />
+          <Route path="/alertas-plazo" element={<AlertasPlazoPage />} />
           <Route path="/estado-cuenta" element={<EstadoCuentaPage />} />
           <Route path="/morosos" element={<MorososPage />} />
           <Route path="/clientes/nuevo" element={<FichaMaestraPage />} />

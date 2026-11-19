@@ -1,0 +1,81 @@
+@startuml
+!pragma layout smetana
+title T87 · HU-19 · Clases de las alertas escalonadas del plazo de respuesta de una notificación
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class AlertaPlazoProgramador <<nuevo>> {
+  @Scheduled(cron "0 0 7 * * *", zone America/Lima)
+  +generarAlertasDelDia()
+}
+
+class AlertaPlazoService <<nuevo>> {
+  ~ZONA = America/Lima
+  -diasAlerta: List<Integer>  (app.tributario.alertas-carta-dias)
+  -clock: Clock (zona de Lima)
+  +generar(hoy): int
+  +listar(): List<AlertaPlazoDto>
+}
+
+class AlertaPlazoController <<nuevo>> {
+  +listar(): List<AlertaPlazoDto>
+}
+
+class AlertaPlazoDto <<record, nuevo>> {
+  id: Long
+  notificacionId: Long
+  clienteId: Long
+  ruc: String
+  razonSocial: String
+  tipo: TipoNotificacion
+  plazoRespuesta: LocalDate
+  diasAntes: int
+  fechaAlerta: LocalDate
+  diasRestantes: long
+}
+
+class RecordatorioSireFechas <<existe>> {
+  {static} corresponde(fecha, hoy, dias): boolean
+}
+
+class AvisoInternoService <<existe, HU-12 #64>> {
+  +crear(origen, claveEvento, mensaje, clienteIds): AvisoInternoDto
+}
+
+class NotificacionSol <<existe, HU-18>> {
+  clienteId, tipo, plazoRespuesta
+  estado: PENDIENTE | ATENDIDA
+}
+
+class "alertas_plazo_notificacion" as Tabla <<tabla nueva>> {
+  notificacion_id, dias_antes, fecha_alerta, aviso_id
+  UNIQUE (notificacion_id, dias_antes)
+}
+
+AlertaPlazoProgramador --> AlertaPlazoService : generar(hoy de Lima)
+AlertaPlazoController --> AlertaPlazoService
+AlertaPlazoController ..> AlertaPlazoDto
+AlertaPlazoService ..> RecordatorioSireFechas : día exacto de alerta
+AlertaPlazoService --> AvisoInternoService : un aviso por (origen, clave del evento)
+AlertaPlazoService ..> NotificacionSol : solo PENDIENTE
+AlertaPlazoService ..> Tabla
+
+note bottom of AlertaPlazoService
+  Criterio 1: el día de aviso, una notificación PENDIENTE a esos días del plazo genera su alerta.
+  Criterio 2: escalonadas: una alerta por cada día de la lista, cada una una sola vez
+  (UNIQUE notificacion + días; el reintento del mismo día no duplica).
+  Criterio 3: la alerta trae el cliente y los días restantes, calculados con el «hoy» de Lima al consultar.
+  Criterio 4: una notificación ATENDIDA no genera alertas nuevas y sus alertas ya creadas dejan de listarse.
+  Supuesto por confirmar con Beto (la tarjeta no define los días): 5, 3, 1 y 0 días antes del plazo.
+  Una notificación que se registra con menos días de los de un escalón no recibe ese escalón atrasado.
+  Las alertas son avisos internos del sistema; no hay correo ni WhatsApp (canal sin definir).
+end note
+
+note right of AlertaPlazoController
+  Solo el estudio (CONTADOR, ADMIN): sin token 401, CLIENTE_MYPE o token sin rol 403.
+end note
+
+footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-19, el código de develop (7c1594d), HU-18 (notificaciones del Buzón SOL) y el núcleo de avisos de HU-12 (#64). Supuestos por confirmar con Beto: días de las alertas, todos los tipos de notificación, incluye clientes inactivos
+@enduml
