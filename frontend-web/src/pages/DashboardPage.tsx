@@ -31,9 +31,9 @@ export default function DashboardPage() {
   return (
     <Card title="Cartera de clientes"
       actions={<Link to="/clientes/nuevo"><Button><Plus size={16} /> Nuevo cliente</Button></Link>}>
-      {error && <div role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="mb-4 rounded-campo bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {solicitudes.length > 0 && (
-        <section aria-label="Solicitudes de nueva contraseña" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <section aria-label="Solicitudes de nueva contraseña" className="mb-4 rounded-campo border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p className="flex items-center gap-2 font-medium">
             <KeyRound size={16} /> Clientes que pidieron una nueva contraseña
           </p>

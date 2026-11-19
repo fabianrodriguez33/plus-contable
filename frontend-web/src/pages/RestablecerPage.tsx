@@ -30,11 +30,11 @@ export default function RestablecerPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-900 to-brand-600 p-4">
-      <form onSubmit={enviar} className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
-        <h1 className="text-xl font-bold text-brand-900">¿Olvidaste tu contraseña?</h1>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={enviar} className="hoja w-full max-w-sm rounded-panel p-8">
+        <h1 className="text-xl font-semibold text-tinta">¿Olvidaste tu contraseña?</h1>
         {mensaje ? (
-          <div role="status" className="mt-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div role="status" className="mt-4 flex items-start gap-2 rounded-campo border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
             <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> {mensaje}
           </div>
         ) : (
@@ -43,7 +43,7 @@ export default function RestablecerPage() {
               Escribe el correo con el que ingresas. El estudio recibirá tu pedido y te entregará una nueva contraseña temporal.
             </p>
             {error && (
-              <div role="alert" className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <div role="alert" className="mt-4 flex items-start gap-2 rounded-campo border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" /> {error}
               </div>
             )}

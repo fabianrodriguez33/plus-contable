@@ -50,12 +50,12 @@ export default function VencidasPage() {
                 <tr key={o.obligacionId} className="bg-red-50/40">
                   <Cliente o={o} />
                   <Tributo o={o} />
-                  <Td>{o.periodo.slice(0, 7)}</Td>
-                  <Td>{fechaCorta(o.fechaVencimiento)}</Td>
-                  <Td>{dias(o.diasVencida)}</Td>
-                  <Td>{monto(o.montoDeterminado)}</Td>
-                  <Td>{soles(o.montoPagado)}</Td>
-                  <Td>{monto(o.saldo)}</Td>
+                  <Td className="whitespace-nowrap">{o.periodo.slice(0, 7)}</Td>
+                  <Td className="whitespace-nowrap">{fechaCorta(o.fechaVencimiento)}</Td>
+                  <Td className="whitespace-nowrap font-semibold text-peligro-texto">{dias(o.diasVencida)}</Td>
+                  <Td className="whitespace-nowrap">{monto(o.montoDeterminado)}</Td>
+                  <Td className="whitespace-nowrap">{soles(o.montoPagado)}</Td>
+                  <Td className="whitespace-nowrap">{monto(o.saldo)}</Td>
                   <Td><span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
                     {o.estado === 'PAGO_PARCIAL' ? ETIQUETA_CON_SALDO : ETIQUETA_SIN_PAGO}</span></Td>
                 </tr>
@@ -74,9 +74,9 @@ export default function VencidasPage() {
                 <tr key={o.obligacionId} className="bg-amber-50/50">
                   <Cliente o={o} />
                   <Tributo o={o} />
-                  <Td>{o.periodo.slice(0, 7)}</Td>
-                  <Td>{fechaCorta(o.fechaVencimiento)}</Td>
-                  <Td>{dias(o.diasVencida)}</Td>
+                  <Td className="whitespace-nowrap">{o.periodo.slice(0, 7)}</Td>
+                  <Td className="whitespace-nowrap">{fechaCorta(o.fechaVencimiento)}</Td>
+                  <Td className="whitespace-nowrap font-semibold text-amber-700">{dias(o.diasVencida)}</Td>
                 </tr>
               ))}
             </Table>

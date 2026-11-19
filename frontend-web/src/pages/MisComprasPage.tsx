@@ -92,7 +92,7 @@ export default function MisComprasPage() {
       ) : (
         <ul className="space-y-3">
           {lista.map((c) => (
-            <li key={c.id} className="panel-solido rounded-campo p-4 text-sm">
+            <li key={c.id} className="hoja rounded-campo p-4 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-semibold">{c.proveedorRazonSocial ?? c.proveedorRuc}</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COLOR_ESTADO[c.estado]}`}>{ETIQUETA_ESTADO_CLIENTE[c.estado]}</span>

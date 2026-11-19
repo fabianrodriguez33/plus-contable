@@ -86,7 +86,7 @@ export default function SolicitudesTab({ clienteId, setError, setOk }: Props) {
           <label htmlFor="solicitud-descripcion" className="mb-1 block text-sm font-medium text-slate-700">Descripción (opcional)</label>
           <textarea id="solicitud-descripcion" rows={2} maxLength={MAX_DESCRIPCION} value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+            className="w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm text-tinta focus:border-acento focus:outline-none" />
           <p className="mt-1 text-xs text-slate-500">{descripcion.length}/{MAX_DESCRIPCION}</p>
         </div>
         <Button type="submit" disabled={guardando}>

@@ -85,14 +85,14 @@ export default function IncidenciasTab({ clienteId, setError, setOk }: Props) {
           <label htmlFor="incidencia-descripcion" className="mb-1 block text-sm font-medium text-slate-700">Descripción</label>
           <textarea id="incidencia-descripcion" rows={3} required maxLength={MAX_DESCRIPCION} value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+            className="w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm text-tinta focus:border-acento focus:outline-none" />
           <p className="mt-1 text-xs text-slate-500">{descripcion.length}/{MAX_DESCRIPCION}</p>
         </div>
         <div>
           <label htmlFor="incidencia-observaciones" className="mb-1 block text-sm font-medium text-slate-700">Observaciones (opcional)</label>
           <textarea id="incidencia-observaciones" rows={2} maxLength={MAX_OBSERVACIONES} value={observaciones}
             onChange={(e) => setObservaciones(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+            className="w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm text-tinta focus:border-acento focus:outline-none" />
           <p className="mt-1 text-xs text-slate-500">{observaciones.length}/{MAX_OBSERVACIONES}</p>
         </div>
         {esGeneral && (

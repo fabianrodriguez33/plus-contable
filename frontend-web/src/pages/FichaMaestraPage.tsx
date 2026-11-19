@@ -121,8 +121,8 @@ export default function FichaMaestraPage() {
       {clienteId === null && (
         <p className="mb-4 text-sm text-slate-500">Registre primero los datos generales para habilitar las demás pestañas.</p>
       )}
-      {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {ok && <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{ok}</div>}
+      {error && <div role="alert" className="mb-4 rounded-campo border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {ok && <div role="status" className="mb-4 rounded-campo border border-green-200 bg-green-50 p-3 text-sm text-green-700">{ok}</div>}
 
       {tab === 'general' && (
         <DatosGeneralesTab cliente={cliente} esNuevo={clienteId === null} onCambio={cambiar}

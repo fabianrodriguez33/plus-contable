@@ -12,7 +12,7 @@ const VACIO: Trabajador = {
   fechaIngreso: '',
 }
 
-const input = 'w-full border rounded px-2 py-1 aria-[invalid=true]:border-red-600'
+const input = 'w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm aria-[invalid=true]:border-red-600'
 
 function Campo({ id, label, invalido, children }: { id: string; label: string; invalido: boolean; children: ReactNode }) {
   return (
@@ -135,7 +135,7 @@ export default function TrabajadoresPage() {
 
         {error && <p role="alert" className="sm:col-span-2 text-red-600">{error}</p>}
         <div className="sm:col-span-2">
-          <button type="submit" disabled={guardando} className="bg-blue-700 text-white rounded px-4 py-2 disabled:opacity-50">
+          <button type="submit" disabled={guardando} className="rounded-campo bg-acento px-4 py-2 text-sm font-semibold text-white hover:bg-acento-oscuro disabled:opacity-50">
             {guardando ? 'Guardando…' : 'Registrar trabajador'}
           </button>
         </div>

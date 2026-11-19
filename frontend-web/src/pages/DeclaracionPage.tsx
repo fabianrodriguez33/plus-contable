@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { mensajeError } from '../services/apiClient'
 import { buscarObligacion, declarar, Obligacion } from '../services/obligacionService'
 
-const input = 'w-full border rounded px-2 py-1 aria-[invalid=true]:border-red-600'
+const input = 'w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm aria-[invalid=true]:border-red-600'
 const hoy = () => new Date().toISOString().slice(0, 10)
 const mesPeriodo = (p: string) => p.slice(0, 7)
 
@@ -79,7 +79,7 @@ export default function DeclaracionPage() {
           </label>
           {error && <p role="alert" className="sm:col-span-3 text-red-600">{error}</p>}
           <div className="sm:col-span-3">
-            <button type="submit" disabled={guardando} className="bg-blue-700 text-white rounded px-4 py-2 disabled:opacity-50">
+            <button type="submit" disabled={guardando} className="rounded-campo bg-acento px-4 py-2 text-sm font-semibold text-white hover:bg-acento-oscuro disabled:opacity-50">
               {guardando ? 'Guardando…' : 'Marcar como declarada'}
             </button>
           </div>

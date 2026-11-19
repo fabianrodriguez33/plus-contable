@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom'
 import { mensajeError } from '../services/apiClient'
 import { Acuerdo, guardarAcuerdo, obtenerAcuerdo } from '../services/expedienteService'
 
-const input = 'w-full border rounded px-2 py-1 aria-[invalid=true]:border-red-600'
+const input = 'w-full rounded-campo border border-tinta/30 bg-white px-3 py-2 text-sm aria-[invalid=true]:border-red-600'
 const hoy = () => new Date().toISOString().slice(0, 10)
 const soles = (n: number) => `S/ ${Number(n).toFixed(2)}`
 
@@ -97,7 +97,7 @@ export default function AcuerdoPage() {
         {error && <p role="alert" className="sm:col-span-2 text-red-600">{error}</p>}
         {ok && <p role="status" className="sm:col-span-2 text-green-700">{ok}</p>}
         <div className="sm:col-span-2">
-          <button type="submit" disabled={guardando} className="bg-blue-700 text-white rounded px-4 py-2 disabled:opacity-50">
+          <button type="submit" disabled={guardando} className="rounded-campo bg-acento px-4 py-2 text-sm font-semibold text-white hover:bg-acento-oscuro disabled:opacity-50">
             {guardando ? 'Guardando…' : acuerdo ? 'Actualizar acuerdo' : 'Registrar acuerdo'}
           </button>
         </div>

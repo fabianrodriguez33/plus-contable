@@ -42,16 +42,16 @@ export default function CambiarPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-900 to-brand-600 p-4">
-      <form onSubmit={enviar} noValidate className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={enviar} noValidate className="hoja w-full max-w-sm rounded-panel p-8">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-brand-900">Cambie su contraseña</h1>
+          <h1 className="text-2xl font-semibold text-tinta">Cambie su contraseña</h1>
           <p className="mt-1 text-sm text-slate-500">
             Entró con una contraseña temporal. Para usar el sistema debe elegir una contraseña propia de {PASSWORD_MINIMO} a {PASSWORD_MAXIMO} caracteres.
           </p>
         </div>
         {error && (
-          <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div role="alert" className="mb-4 flex items-start gap-2 rounded-campo border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <AlertCircle size={16} className="mt-0.5 shrink-0" /> {error}
           </div>
         )}

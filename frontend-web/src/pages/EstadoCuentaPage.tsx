@@ -87,7 +87,7 @@ export default function EstadoCuentaPage() {
               ['Pagos recibidos', soles(estado.totalPagado)],
               ['Saldo al cierre', saldo(estado.saldo)],
             ].map(([etiqueta, valor]) => (
-              <div key={etiqueta} className="rounded-lg border border-slate-200 p-3">
+              <div key={etiqueta} className="rounded-campo border border-slate-200 p-3">
                 <dt className="text-slate-500">{etiqueta}</dt>
                 <dd className="text-base font-semibold text-slate-900">{valor}</dd>
               </div>
@@ -99,7 +99,7 @@ export default function EstadoCuentaPage() {
           </p>
 
           {estado.sinMovimientos ? (
-            <p role="status" className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+            <p role="status" className="rounded-campo bg-slate-50 p-3 text-sm text-slate-600">
               El cliente no tiene cobros ni pagos en este periodo.
             </p>
           ) : (

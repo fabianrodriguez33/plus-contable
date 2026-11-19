@@ -130,7 +130,7 @@ export default function AccesoClienteTab({ clienteId, setError, setOk }: Props) 
   return (
     <div className="space-y-5">
       {creada && (
-        <section aria-label="Contraseña temporal" className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+        <section aria-label="Contraseña temporal" className="rounded-campo border border-amber-300 bg-amber-50 p-4">
           {creada.restablecida && <p className="mb-2 text-sm font-semibold text-amber-900">Acceso restablecido: nueva contraseña temporal</p>}
           <p className="flex items-start gap-2 text-sm font-medium text-amber-900">
             <TriangleAlert size={18} className="mt-0.5 shrink-0" />
