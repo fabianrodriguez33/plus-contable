@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ public class NotificacionSolService {
     private final NotificacionSolRepository notificaciones;
     private final ClienteService clientes;
     private final Clock clock;
+    private ApplicationEventPublisher eventos;
 
     @Autowired
     public NotificacionSolService(NotificacionSolRepository notificaciones, ClienteService clientes) {
@@ -67,6 +69,12 @@ public class NotificacionSolService {
         return lista.stream().map(NotificacionSolDto::from).toList();
     }
 
+    /** Para avisar a otras historias (HU-19) que una notificación se atendió; sin él (pruebas unitarias) no se publica nada. */
+    @Autowired(required = false)
+    void setEventos(ApplicationEventPublisher eventos) {
+        this.eventos = eventos;
+    }
+
     /** Pasa una notificación pendiente a ATENDIDA con la fecha de hoy; 404 si no existe y 400 si ya estaba atendida. */
     @Transactional
     public NotificacionSolDto marcarAtendida(Long notificacionId) {
@@ -77,7 +85,9 @@ public class NotificacionSolService {
         }
         n.setEstado(EstadoNotificacion.ATENDIDA);
         n.setFechaAtencion(LocalDate.now(clock));
-        return NotificacionSolDto.from(notificaciones.save(n));
+        NotificacionSolDto atendida = NotificacionSolDto.from(notificaciones.save(n));
+        if (eventos != null) eventos.publishEvent(new NotificacionAtendidaEvento(notificacionId)); // en la misma transacción
+        return atendida;
     }
 
     private void validar(NotificacionSolEntradaDto dto) {
