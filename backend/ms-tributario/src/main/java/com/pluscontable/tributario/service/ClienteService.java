@@ -7,6 +7,7 @@ import com.pluscontable.tributario.model.Cliente;
 import com.pluscontable.tributario.model.CredencialSol;
 import com.pluscontable.tributario.repository.ClienteRepository;
 import com.pluscontable.tributario.repository.CredencialSolRepository;
+import com.pluscontable.tributario.ruc.AlertaCondicionRucService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ValidationException;
 import java.time.LocalDateTime;
@@ -20,12 +21,14 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
     private final CredencialSolRepository credencialRepository;
     private final AesUtil aesUtil;
+    private final AlertaCondicionRucService alertaCondicion;
 
     public ClienteService(ClienteRepository clienteRepository, CredencialSolRepository credencialRepository,
-                          AesUtil aesUtil) {
+                          AesUtil aesUtil, AlertaCondicionRucService alertaCondicion) {
         this.clienteRepository = clienteRepository;
         this.credencialRepository = credencialRepository;
         this.aesUtil = aesUtil;
+        this.alertaCondicion = alertaCondicion;
     }
 
     @Transactional(readOnly = true)
@@ -61,8 +64,11 @@ public class ClienteService {
         if (!c.getRuc().equals(dto.ruc()) && clienteRepository.existsByRuc(dto.ruc())) {
             throw new ValidationException("Ya existe un cliente registrado con el RUC " + dto.ruc());
         }
+        Cliente.CondicionHabido condicionAnterior = c.getCondicionHabido();
         aplicar(c, dto);
         clienteRepository.save(c);
+        // HU-22 T80: misma transacción; si el aviso falla, el cambio de condición también se revierte.
+        alertaCondicion.registrarCambio(c, condicionAnterior);
         guardarSolSiViene(id, dto);
         return obtener(id);
     }

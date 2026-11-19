@@ -1,0 +1,102 @@
+@startuml
+!pragma layout smetana
+title T202 · HU-33 · Clases del aviso al cliente antes de que venza el pago
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam noteBackgroundColor #FFF2CC
+skinparam noteBorderColor #BF9000
+
+class AvisoClienteProgramador <<nuevo>> {
+  @Scheduled(cron "0 0 7 * * *", zone America/Lima)
+  +generarAvisosDelDia()
+}
+
+class AvisoClienteService <<nuevo>> {
+  +DIAS_AVISO = [3, 1, 0]
+  +generar(hoy): int
+  +listar(clienteId): List<AvisoClienteDto>
+}
+
+class AvisoClienteController <<nuevo>> {
+  +listar(clienteId): List<AvisoClienteDto>
+}
+
+class AvisoClienteDto <<record, nuevo>> {
+  id: Long
+  obligacionId: Long
+  tributo: String
+  monto: BigDecimal
+  fechaVencimiento: LocalDate
+  fechaAviso: LocalDate
+}
+
+class RecordatorioSireFechas <<existe>> {
+  +DIAS_AVISO_INICIALES = [3, 1, 0]
+  {static} corresponde(fecha, hoy, dias): boolean
+}
+
+class AccesoCliente <<existe>> {
+  {static} exigir(clienteIdPedido)
+}
+
+class SecurityConfig <<existe, ampliado>> {
+  GET .../clientes/*/avisos-pago: CONTADOR, ADMIN, CLIENTE_MYPE
+}
+
+class "avisos_cliente" as Tabla <<tabla nueva>> {
+  cliente_id, obligacion_id, tributo, monto,
+  fecha_vencimiento, fecha_aviso
+  UNIQUE (obligacion_id, fecha_aviso)
+}
+
+class "AvisosPagoTab\n(frontend-web)" as Tab <<nuevo>> {
+  Aviso del · Tributo · Monto por pagar · Vence
+}
+
+class "MisAvisosPage\n(frontend-web, cuenta del cliente)" as Mis <<nuevo>> {
+  solo lectura: la empresa sale del claim clienteId del token
+  cuenta sin empresa: aviso «Su cuenta no está vinculada a una empresa»
+}
+
+class "App.tsx · Sidebar.tsx" as Nav <<ampliado>> {
+  ruta /mis-avisos
+  menú del cliente: «Mi empresa» y «Avisos de pago»
+}
+
+class "avisoClienteService.ts" as Srv <<nuevo>> {
+  listarAvisosPago(clienteId)
+}
+
+AvisoClienteProgramador --> AvisoClienteService : generar(hoy de Lima)
+AvisoClienteController --> AvisoClienteService
+AvisoClienteController ..> AccesoCliente : exigir(clienteId)
+AvisoClienteController ..> AvisoClienteDto
+AvisoClienteService ..> RecordatorioSireFechas : día exacto de aviso
+AvisoClienteService ..> Tabla : INSERT ... ON CONFLICT DO NOTHING
+Tab --> Srv
+Mis --> Tab : muestra la lista del cliente
+Nav ..> Mis
+Srv ..> AvisoClienteController : GET /api/tributario/clientes/{id}/avisos-pago
+SecurityConfig ..> AvisoClienteController
+
+note bottom of AvisoClienteService
+  Criterio de T203: el cliente recibe el aviso unos días antes del vencimiento: 3, 1 y 0 días antes (los de SIRE; supuesto por confirmar con Beto).
+  Candidatas: obligaciones DECLARADO o PAGO_PARCIAL, con monto determinado, de clientes activos y con vencimiento entre hoy y hoy + 3.
+  Criterio de T205: monto del aviso = monto determinado - suma de pagos (HU-13). Sin saldo (PAGADO o pagos iguales al monto) no hay aviso;
+  con pago parcial se avisa el saldo. Un aviso por obligación y por día: repetir el proceso el mismo día no duplica.
+  El aviso guarda tributo, monto y fecha tal como se avisaron; no se actualiza si después se paga.
+  Solo se ve dentro del sistema: no se envía por correo ni WhatsApp (canal sin definir).
+end note
+
+note right of AvisoClienteController
+  Permisos: sin token 401. El estudio (CONTADOR, ADMIN) lee los avisos de cualquier cliente;
+  un CLIENTE_MYPE solo los de su empresa (claim clienteId del token): otra empresa, o un token sin empresa, 403.
+end note
+
+note bottom of Tab
+  La misma lista se ve en dos lugares (T204): la pestaña «Avisos de pago» de la ficha, para el estudio, y la pantalla propia
+  «Avisos de pago» (/mis-avisos) de la cuenta del cliente, que reutiliza AvisosPagoTab. Un cliente solo ve los de su empresa.
+end note
+
+footer Documentado a partir del código, 17/11/2026 · actualizado el 18/11/2026 contra develop (922edee, con #68 fusionado). Código: AvisoClienteProgramador, AvisoClienteService, AvisoClienteController, AvisoClienteDto, SecurityConfig, schema.sql, AvisosPagoTab.tsx, MisAvisosPage.tsx, App.tsx, Sidebar.tsx, avisoClienteService.ts. Pruebas: AvisoClientePostgresTest, AvisoClientePermisosTest, AvisosPagoTab.test.tsx, MisAvisosPage.test.tsx
+@enduml
