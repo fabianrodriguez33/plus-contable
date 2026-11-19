@@ -11,10 +11,11 @@ import { soles } from '../utils/societario'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import { Input } from '../components/Input'
+import RecordatoriosPagoPanel from '../components/RecordatoriosPagoPanel'
 
 const mesPeriodo = (p: string) => p.slice(0, 7)
 
-/** Estado y vencimiento con la misma regla del calendario: una pagada o declarada nunca sale «Vencida»; con pago parcial se debe saldo. */
+/** Estado y vencimiento con la misma regla del calendario: vencida = fecha pasada y saldo pendiente (declarada sin pago o con pago parcial); la pagada nunca. */
 function etiquetaEstado(o: Obligacion, hoy: string): string {
   const dias = Math.round((deIso(o.fechaVencimiento).getTime() - deIso(hoy).getTime()) / 86_400_000)
   const item: CalendarioItem = { obligacion: o, diasRestantes: dias, vencimientoPasado: dias < 0 }
@@ -145,6 +146,8 @@ export default function PagoPage() {
           </table>
         </Card>
       )}
+
+      {obligacion && admitePagos && <RecordatoriosPagoPanel obligacionId={obligacion.id} fechaVencimiento={obligacion.fechaVencimiento} />}
     </section>
   )
 }

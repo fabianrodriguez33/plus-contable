@@ -11,6 +11,10 @@ import { soles } from '../utils/societario'
 
 vi.mock('../services/obligacionService', () => ({ buscarObligacion: vi.fn() }))
 vi.mock('../services/pagoService', () => ({ listarPagos: vi.fn(), registrarPago: vi.fn() }))
+// HU-15: el panel de recordatorios tiene sus propias pruebas; aquí solo se evita llamar al servidor
+vi.mock('../components/RecordatoriosPagoPanel', () => ({
+  default: (p: { obligacionId: number; fechaVencimiento: string }) => <div data-testid="panel-recordatorios" data-obligacion={p.obligacionId} data-vence={p.fechaVencimiento} />,
+}))
 
 const obligacion = (over: Partial<Obligacion> = {}): Obligacion => ({
   id: 3, clienteId: 9, tipoObligacion: 'IGV', periodo: '2026-10-01', fechaVencimiento: '2026-11-20',
@@ -253,12 +257,11 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
     expect(screen.queryByLabelText('Monto pagado (S/) *')).toBeNull()
   })
 
-  it('una obligación DECLARADA con la fecha pasada tampoco sale «Vencida»', async () => {
+  it('una obligación DECLARADA sin pago y con la fecha pasada sale «Vencida» (se debe todo)', async () => {
     obtener.mockResolvedValue(obligacion({ estado: 'DECLARADO', fechaVencimiento: '2026-11-03' }))
     pantalla()
 
-    expect((await screen.findByTestId('estado')).textContent).toBe('Declarada')
-    expect(screen.queryByText(/Vencida/)).toBeNull()
+    expect((await screen.findByTestId('estado')).textContent).toBe('Vencida hace 6 días')
   })
 
   it('con pago parcial y la fecha pasada todavía se debe saldo: dice «Pago parcial · Vencida hace…» y sigue admitiendo pagos', async () => {
@@ -285,5 +288,26 @@ describe('Registrar pago (HU-13, tarea 7)', () => {
 
     expect((await screen.findByRole('alert')).textContent).toBe('Obligación no encontrada')
     expect(screen.queryByLabelText('Monto pagado (S/) *')).toBeNull()
+  })
+
+  it('HU-15: el panel de recordatorios sale en una declarada y en una con pago parcial, con su fecha de vencimiento', async () => {
+    pantalla()
+    expect(await screen.findByTestId('panel-recordatorios')).toMatchObject({ dataset: { obligacion: '3', vence: '2026-11-20' } })
+    cleanup()
+    obtener.mockResolvedValue(obligacion({ estado: 'PAGO_PARCIAL' }))
+    pantalla()
+    expect(await screen.findByTestId('panel-recordatorios')).toMatchObject({ dataset: { obligacion: '3', vence: '2026-11-20' } })
+  })
+
+  it('HU-15: no sale en una sin declarar ni en una pagada', async () => {
+    obtener.mockResolvedValue(obligacion({ estado: 'PENDIENTE' }))
+    pantalla()
+    await screen.findByTestId('estado')
+    expect(screen.queryByTestId('panel-recordatorios')).toBeNull()
+    cleanup()
+    obtener.mockResolvedValue(obligacion({ estado: 'PAGADO' }))
+    pantalla()
+    await screen.findByTestId('estado')
+    expect(screen.queryByTestId('panel-recordatorios')).toBeNull()
   })
 })

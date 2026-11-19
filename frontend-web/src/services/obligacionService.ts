@@ -14,6 +14,9 @@ export interface Obligacion {
   fechaDeclaracion?: string
   numeroFormulario?: string
   montoDeterminado?: number
+  /** Solo con pago parcial en el calendario (lo pagado y lo que falta). */
+  montoAcumuladoPagado?: number
+  saldo?: number
 }
 
 export interface Declaracion {

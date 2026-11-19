@@ -37,14 +37,14 @@ TS -> TR : obligaciones por cliente, periodo y estado (DECLARADO si «sin pago»
 TR -> DB : SELECT obligaciones
 TS -> PR : sumasPagadas(ids de las obligaciones)
 PR -> DB : SELECT obligacion_id, SUM(monto_pagado) FROM pagos_obligacion GROUP BY obligacion_id
-TS -> TS : por fila: montoPagado, saldo = monto determinado - pagado,\nvencida = (PENDIENTE o PAGO_PARCIAL) y fecha límite < hoy (Lima)
+TS -> TS : por fila: montoPagado, saldo = monto determinado - pagado,\nvencida = (DECLARADO sin pago o PAGO_PARCIAL) y fecha límite < hoy (Lima);\nsinDeclarar = PENDIENTE y fecha límite < hoy (pendiente de atención, aparte)
 TS --> FE : 200 [TableroFilaDto] por fecha límite, cliente y tributo
 alt hay filas
-  FE -> U : tabla con cliente, tributo, mes, fecha límite, monto, pagado y saldo,\nestado (Pendiente, Declarada, Pago parcial, Pagada) y «Vencida» solo si vencida;\nresumen por estado
+  FE -> U : tabla con cliente, tributo, mes, fecha límite, monto, pagado y saldo,\nestado (Pendiente, Declarada, Pago parcial, Pagada) «Vencida» solo si vencida y «Sin declarar» solo si sinDeclarar;\nresumen por estado y N vencidas · N sin declarar (pendientes de atención)
   note right : Criterios 1 y 3
 else sin filas
   FE -> U : "No hay obligaciones para este filtro."
 end
 
-footer Diseño previo, 17/11/2026 · Base: criterios de aceptación de HU-14, el código de develop (a9bdff1) y HU-13. Código existente: Obligacion, PagoObligacion, PagoObligacionRepository, ClienteRepository, SecurityConfig, GlobalExceptionHandler
+footer Diseño previo, 17/11/2026 · actualizado el 18/11/2026 con el tablero ya fusionado (#67) en develop (61adf8b). Base: criterios de aceptación de HU-14, el código de develop y HU-13. Código existente: Obligacion, PagoObligacion, PagoObligacionRepository, ClienteRepository, SecurityConfig, GlobalExceptionHandler
 @enduml

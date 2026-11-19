@@ -51,6 +51,7 @@ public class SecurityConfig {
                                 "/api/tributario/clientes/*/compras",
                                 "/api/tributario/clientes/*/datos-empresa",
                                 "/api/tributario/obligaciones",
+                                "/api/tributario/obligaciones-vencidas",
                                 "/api/tributario/obligaciones/*")
                         .hasAnyRole(ESTUDIO_Y_CLIENTE)
                         // HU-25: solo el cliente clasifica sus compras (el contador las carga y las ve)

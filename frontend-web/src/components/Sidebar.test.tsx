@@ -22,6 +22,11 @@ describe('Menú lateral por rol (HU-35)', () => {
 
     expect(enlaces).toContain('Clientes')
     expect(enlaces).toContain('Calendario')
+    expect(enlaces).toContain('Obligaciones vencidas')
     expect(enlaces).not.toContain('Mi empresa')
+  })
+
+  it('la cuenta de un cliente no ve «Obligaciones vencidas» (HU-16 es del estudio)', () => {
+    expect(menuDe('CLIENTE_MYPE')).not.toContain('Obligaciones vencidas')
   })
 })
