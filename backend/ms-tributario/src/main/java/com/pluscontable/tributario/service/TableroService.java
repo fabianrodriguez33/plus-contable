@@ -92,9 +92,10 @@ public class TableroService {
 
     private static TableroFilaDto fila(Obligacion o, Cliente c, BigDecimal pagado, LocalDate hoy) {
         BigDecimal saldo = o.getMontoDeterminado() == null ? null : o.getMontoDeterminado().subtract(pagado);
-        boolean conSaldoPendiente = o.getEstado() == Obligacion.Estado.PENDIENTE || o.getEstado() == Obligacion.Estado.PAGO_PARCIAL;
+        boolean pasada = o.getFechaVencimiento().isBefore(hoy);
+        boolean conSaldoPendiente = o.getEstado() == Obligacion.Estado.DECLARADO || o.getEstado() == Obligacion.Estado.PAGO_PARCIAL;
         return new TableroFilaDto(o.getId(), o.getClienteId(), c.getRuc(), c.getRazonSocial(), o.getTipoObligacion(),
                 o.getPeriodo(), o.getFechaVencimiento(), o.getEstado(), o.getMontoDeterminado(), pagado, saldo,
-                conSaldoPendiente && o.getFechaVencimiento().isBefore(hoy));
+                conSaldoPendiente && pasada, o.getEstado() == Obligacion.Estado.PENDIENTE && pasada);
     }
 }

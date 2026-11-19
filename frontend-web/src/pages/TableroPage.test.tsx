@@ -19,7 +19,7 @@ const BETA = { id: 5, ruc: '20123456780', razonSocial: 'Beta SAC' } as Cliente
 
 const fila = (cambios: Partial<FilaTablero>): FilaTablero => ({
   obligacionId: 1, clienteId: 4, ruc: '20123456789', razonSocial: 'Acme SAC', tipoObligacion: 'IGV', periodo: '2026-11-01',
-  fechaVencimiento: '2026-11-20', estado: 'PENDIENTE', montoDeterminado: null, montoPagado: 0, saldo: null, vencida: false, ...cambios,
+  fechaVencimiento: '2026-11-20', estado: 'PENDIENTE', montoDeterminado: null, montoPagado: 0, saldo: null, vencida: false, sinDeclarar: false, ...cambios,
 })
 
 const CUATRO: FilaTablero[] = [
@@ -55,6 +55,16 @@ describe('Tablero Declarado vs. Pagado (HU-14)', () => {
     expect(within(filas[2]).getByText('Pago parcial')).toBeTruthy()
     expect(within(filas[3]).getByText('Pagada')).toBeTruthy()
     expect(screen.getByLabelText('Resumen').textContent).toContain('1 pendientes · 1 declaradas · 1 con pago parcial · 1 pagadas')
+  })
+
+  it('una sin declarar con fecha pasada sale «Sin declarar», aparte de las vencidas', async () => {
+    vi.mocked(consultarTablero).mockResolvedValue([fila({ obligacionId: 9, estado: 'PENDIENTE', fechaVencimiento: '2026-11-02', sinDeclarar: true })])
+    montar()
+
+    const f = within(await screen.findByRole('table')).getAllByRole('row')[1]
+    expect(within(f).getByText('Sin declarar')).toBeTruthy()
+    expect(within(f).queryByText('Vencida')).toBeNull()
+    expect(screen.getByLabelText('Resumen').textContent).toContain('1 sin declarar (pendientes de atención)')
   })
 
   it('«Vencida» solo sale en lo que el servidor marca vencido: nunca en una obligación pagada con fecha pasada', async () => {

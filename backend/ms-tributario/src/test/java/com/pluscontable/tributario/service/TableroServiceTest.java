@@ -107,7 +107,7 @@ class TableroServiceTest {
     }
 
     @Test
-    void vencidaSoloSiEstaPendienteOConPagoParcialYSuFechaEsAnteriorAHoy() {
+    void vencidaSoloSiTieneSaldoPendienteYSuFechaEsAnteriorAHoy() {
         LocalDate ayer = HOY.minusDays(1);
         hay(obligacion(1, 1, TipoObligacion.IGV, ayer, Obligacion.Estado.PENDIENTE, null),
                 obligacion(2, 1, TipoObligacion.RENTA, ayer, Obligacion.Estado.PAGO_PARCIAL, "100.00"),
@@ -118,7 +118,9 @@ class TableroServiceTest {
 
         List<TableroFilaDto> filas = service.listar(null, null, false);
 
-        assertThat(filas).filteredOn(TableroFilaDto::vencida).extracting(TableroFilaDto::obligacionId).containsExactlyInAnyOrder(1L, 2L);
+        // declarada sin pago (4) y pago parcial (2) vencen; la sin declarar (1) va aparte; pagada (3) nunca
+        assertThat(filas).filteredOn(TableroFilaDto::vencida).extracting(TableroFilaDto::obligacionId).containsExactlyInAnyOrder(2L, 4L);
+        assertThat(filas).filteredOn(TableroFilaDto::sinDeclarar).extracting(TableroFilaDto::obligacionId).containsExactly(1L);
     }
 
     @Test
@@ -131,7 +133,7 @@ class TableroServiceTest {
 
         List<TableroFilaDto> filas = enLima.listar(null, null, false);
 
-        assertThat(filas).filteredOn(TableroFilaDto::vencida).extracting(TableroFilaDto::obligacionId).containsExactly(2L);
+        assertThat(filas).filteredOn(TableroFilaDto::sinDeclarar).extracting(TableroFilaDto::obligacionId).containsExactly(2L);
     }
 
     @Test

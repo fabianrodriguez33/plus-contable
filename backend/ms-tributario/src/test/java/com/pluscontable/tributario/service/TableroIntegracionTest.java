@@ -217,14 +217,16 @@ class TableroIntegracionTest {
     // ---- «Vencida» solo para lo que todavía se debe
 
     @Test
-    void vencidaSoloParaPendientesYPagosParcialesConFechaAnteriorAHoyYNuncaParaLasPagadas() throws Exception {
+    void vencidaSoloConSaldoPendienteYFechaPasadaLaSinDeclararVaAparteYNuncaLaPagada() throws Exception {
         JsonNode todas = filas("?clienteId=" + clienteA);
         JsonNode deB = filas("?clienteId=" + clienteB);
 
         assertThat(fila(todas, igvPendienteHoy).get("vencida").asBoolean()).isFalse();      // vence hoy: todavía no
-        assertThat(fila(todas, rentaPendienteAyer).get("vencida").asBoolean()).isTrue();    // venció ayer
+        assertThat(fila(todas, rentaPendienteAyer).get("vencida").asBoolean()).isFalse();   // sin declarar: no es vencida...
+        assertThat(fila(todas, rentaPendienteAyer).get("sinDeclarar").asBoolean()).isTrue(); // ...es pendiente de atención
+        assertThat(fila(todas, igvPendienteHoy).get("sinDeclarar").asBoolean()).isFalse();
         assertThat(fila(todas, essaludPagada).get("vencida").asBoolean()).isFalse();        // pagada con fecha pasada
-        assertThat(fila(todas, plameDeclarada).get("vencida").asBoolean()).isFalse();       // declarada: misma regla del calendario
+        assertThat(fila(todas, plameDeclarada).get("vencida").asBoolean()).isTrue();        // declarada sin pago con fecha pasada: se debe todo
         assertThat(fila(deB, igvParcial).get("vencida").asBoolean()).isTrue();              // todavía debe 600
         assertThat(fila(deB, rentaDeclaradaFutura).get("vencida").asBoolean()).isFalse();
     }

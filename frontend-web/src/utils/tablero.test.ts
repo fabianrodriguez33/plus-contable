@@ -5,7 +5,7 @@ import { ETIQUETA_ESTADO, hoyLima, mesActualLima, mesCorto, periodoDeMes, resume
 
 const fila = (cambios: Partial<FilaTablero>): FilaTablero => ({
   obligacionId: 1, clienteId: 1, ruc: '20100070970', razonSocial: 'Acme SAC', tipoObligacion: 'IGV', periodo: '2026-11-01',
-  fechaVencimiento: '2026-11-20', estado: 'PENDIENTE', montoDeterminado: null, montoPagado: 0, saldo: null, vencida: false, ...cambios,
+  fechaVencimiento: '2026-11-20', estado: 'PENDIENTE', montoDeterminado: null, montoPagado: 0, saldo: null, vencida: false, sinDeclarar: false, ...cambios,
 })
 
 describe('tablero (HU-14)', () => {
@@ -35,14 +35,14 @@ describe('tablero (HU-14)', () => {
 
   it('el resumen cuenta por estado y las vencidas aparte', () => {
     const r = resumenTablero([
-      fila({ obligacionId: 1, estado: 'PENDIENTE', vencida: true }),
-      fila({ obligacionId: 2, estado: 'DECLARADO' }),
+      fila({ obligacionId: 1, estado: 'PENDIENTE', sinDeclarar: true }),
+      fila({ obligacionId: 2, estado: 'DECLARADO', vencida: true }),
       fila({ obligacionId: 3, estado: 'DECLARADO' }),
       fila({ obligacionId: 4, estado: 'PAGO_PARCIAL', vencida: true }),
       fila({ obligacionId: 5, estado: 'PAGADO' }),
     ])
 
-    expect(r).toEqual({ pendientes: 1, declaradas: 2, pagoParcial: 1, pagadas: 1, vencidas: 2 })
+    expect(r).toEqual({ pendientes: 1, declaradas: 2, pagoParcial: 1, pagadas: 1, vencidas: 2, sinDeclarar: 1 })
   })
 
   it('el menú tiene el enlace al tablero', () => {

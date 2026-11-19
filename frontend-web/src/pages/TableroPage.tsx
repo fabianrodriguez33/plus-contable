@@ -15,8 +15,8 @@ const monto = (n: number | null) => (n === null || n === undefined ? '—' : sol
 
 /**
  * HU-14 · Tareas 27 a 30: el tablero Declarado vs. Pagado. Cada obligación con su estado real (criterio 1), por cliente y por
- * mes (criterio 2), con su monto y su fecha límite (criterio 3) y el filtro «declarado sin pago» (criterio 4). «Vencida» solo
- * aparece si el servidor la marca vencida: una obligación pagada o declarada nunca la muestra.
+ * mes (criterio 2), con su monto y su fecha límite (criterio 3) y el filtro «declarado sin pago» (criterio 4). «Vencida» (fecha
+ * pasada y saldo pendiente) y «Sin declarar» (pendiente de atención) solo aparecen si el servidor los marca.
  */
 export default function TableroPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -69,6 +69,7 @@ export default function TableroPage() {
             <p aria-label="Resumen" className="text-sm text-slate-600">
               {resumen.pendientes} pendientes · {resumen.declaradas} declaradas · {resumen.pagoParcial} con pago parcial · {resumen.pagadas} pagadas
               {resumen.vencidas > 0 && <> · <strong className="text-red-700">{resumen.vencidas} vencidas</strong></>}
+              {resumen.sinDeclarar > 0 && <> · <strong className="text-amber-700">{resumen.sinDeclarar} sin declarar (pendientes de atención)</strong></>}
             </p>
           )}
           <Table columnas={['Cliente', 'Tributo', 'Mes', 'Fecha límite', 'Monto', 'Pagado', 'Saldo', 'Estado']}
@@ -86,6 +87,7 @@ export default function TableroPage() {
                   <span className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ESTILO_ESTADO[f.estado]}`}>{ETIQUETA_ESTADO[f.estado]}</span>
                     {f.vencida && <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">Vencida</span>}
+                    {f.sinDeclarar && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Sin declarar</span>}
                   </span>
                 </Td>
               </tr>

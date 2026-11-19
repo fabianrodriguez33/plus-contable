@@ -38,6 +38,7 @@ export interface ResumenTablero {
   pagoParcial: number
   pagadas: number
   vencidas: number
+  sinDeclarar: number
 }
 
 export function resumenTablero(filas: FilaTablero[]): ResumenTablero {
@@ -48,5 +49,6 @@ export function resumenTablero(filas: FilaTablero[]): ResumenTablero {
     pagoParcial: cuenta('PAGO_PARCIAL'),
     pagadas: cuenta('PAGADO'),
     vencidas: filas.filter((f) => f.vencida).length,
+    sinDeclarar: filas.filter((f) => f.sinDeclarar).length,
   }
 }

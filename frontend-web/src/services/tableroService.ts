@@ -16,8 +16,10 @@ export interface FilaTablero {
   montoDeterminado: number | null
   montoPagado: number
   saldo: number | null
-  /** Solo las pendientes o con pago parcial cuya fecha límite ya pasó; nunca las pagadas. */
+  /** Fecha límite pasada y saldo pendiente (declarada sin pago o con pago parcial); nunca las pagadas ni las sin declarar. */
   vencida: boolean
+  /** Sin declarar con la fecha límite pasada: pendiente de atención, aparte de las vencidas. */
+  sinDeclarar: boolean
 }
 
 export interface FiltroTablero {
