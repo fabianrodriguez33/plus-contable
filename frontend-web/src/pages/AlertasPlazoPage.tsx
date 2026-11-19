@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { mensajeError } from '../services/apiClient'
 import { listarAlertasPlazo, type AlertaPlazo } from '../services/alertaPlazoService'
-import { ETIQUETA_TIPO, estiloDias, textoDiasRestantes, textoEscalon } from '../utils/alertas'
+import { ETIQUETA_TIPO, textoDiasRestantes, textoEscalon } from '../utils/alertas'
 import { fechaCorta } from '../utils/programacion'
 import Card from '../components/Card'
 import Table, { Td } from '../components/Table'
+import Sello, { type TonoSello } from '../components/Sello'
+
+/** Cuanto más cerca el plazo, más urgente: hoy y mañana en rojo, hasta 3 días en ámbar, el resto neutro. */
+const tonoDe = (dias: number): TonoSello => (dias <= 1 ? 'peligro' : dias <= 3 ? 'aviso' : 'neutro')
 
 /**
  * HU-19 · Tarea 90: las alertas escalonadas del plazo de respuesta de las notificaciones del Buzón SOL que siguen pendientes.
@@ -36,7 +40,8 @@ export default function AlertasPlazoPage() {
               <Td>{ETIQUETA_TIPO[a.tipo]}</Td>
               <Td>{fechaCorta(a.plazoRespuesta)}</Td>
               <Td>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${estiloDias(a.diasRestantes)}`}>{textoDiasRestantes(a.diasRestantes)}</span>
+                <Sello tono={tonoDe(a.diasRestantes)} cifra={a.diasRestantes} texto={a.diasRestantes === 0 ? 'hoy' : a.diasRestantes === 1 ? 'día' : 'días'}
+                  etiqueta={textoDiasRestantes(a.diasRestantes)} />
               </Td>
               <Td>{textoEscalon(a.diasAntes)} · {fechaCorta(a.fechaAlerta)}</Td>
             </tr>

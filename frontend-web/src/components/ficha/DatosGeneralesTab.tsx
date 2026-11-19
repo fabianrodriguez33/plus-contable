@@ -20,19 +20,19 @@ function PanelConsultaRuc({ consulta }: { consulta: ConsultaRuc }) {
   return (
     <div role="status" className="space-y-2 text-sm">
       {encontrado ? (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-blue-800">
+        <div className="rounded-campo border border-blue-200 bg-blue-50 p-3 text-blue-800">
           <p>
             Datos de SUNAT{fecha ? ` al ${fecha}` : ''}. Se completaron razón social, dirección y condición: revíselos
             antes de registrar. El régimen tributario y las credenciales SOL se ingresan manualmente.
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">
+        <div className="rounded-campo border border-slate-200 bg-slate-50 p-3 text-slate-700">
           <p>{consulta.mensaje}</p>
         </div>
       )}
       {consulta.avisos.length > 0 && (
-        <ul className="list-disc space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 pl-7 text-amber-800">
+        <ul className="list-disc space-y-1 rounded-campo border border-amber-200 bg-amber-50 p-3 pl-7 text-amber-800">
           {consulta.avisos.map((a) => <li key={a}>{a}</li>)}
         </ul>
       )}
@@ -141,11 +141,11 @@ export default function DatosGeneralesTab({ cliente, esNuevo, onCambio, onGuarda
 
       {consulta && <PanelConsultaRuc consulta={consulta} />}
       {errorConsulta && (
-        <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{errorConsulta}</div>
+        <div role="status" className="rounded-campo border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{errorConsulta}</div>
       )}
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <h3 className="mb-3 text-base font-semibold text-tinta">
           Credenciales SUNAT (cifradas con AES-256)
         </h3>
         <div className="grid gap-4 md:grid-cols-2">

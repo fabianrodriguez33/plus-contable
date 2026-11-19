@@ -5,16 +5,17 @@ interface Props {
   actions?: ReactNode
   children: ReactNode
   className?: string
-  /** «vidrio» (por defecto) para paneles; «solida» para listados largos donde el desenfoque resta legibilidad. */
+  /** Se conserva por compatibilidad: ahora todas las pantallas son una misma hoja de papel. */
   variante?: 'vidrio' | 'solida'
 }
 
-export default function Card({ title, actions, children, className = '', variante = 'vidrio' }: Props) {
+/** Una hoja de papel contable: título en serif sobre una regla fina y, debajo, el contenido. */
+export default function Card({ title, actions, children, className = '' }: Props) {
   return (
-    <section className={`${variante === 'vidrio' ? 'vidrio' : 'panel-solido'} rounded-panel p-6 md:p-8 ${className}`}>
+    <section className={`hoja rounded-panel p-5 md:p-7 ${className}`}>
       {(title || actions) && (
-        <header className="mb-5 flex items-center justify-between gap-4">
-          {title && <h2 className="text-lg font-semibold text-tinta">{title}</h2>}
+        <header className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-tinta/15 pb-3">
+          {title && <h2 className="text-xl font-semibold text-tinta">{title}</h2>}
           {actions}
         </header>
       )}

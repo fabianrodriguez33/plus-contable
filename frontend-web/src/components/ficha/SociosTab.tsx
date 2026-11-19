@@ -148,12 +148,12 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
       </Table>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-campo border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Capital social total</p>
           <p className="text-2xl font-semibold text-slate-900" data-testid="capital-total">{soles(estado.capitalSocialTotal)}</p>
         </div>
         {estado.sinAporte > 0 ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+          <div className="rounded-campo border border-amber-200 bg-amber-50 p-4 text-amber-800">
             <p className="flex items-center gap-2 text-sm font-semibold">
               <AlertTriangle size={18} /> Estructura incompleta
             </p>
@@ -163,12 +163,12 @@ export default function SociosTab({ clienteId, setError, setOk }: Props) {
             </p>
           </div>
         ) : hayCambiosSinGuardar || !guardado ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700">
+          <div className="rounded-campo border border-slate-200 bg-slate-50 p-4 text-slate-700">
             <p className="flex items-center gap-2 text-sm font-semibold"><Info size={18} /> Participación</p>
             <p className="text-sm" data-testid="diferencia">Los porcentajes se calculan al guardar y suman 100.00%.</p>
           </div>
         ) : (
-          <div className={`rounded-lg border p-4 ${
+          <div className={`rounded-campo border p-4 ${
             guardado.completo ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
             <p className="flex items-center gap-2 text-sm font-semibold">
               {guardado.completo ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}

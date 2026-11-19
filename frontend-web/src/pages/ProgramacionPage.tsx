@@ -48,7 +48,7 @@ export default function ProgramacionPage({ hoy = new Date() }: Props) {
         </Button>
       </div>
 
-      {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="rounded-campo border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       {resultado && (
         <div role="status" aria-label="Resultado de la programación" className="space-y-4 text-sm">
@@ -85,7 +85,7 @@ export default function ProgramacionPage({ hoy = new Date() }: Props) {
             {resultado.noGeneradas.length === 0 ? (
               <p className="text-slate-500">Se generaron todos los tipos.</p>
             ) : (
-              <ul className="list-disc space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3 pl-7 text-amber-800">
+              <ul className="list-disc space-y-1 rounded-campo border border-amber-200 bg-amber-50 p-3 pl-7 text-amber-800">
                 {resultado.noGeneradas.map((n) => (
                   <li key={n.tipo}><strong>{etiquetaTipo(n.tipo)}:</strong> {n.motivo}</li>
                 ))}

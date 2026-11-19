@@ -56,7 +56,7 @@ function Lista({ id, tributos, hoy }: { id: string; tributos: Obligacion[]; hoy:
       </div>
       <ul className="space-y-3 md:hidden" data-testid={`${id}-tarjetas`}>
         {tributos.map((o) => (
-          <li key={o.id} className="panel-solido rounded-campo p-4 text-sm">
+          <li key={o.id} className="hoja rounded-campo p-4 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold"><Tributo o={o} /></span>
               <Estado o={o} hoy={hoy} />

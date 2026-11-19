@@ -164,7 +164,7 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
       </div>
 
       {errores.map((m) => (
-        <div key={m} role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{m}</div>
+        <div key={m} role="alert" className="mb-4 rounded-campo bg-red-50 p-3 text-sm text-red-700">{m}</div>
       ))}
 
       {cargando ? (
@@ -176,7 +176,7 @@ export default function CalendarioPage({ hoy }: { hoy?: Date }) {
           {grupos.map((g) => (
             <section key={g.fecha} aria-label={g.fecha}>
               <h3 className="mb-2 text-sm font-semibold capitalize text-slate-700">{titulo(g.fecha)}</h3>
-              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              <ul className="divide-y divide-slate-100 rounded-campo border border-slate-200">
                 {g.entradas.map((e) => e.tipo === 'OBLIGACION' ? (
                   <li key={`o${e.item.obligacion.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm">
                     <span>

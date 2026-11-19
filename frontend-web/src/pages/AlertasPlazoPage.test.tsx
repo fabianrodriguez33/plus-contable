@@ -72,14 +72,15 @@ describe('Alertas de plazo de respuesta (HU-19)', () => {
     expect((await screen.findByRole('link', { name: 'Beta SAC' })).getAttribute('href')).toBe('/clientes/5')
   })
 
-  it('lo más urgente se ve en rojo y lo lejano en gris', async () => {
+  it('lo más urgente se marca en rojo y lo lejano queda neutro', async () => {
     montar()
 
     await screen.findByRole('table')
-    expect(screen.getByText('Vence hoy').className).toContain('text-red-700')
-    expect(screen.getByText('Falta 1 día').className).toContain('text-red-700')
-    expect(screen.getByText('Faltan 3 días').className).toContain('text-amber-700')
-    expect(screen.getByText('Faltan 8 días').className).toContain('text-slate-700')
+    const tono = (texto: string) => screen.getByText(texto).closest('[data-tono]')?.getAttribute('data-tono')
+    expect(tono('Vence hoy')).toBe('peligro')
+    expect(tono('Falta 1 día')).toBe('peligro')
+    expect(tono('Faltan 3 días')).toBe('aviso')
+    expect(tono('Faltan 8 días')).toBe('neutro')
   })
 
   it('sin alertas lo dice', async () => {

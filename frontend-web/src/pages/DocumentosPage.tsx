@@ -93,7 +93,7 @@ export default function DocumentosPage() {
         </label>
         {error && <p role="alert" className="sm:col-span-3 text-red-600">{error}</p>}
         <div className="sm:col-span-3">
-          <button type="submit" disabled={guardando} className="bg-blue-700 text-white rounded px-4 py-2 disabled:opacity-50">
+          <button type="submit" disabled={guardando} className="rounded-campo bg-acento px-4 py-2 text-sm font-semibold text-white hover:bg-acento-oscuro disabled:opacity-50">
             {guardando ? 'Subiendo…' : 'Adjuntar documento'}
           </button>
         </div>

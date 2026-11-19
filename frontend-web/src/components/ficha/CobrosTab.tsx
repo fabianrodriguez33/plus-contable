@@ -80,7 +80,7 @@ export default function CobrosTab({ clienteId, setError, setOk, onIrAlAcuerdo }:
       </p>
 
       {sinAcuerdo && (
-        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div role="alert" className="flex flex-wrap items-center gap-3 rounded-campo border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <span>{SIN_ACUERDO} antes de programar sus cobros.</span>
           <Button variant="secondary" onClick={onIrAlAcuerdo}><FileSignature size={16} /> Ir al acuerdo de servicio</Button>
         </div>

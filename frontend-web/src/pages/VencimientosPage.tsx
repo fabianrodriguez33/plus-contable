@@ -91,7 +91,7 @@ export default function VencimientosPage() {
             <input type="date" className={`${input} block`} value={nuevaFecha} onChange={(e) => setNuevaFecha(e.target.value)} />
           </label>
           <button type="submit" disabled={guardando || seleccion.size === 0}
-            className="bg-blue-700 text-white rounded px-4 py-2 disabled:opacity-50">
+            className="rounded-campo bg-acento px-4 py-2 text-sm font-semibold text-white hover:bg-acento-oscuro disabled:opacity-50">
             {guardando ? 'Guardando…' : `Cambiar ${seleccion.size || ''} seleccionada(s)`}
           </button>
         </div>
