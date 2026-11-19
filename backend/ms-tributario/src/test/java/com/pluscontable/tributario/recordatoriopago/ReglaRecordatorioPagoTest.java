@@ -43,15 +43,21 @@ class ReglaRecordatorioPagoTest {
     }
 
     @Test
-    void siElSistemaEstuvoCaidoSeEnviaConRetrasoMientrasSigaSiendoUtil_Beto18Nov() {
+    void siElSistemaEstuvoCaidoSeEnviaConRetraso_Beto18Nov() {
         LocalDate fecha = HOY.minusDays(2);
         assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, fecha, HOY));
         assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGO_PARCIAL, VENCE, fecha, VENCE));
     }
 
     @Test
-    void yaVencidaElRecordatorioAtrasadoDejoDeSerUtil() {
-        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY, VENCE.plusDays(1)));
+    void elAtrasadoSigueSiendoUtilAunqueLaObligacionYaHayaVencido_Beto18Nov() {
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.DECLARADO, VENCE, HOY, VENCE.plusDays(20)));
+        assertEquals(CORRESPONDE_ENVIAR, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGO_PARCIAL, VENCE, HOY, VENCE.plusDays(20)));
+    }
+
+    @Test
+    void yaPagadaPorCompletoNoCorrespondeAunqueEsteAtrasado() {
+        assertEquals(NO_ELEGIBLE, ReglaRecordatorioPago.evaluar(Obligacion.Estado.PAGADO, VENCE, HOY, VENCE.plusDays(20)));
     }
 
     @Test

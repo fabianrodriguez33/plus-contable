@@ -158,16 +158,18 @@ class RecordatorioPagoPostgresTest {
     }
 
     @Test
-    void siSePagoTodoDespuesDeProgramarNoSeEnvia() {
+    void siSePagoTodoDespuesDeProgramarSeCancelanSusRecordatoriosIncluidoUnoDeFechaFutura_Beto18Nov() {
         long pagada = declarada();
         var dia = HOY.plusDays(1);
         var r = servicio(HOY).programar(pagada, dia, "c");
+        var futuro = servicio(HOY).programar(pagada, HOY.plusDays(5), "c");
         pago(pagada, "1000.00", "C-9");
         jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGADO' WHERE id = ?", pagada);
 
-        assertThat(servicio(dia).entregar(dia)).isEqualTo(new RecordatorioPagoService.Resultado(0, 1));
+        assertThat(servicio(dia).entregar(dia)).isEqualTo(new RecordatorioPagoService.Resultado(0, 0));
         assertThat(avisos(pagada)).isEmpty();
-        assertThat(estado(r.id())).isEqualTo("OMITIDO");
+        assertThat(estado(r.id())).isEqualTo("CANCELADO");
+        assertThat(estado(futuro.id())).isEqualTo("CANCELADO");   // aunque su fecha todavía no llegó
     }
 
     @Test
@@ -194,13 +196,27 @@ class RecordatorioPagoPostgresTest {
     }
 
     @Test
-    void siYaVencioElRecordatorioAtrasadoDejoDeSerUtilYNoSeEnvia() {
+    void siYaVencioPeroSigueSinPagarElRecordatorioAtrasadoSiSeEnvia_Beto18Nov() {
         long o = declarada();
         var r = servicio(HOY).programar(o, HOY.plusDays(1), "c");
-        var tarde = VENCE.plusDays(1);
-        assertThat(servicio(tarde).entregar(tarde)).isEqualTo(new RecordatorioPagoService.Resultado(0, 1));
-        assertThat(avisos(o)).isEmpty();
-        assertThat(estado(r.id())).isEqualTo("OMITIDO");
+        var tarde = VENCE.plusDays(10);
+
+        assertThat(servicio(tarde).entregar(tarde)).isEqualTo(new RecordatorioPagoService.Resultado(1, 0));
+        assertThat(avisos(o)).containsExactly("IGV|1000.00|" + VENCE + "|" + tarde);
+        assertThat(estado(r.id())).isEqualTo("ENVIADO");
+    }
+
+    @Test
+    void yaVencidaConPagoParcialElAtrasadoSeEnviaConElSaldo_Beto18Nov() {
+        long o = declarada();
+        var r = servicio(HOY).programar(o, HOY.plusDays(1), "c");
+        pago(o, "400.00", "C-7");
+        jdbc.update("UPDATE tributario_schema.obligaciones SET estado = 'PAGO_PARCIAL' WHERE id = ?", o);
+        var tarde = VENCE.plusDays(3);
+
+        assertThat(servicio(tarde).entregar(tarde)).isEqualTo(new RecordatorioPagoService.Resultado(1, 0));
+        assertThat(avisos(o)).containsExactly("IGV|600.00|" + VENCE + "|" + tarde);
+        assertThat(estado(r.id())).isEqualTo("ENVIADO");
     }
 
     @Test

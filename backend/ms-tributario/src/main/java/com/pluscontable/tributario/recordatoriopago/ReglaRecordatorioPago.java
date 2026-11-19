@@ -13,9 +13,10 @@ public final class ReglaRecordatorioPago {
 
     /**
      * Decisiones de Beto (18/11): se puede recordar el pago de una obligación DECLARADA o con PAGO_PARCIAL (con saldo pendiente; el
-     * aviso muestra el saldo). Si el sistema estuvo caído el día elegido, el recordatorio se envía cuando vuelve, pero solo mientras
-     * siga siendo útil: la obligación sigue con saldo y todavía no venció. La fecha del recordatorio la proporciona quien lo programó
-     * y no puede ser posterior al vencimiento. Que haya saldo pendiente lo comprueba quien llama (necesita los pagos).
+     * aviso muestra el saldo). Si el sistema estuvo caído el día elegido, el recordatorio se envía cuando vuelve, y sigue siendo útil
+     * <b>mientras la obligación siga pendiente de pago, aunque ya haya vencido</b>; si se pagó por completo ya no corresponde. La fecha
+     * del recordatorio la proporciona quien lo programó y no puede ser posterior al vencimiento. Que haya saldo pendiente lo comprueba
+     * quien llama (necesita los pagos).
      */
     public static Resultado evaluar(Obligacion.Estado estado, LocalDate fechaVencimiento,
                                     LocalDate fechaRecordatorio, LocalDate hoy) {
@@ -25,8 +26,7 @@ public final class ReglaRecordatorioPago {
             return Resultado.NO_ELEGIBLE;
         }
         if (hoy.isBefore(fechaRecordatorio)) return Resultado.FECHA_PENDIENTE;
-        if (hoy.isAfter(fechaVencimiento)) return Resultado.NO_ELEGIBLE; // ya venció: el recordatorio previo dejó de ser útil
-        return Resultado.CORRESPONDE_ENVIAR; // el día elegido o, con retraso, el primer día en que el sistema vuelve
+        return Resultado.CORRESPONDE_ENVIAR; // el día elegido o, con retraso, el primer día en que el sistema vuelve (aunque ya haya vencido)
     }
 
     /** Clave determinista para deduplicar una ocurrencia; reprogramar cambia la clave de fecha. */

@@ -69,7 +69,7 @@ export default function RecordatoriosPagoPanel({ obligacionId, fechaVencimiento 
   return (
     <Card title="Recordatorios de pago">
       <p className="mb-3 text-sm text-slate-600">
-        Elija el día en que el cliente recibirá un aviso de pago con el saldo pendiente. Si para ese día la obligación ya se pagó o venció, no se envía.
+        Elija el día en que el cliente recibirá un aviso de pago con el saldo pendiente. Si se paga por completo, el recordatorio se cancela; si el sistema no pudo enviarlo ese día, se envía al volver mientras siga pendiente de pago, aunque ya haya vencido.
       </p>
       {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}
       {ok && <p role="status" className="mb-3 text-sm text-emerald-700">{ok}</p>}

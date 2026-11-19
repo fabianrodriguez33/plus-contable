@@ -95,14 +95,19 @@ public class RecordatorioPagoService {
     }
 
     /**
-     * Entrega los recordatorios cuya fecha es hoy o ya pasó (si el sistema estuvo caído se envían al volver; decisión de Beto, 18/11).
-     * Comprueba el estado ese mismo día: solo se envía si la obligación sigue con saldo pendiente (declarada o con pago parcial), todavía
-     * no venció y el cliente está activo; si ya se pagó o dejó de hacer falta queda OMITIDO. Si una obligación tiene varios atrasados
-     * se envía <b>uno solo</b> (el de la fecha más reciente, con el saldo de hoy) y los demás quedan OMITIDO. Si el cliente ya recibió
-     * hoy el aviso automático de HU-33 por esa obligación, no se duplica y el recordatorio queda ENVIADO. Repetirlo no cambia nada.
+     * Entrega los recordatorios cuya fecha es hoy o ya pasó (si el sistema estuvo caído se envían al volver; decisión de Beto, 18/11) y
+     * siguen siendo útiles <b>mientras la obligación siga pendiente de pago, aunque ya haya vencido</b>: se envía con el saldo de hoy.
+     * Si la obligación se pagó por completo, los recordatorios que le quedaban programados se <b>cancelan</b> (también los de fechas
+     * futuras). Si el cliente quedó inactivo o la obligación ya no tiene saldo, no se envía y queda OMITIDO. Si una obligación tiene
+     * varios atrasados se envía <b>uno solo</b> (el de la fecha más reciente) y los demás quedan OMITIDO. Si el cliente ya recibió hoy el
+     * aviso automático de HU-33 por esa obligación, no se duplica y el recordatorio queda ENVIADO. Repetirlo no cambia nada.
      */
     @Transactional
     public Resultado entregar(LocalDate hoy) {
+        jdbc.update("""
+                UPDATE tributario_schema.recordatorios_pago r SET estado = 'CANCELADO', resuelto_en = CURRENT_TIMESTAMP
+                FROM tributario_schema.obligaciones o
+                WHERE o.id = r.obligacion_id AND r.estado = 'PROGRAMADO' AND o.estado = 'PAGADO'""");
         List<Pendiente> pendientes = jdbc.query("""
                 SELECT r.id, r.obligacion_id, o.cliente_id, o.tipo_obligacion, r.fecha_recordatorio, o.estado, o.fecha_vencimiento,
                        o.monto_determinado - COALESCE((SELECT SUM(p.monto_pagado) FROM tributario_schema.pagos_obligacion p

@@ -163,7 +163,7 @@ class RecordatorioPagoHttpTest {
         recordatorios.entregar(HOY);
 
         assertThat(json.readTree(llamar("GET", "/api/tributario/clientes/" + suyo + "/avisos-pago", token("CLIENTE_MYPE", suyo), null).body())).isEmpty();
-        assertThat(json.readTree(llamar("GET", ruta, contador, null).body()).get(0).get("estado").asText()).isEqualTo("OMITIDO");
+        assertThat(json.readTree(llamar("GET", ruta, contador, null).body()).get(0).get("estado").asText()).isEqualTo("CANCELADO");
     }
 
     @Test
