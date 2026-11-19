@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { Obligacion } from '../services/obligacionService'
-import { ETIQUETA_ESTADO, delMes, estaVencida, hoyEnLima, mesDeHoyEnLima, mesesDisponibles, montosDe } from './estadoCuentaCliente'
+import { ETIQUETA_ESTADO, delMes, estaVencida, hoyEnLima, mesDeHoyEnLima, mesesDisponibles, montosDe, sinDeclararAtrasada, sinDeclararDe, vencidasDe } from './estadoCuentaCliente'
 
 const ob = (id: number, periodo: string, vence: string, tipo?: string): Obligacion =>
   ({ id, clienteId: 4, tipoObligacion: tipo, periodo, fechaVencimiento: vence, estado: 'PENDIENTE' })
 
 describe('estado de cuenta del cliente (HU-32 · T200)', () => {
   it('los nombres de estado son los del calendario y el tablero', () => {
-    expect(ETIQUETA_ESTADO).toEqual({ PENDIENTE: 'Pendiente', DECLARADO: 'Declarada', PAGO_PARCIAL: 'Pago parcial', PAGADO: 'Pagada' })
+    expect(ETIQUETA_ESTADO).toEqual({ PENDIENTE: 'Sin declarar', DECLARADO: 'Declarada', PAGO_PARCIAL: 'Pago parcial', PAGADO: 'Pagada' })
   })
 
   it('«mes» es el periodo tributario, no el mes de la fecha límite, ordenado por fecha límite, tributo e id', () => {
@@ -53,5 +53,30 @@ describe('estado de cuenta del cliente (HU-32 · T200)', () => {
     expect(montosDe({ ...base, estado: 'DECLARADO', montoDeterminado: 700 })).toEqual({ pagado: 0, saldo: 700 })
     expect(montosDe({ ...base, estado: 'PENDIENTE' })).toEqual({ pagado: null, saldo: null })
     expect(montosDe({ ...base, estado: 'DECLARADO' })).toEqual({ pagado: null, saldo: null })
+  })
+
+  it('la sin declarar con fecha pasada es un pendiente de atención: no vencida, y solo la PENDIENTE', () => {
+    const hoy = '2026-11-18'
+    const o = (estado: Obligacion['estado'], vence: string) => ({ estado, fechaVencimiento: vence })
+    expect(sinDeclararAtrasada(o('PENDIENTE', '2026-11-17'), hoy)).toBe(true)
+    expect(sinDeclararAtrasada(o('PENDIENTE', '2026-11-18'), hoy)).toBe(false)      // el día límite todavía no
+    expect(sinDeclararAtrasada(o('DECLARADO', '2026-11-17'), hoy)).toBe(false)
+    expect(sinDeclararAtrasada(o('PAGO_PARCIAL', '2026-11-17'), hoy)).toBe(false)
+    expect(sinDeclararAtrasada(o('PAGADO', '2026-11-17'), hoy)).toBe(false)
+    expect(estaVencida(o('PENDIENTE', '2026-11-17'), hoy)).toBe(false)
+  })
+
+  it('todas las vencidas de todos los periodos y las sin declarar atrasadas, la más antigua primero', () => {
+    const hoy = '2026-11-18'
+    const lista: Obligacion[] = [
+      { ...ob(1, '2026-10-01', '2026-11-13', 'IGV'), estado: 'DECLARADO' },
+      { ...ob(2, '2026-09-01', '2026-10-15', 'AFP'), estado: 'PAGO_PARCIAL' },
+      { ...ob(3, '2026-10-01', '2026-11-12', 'PLAME'), estado: 'PENDIENTE' },
+      { ...ob(4, '2026-08-01', '2026-09-15', 'IGV'), estado: 'PENDIENTE' },
+      { ...ob(5, '2026-10-01', '2026-11-10', 'RENTA'), estado: 'PAGADO' },
+      { ...ob(6, '2026-11-01', '2026-12-18', 'IGV'), estado: 'DECLARADO' },
+    ]
+    expect(vencidasDe(lista, hoy).map((o) => o.id)).toEqual([2, 1])
+    expect(sinDeclararDe(lista, hoy).map((o) => o.id)).toEqual([4, 3])
   })
 })
